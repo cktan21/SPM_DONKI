@@ -12,6 +12,9 @@ on:
 jobs:
     dast_scan:
         runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./frontend
 
         steps:
             - name: 📥 Checkout code
@@ -20,11 +23,8 @@ jobs:
             - name: 🛠️ Setup Bun
               uses: oven-sh/setup-bun@v1
 
-            - name: Navigate to frontend directory
-              run: cd frontend
-
             - name: 📦 Install dependencies
-              run: bun install
+              run: bun i
 
             - name: 🚀 Build Nuxt.js application
               run: bun run build
