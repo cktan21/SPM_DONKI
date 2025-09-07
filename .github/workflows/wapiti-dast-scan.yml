@@ -20,8 +20,8 @@ jobs:
             - name: 🛠️ Setup Bun
               uses: oven-sh/setup-bun@v1
 
-            - name: Enter Frontend Folder
-              uses: cd frontend
+            - name: Navigate to frontend directory
+              run: cd frontend
 
             - name: 📦 Install dependencies
               run: bun install
