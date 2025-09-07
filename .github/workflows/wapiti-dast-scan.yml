@@ -48,7 +48,7 @@ jobs:
                   # We'll use http://localhost:3000 as the target.
                   # The -f html -o report-folder generates an HTML report.
                   # The --scan-force aggressive option increases the scan's thoroughness.
-                  wapiti -u http://localhost:3000 --scope domain -f html -o wapiti_report --scan-force aggressive
+                  wapiti -u http://localhost:3000 --scope domain -f html -o . --scan-force aggressive
               env:
                   # dummy ENV change when we actually have real envs LOL
                   NODE_ENV: production
@@ -57,4 +57,4 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: wapiti-report
-                  path: wapiti_report/
+                  path: ./
