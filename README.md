@@ -22,17 +22,26 @@ Switch to your branch before starting to code <br>
 
 > Local Setup, ensure Docker Desktop is running
 1. Open a terminal and run the following command:
+
 ```bash
-  cd backend
-  docker-compose up -d --build
-  docker-compose down
+cd backend
+docker-compose up -d --build
+docker-compose down
 ```
 2. Open another terminal and run the following command:
+
 ```bash
-  cd frontend
-  bun i
-  bun run dev
+cd frontend
+bun i
+bun run dev
 ```
+<!-- 3. Setting up SonarQube (access on localhost:9000)
+- default credentials username: `admin` password: `admin`
+
+```bash
+docker pull sonarqube:lts-community
+docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
+``` -->
 
 ## Technical Architecture Diagram
 
