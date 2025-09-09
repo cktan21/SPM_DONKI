@@ -44,8 +44,7 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 ``` -->
 
 ## Technical Architecture Diagram
-
-insert smth here
+<img width="1195" height="911" alt="image" src="https://github.com/user-attachments/assets/3a79e6c4-eba5-40c2-af26-ebf8b520f63e" />
 
 
 ## Notable Technical Implementations
@@ -53,7 +52,6 @@ insert smth here
 - <b>Microservice Archictecture</b>
 - <b>Loosely Coupled</b> Atomic Microservices
 - Variety of <b>Languages and Frameworks and Runtimes</b> to show <b>Language Agnostic</b> properties in Microservices
-- Mix of <b>SQL and NoSQL Databases</b>
 - <b>RabbitMQ as message broker</b> for real time changes
 - Websocket as message consumer of RabbitMQ
 - <b>Kong API Gateway</b> for aggregating requests and routing
@@ -83,12 +81,11 @@ insert smth here
 
 <p align="center"><strong>Microservices Languages</strong></p>
 <p align="center">
-<a href="https://go.dev/"><img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Go_Logo_Blue.svg" alt="Golang" width="80"/></a>&nbsp;&nbsp;
 <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6a/JavaScript-logo.png" alt="JavaScript" width="40"/></a>&nbsp;&nbsp;
 <a href="https://www.typescriptlang.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Typescript_logo_2020.svg/1200px-Typescript_logo_2020.svg.png" alt="TypeScript" width="40"/></a>&nbsp;&nbsp;
 <a href="https://www.python.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/1024px-Python-logo-notext.svg.png" alt="Python" width="40"/></a>&nbsp;&nbsp;
 <br>
-<i>Golang · JavaScript · TypeScript · Python</i>
+<i>JavaScript · TypeScript · Python</i>
 </p>
 <br>
 
@@ -96,16 +93,14 @@ insert smth here
 <p align="center">
 <a href="https://hono.dev/"><img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Hono-logo.svg" alt="Hono" width="50"/></a>&nbsp;&nbsp;
 <a href="https://fastapi.tiangolo.com/"><img src="https://upload.wikimedia.org/wikipedia/commons/1/1a/FastAPI_logo.svg" alt="FastAPI" width="120"/></a>&nbsp;&nbsp;
-<a href="https://flask.palletsprojects.com/"><img src="https://upload.wikimedia.org/wikipedia/commons/3/3c/Flask_logo.svg" alt="Flask" width="100"/></a>&nbsp;&nbsp;
 <br>
-<i>Hono · FastAPI · Flask</i>
+<i>Hono · FastAPI</i>
 </p>
 <br>
 
-<p align="center"><strong>API Gateway and Reverse Proxy</strong></p>
+<p align="center"><strong>API Gateway</strong></p>
 <p align="center">
 <a href="https://konghq.com/"><img src="https://konghq.com/wp-content/uploads/2018/08/kong-combination-mark-color-256px.png" alt="Kong API Gateway" width="88"/></a>
-<a href="https://traefik.io/"><img src="https://raw.githubusercontent.com/docker-library/docs/a6cc2c5f4bc6658168f2a0abbb0307acaefff80e/traefik/logo.png" alt="Traefik" width="55"/></a>
 <br>
 <i>CORS · Rate Limit Plugin </i>
 </p>
