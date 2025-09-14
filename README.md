@@ -25,7 +25,7 @@ Switch to your branch before starting to code <br>
 
 ```bash
 cd backend
-docker-compose up -d --build
+docker-compose --project-name spm-backend up -d --build
 docker-compose down
 ```
 2. Open another terminal and run the following command:

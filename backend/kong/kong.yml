@@ -1,0 +1,81 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # - name: rabbitmq-management
+  #   url: http://rabbitmq:15672
+  #   routes:
+  #     - name: rabbitmq-management-route
+  #       paths:
+  #         - /rabbitmq
+      
+  - name: project-service
+    url: http://project:5200
+    routes:
+      - name: project-route
+        paths:
+          - /project
+
+  - name: tasks-service
+    url: http://tasks:5000
+    routes:
+      - name: tasks-route
+        paths:
+          - /tasks
+
+  - name: schedule-service
+    url: http://schedule:5300
+    routes:
+      - name: schedule-route
+        paths:
+          - /schedule
+
+  - name: user-service
+    url: http://user:5100
+    routes:
+      - name: user-route
+        paths:
+          - /user
+
+
+plugins:
+  - name: rate-limiting
+    config:
+      minute: 100
+      policy: local
+
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - HEAD
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Access-Control-Allow-Origin
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        # - Authorization # Maybe remove this
+
+  # - name: prometheus
+  #   enabled: true
+  #   protocols:
+  #     - grpc
+  #     - grpcs
+  #     - http
+  #     - https
+  #   config:
+  #     ai_metrics: false
+  #     bandwidth_metrics: false
+  #     latency_metrics: false
+  #     per_consumer: false
+  #     status_code_metrics: false
+  #     upstream_health_metrics: false
