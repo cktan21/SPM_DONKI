@@ -8,15 +8,25 @@ class SupabaseClient:
         self.key = os.getenv("SUPABASE_API_KEY")
         self.client: Client = create_client(self.url, self.key)
     
-    # Sample Code PLS CHANGE
-    def insert_recommendation(self, rec):
-        response = self.client.table("Recommendations").insert({
-            "uuid": rec.id,
-            "recommendation": rec.recommendations
-        }).execute()
-        return response
+    def update_task(self, task_id, updates):
+        """Update a task with the provided data and return the updated row"""
+        # Perform the update
+        response = (
+            self.client
+            .table("TASK")
+            .update(updates)
+            .eq("id", task_id)
+            .execute()
+        )
 
-    def fetch_recommendation(self, id):
-        response = self.client.table("Recommendations").select("*").eq("uuid", id).execute()
-        data = response.data
-        return data[0] if data else None
+        # If the update response doesn’t include the row, fetch it explicitly
+        if not getattr(response, "data", None):
+            response = (
+                self.client
+                .table("TASK")
+                .select("*")
+                .eq("id", task_id)
+                .execute()
+            )
+
+        return response
