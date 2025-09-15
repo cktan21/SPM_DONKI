@@ -16,6 +16,40 @@ supabase = SupabaseClient()
 def read_root():
     return {"message": "Task Service is running 🚀😱"}
 
+#Create task 
+@app.post("/tasks", summary="Create a new task")
+async def create_task(
+    task: Dict[str, Any] = Body(
+        ...,
+        example={
+            "name": "New Task Title",
+            "status": "Not Started",
+            "desc": "Optional description",
+            "notes": "Optional notes",
+            "deadline": "2025-09-30T17:00:00Z",
+            "created_by_uid": "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001"  # User ID
+        }
+    )
+):
+    # Ensure task has a valid name
+    if "name" not in task or task["name"].strip() == "":
+        raise HTTPException(status_code=400, detail="Task name is required")
+    
+    # Required server-side defaults
+    if "status" not in task or task["status"]=="":
+        task["status"] = "not_started"
+
+    task["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
+
+    # Insert task into Supabase
+    resp = supabase.client.table("TASK").insert(task).execute()
+    rows = getattr(resp, "data", None) or []
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="Failed to create task")
+
+    return {"message": "Task created successfully", "task": rows[0]}
+
 # Update task details
 @app.put("/{task_id}", summary="Update a task", response_description="Updated task row")
 async def update_task(
