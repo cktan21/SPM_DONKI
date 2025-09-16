@@ -17,7 +17,7 @@ services:
           - /project
 
   - name: tasks-service
-    url: http://tasks:5000
+    url: http://tasks:5500
     routes:
       - name: tasks-route
         paths:

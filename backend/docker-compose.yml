@@ -75,7 +75,7 @@ services:
     networks:
       - spm-net
     ports:
-      - "5000:5000"
+      - "5500:5500"
     env_file:
       - ./services/atomic/tasks/.env
 

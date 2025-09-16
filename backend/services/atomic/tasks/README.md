@@ -4,7 +4,7 @@
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --port 5000
+uvicorn main:app --reload --port 5500
 ```
 
 To deactivate server:
@@ -14,14 +14,14 @@ deactivate
 > Docker Development
 ```bash
 docker build -t my-fastapi-app .
-docker run -p 5000:5000 --name my-fastapi-container my-fastapi-app
+docker run -p 5500:5500 --name my-fastapi-container my-fastapi-app
 ```
 
 ## EndPoints
 
 ### Health Check
 
-GET http://localhost:5000
+GET http://localhost:5500
 
 Output:
 ```bash
@@ -30,7 +30,7 @@ Output:
 
 >Function Name
 
-GET http://localhost:5000/recommendation/{id} //add your endpoints here
+GET http://localhost:5500/recommendation/{id} //add your endpoints here
 
 ----Add Description here----
 
