@@ -28,7 +28,7 @@ Output:
 "message": "Task Service is running 🚀😱"
 ```
 
->Create Task
+>### Create Task
 
 POST http://localhost:5500/tasks
 
@@ -52,7 +52,7 @@ Sample Output:
 }
 ```
 
->Update Task
+>### Update Task
 
 PUT http://localhost:5500/{task_id}
 
