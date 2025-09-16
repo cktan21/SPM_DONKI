@@ -23,11 +23,9 @@ async def create_task(
         ...,
         example={
             "name": "New Task Title",
-            "status": "Not Started",
             "desc": "Optional description",
             "notes": "Optional notes",
-            "deadline": "2025-09-30T17:00:00Z",
-            "created_by_uid": "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001"  # User ID
+            "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6"  # User ID
         }
     )
 ):
@@ -36,8 +34,8 @@ async def create_task(
         raise HTTPException(status_code=400, detail="Task name is required")
     
     # Required server-side defaults
-    if "status" not in task or task["status"]=="":
-        task["status"] = "not_started"
+    # if "status" not in task or task["status"]=="":
+    #     task["status"] = "not_started"
 
     task["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
 
@@ -62,24 +60,31 @@ async def update_task(
             "collaborators": ["3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001", "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"],
             "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
             "desc": "Set up the initial project structure and dependencies",
-            "status": "in_progress",
-            "notes": "Remember to update the README file",
-            "deadline": "2025-09-30T17:00:00Z"
+            "notes": "Remember to update the README file"
         }
     ),
 ):
+    # Filter to only allow specific fields
+    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes"}
+
+    # filtered_updates --> dictionary with only allowed fields
+    filtered_updates = {}
+    for key, value in updates.items():
+        if key in allowed_fields:
+            # Update the value for the key
+            filtered_updates[key] = value
+    
     # Add server-side timestamp
-    updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
-
+    filtered_updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
+    
     # Use supabaseClient's update_task method
-    resp = supabase.update_task(task_id, updates)
-
+    resp = supabase.update_task(task_id, filtered_updates)
     rows = getattr(resp, "data", None) or []
+    
     if not rows:
         raise HTTPException(status_code=404, detail="Task not found or not permitted")
-
+    
     return {"message": "Task updated successfully", "task": rows[0]}
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5500)
