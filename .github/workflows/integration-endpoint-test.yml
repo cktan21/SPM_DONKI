@@ -32,7 +32,7 @@ jobs:
             - name: Setup Docker Buildx
               uses: docker/setup-buildx-action@v3
             - name: Start services
-              run: docker-compose --project-name spm-backend up -d --build
+              run: docker-compose up -d --build
             
             - name: Wait for services to be ready
               run: |
