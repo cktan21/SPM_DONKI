@@ -16,6 +16,10 @@ concurrency:
 jobs:
     test-service:
         runs-on: ubuntu-latest
+        env:
+            SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+            SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+            
         defaults:
             run:
                 working-directory: ./backend

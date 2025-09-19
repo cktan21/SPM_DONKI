@@ -66,8 +66,10 @@ services:
       - spm-net
     ports:
       - "5200:5200"
-    env_file:
-      - ./services/atomic/project/.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_API_KEY: ${SUPABASE_API_KEY}
+    
 
   tasks:
     build: ./services/atomic/tasks
@@ -76,8 +78,9 @@ services:
       - spm-net
     ports:
       - "5500:5500"
-    env_file:
-      - ./services/atomic/tasks/.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_API_KEY: ${SUPABASE_API_KEY}
 
   user:
     build: ./services/atomic/user
@@ -86,8 +89,9 @@ services:
       - spm-net
     ports:
       - "5100:5100"
-    env_file:
-      - ./services/atomic/user/.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_API_KEY: ${SUPABASE_API_KEY}
 
   schedule:
     build: ./services/atomic/schedule
@@ -96,8 +100,9 @@ services:
       - spm-net
     ports:
       - "5300:5300"
-    env_file:
-      - ./services/atomic/schedule/.env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_API_KEY: ${SUPABASE_API_KEY}
 
 #   rabbitmq:
 #     image: rabbitmq:3-management
