@@ -35,7 +35,7 @@ POST http://localhost:5500/tasks
 Create a new task
 
 Sample Output:
-```bash
+```json
 {
   "message": "Task created successfully",
   "task": {
@@ -59,7 +59,7 @@ PUT http://localhost:5500/{task_id}
 Update task details by task id
 
 Sample Output:
-```bash
+```json
 {
   "message": "Task updated successfully",
   "task": {

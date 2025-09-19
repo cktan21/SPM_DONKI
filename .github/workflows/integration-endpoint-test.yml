@@ -1,0 +1,47 @@
+name: Endpoint Integration Test
+
+on:
+    pull_request:
+        branches:
+            - main
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+    test-service:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./backend
+        
+        steps:
+            - name: 📥 Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup Go
+              uses: actions/setup-go@v4
+              with:
+                go-version: '1.25'
+            
+            - name: Start services
+              run: docker-compose --project-name spm-backend up -d --build
+            
+            - name: Wait for services to be ready
+              run: |
+                echo "Waiting for services to start..."
+                sleep 30s # Adjust this sleep time as needed based on your service startup time.
+                echo "Services should be up now."
+
+            - name: Run go test integration tests
+              run: go test -v ../test/integration
+
+            - name: Container Cleanup
+              if: always()
+              run: docker-compose down
+
