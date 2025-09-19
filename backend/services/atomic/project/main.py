@@ -13,5 +13,9 @@ supabase = SupabaseClient()
 def read_root():
     return {"message": "Project Service is running 🚀😫"}
 
+@app.get("/favicon.ico")
+async def get_favicon():
+    return Response(status_code=204)
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5200)

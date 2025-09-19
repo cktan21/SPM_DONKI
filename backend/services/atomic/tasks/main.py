@@ -16,6 +16,10 @@ supabase = SupabaseClient()
 def read_root():
     return {"message": "Task Service is running 🚀😱"}
 
+@app.get("/favicon.ico")
+async def get_favicon():
+    return Response(status_code=204)
+
 #Create task 
 @app.post("/tasks", summary="Create a new task")
 async def create_task(

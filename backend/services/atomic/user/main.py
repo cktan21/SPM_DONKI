@@ -129,5 +129,9 @@ def get_lockedf(current_user: dict = Depends(get_current_user)):
 def read_root():
     return {"message": "User Service is running 🚀🥺"}
 
+@app.get("/favicon.ico")
+async def get_favicon():
+    return Response(status_code=204)
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5100)
