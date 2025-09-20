@@ -84,8 +84,9 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6a/JavaScript-logo.png" alt="JavaScript" width="40"/></a>&nbsp;&nbsp;
 <a href="https://www.typescriptlang.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Typescript_logo_2020.svg/1200px-Typescript_logo_2020.svg.png" alt="TypeScript" width="40"/></a>&nbsp;&nbsp;
 <a href="https://www.python.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/1024px-Python-logo-notext.svg.png" alt="Python" width="40"/></a>&nbsp;&nbsp;
+<a href="https://go.dev/"><img src="https://go.dev/blog/go-brand/Go-Logo/SVG/Go-Logo_Blue.svg" alt="Go" width="60"/></a>
 <br>
-<i>JavaScript · TypeScript · Python</i>
+<i>JavaScript · TypeScript · Python · Go</i>
 </p>
 <br>
 
@@ -120,6 +121,8 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 <a href="https://snyk.io/"><img src="https://github.com/user-attachments/assets/f35638ce-2ad1-4664-9cf1-e219222ca4f0" alt="Snyk" width="120"/></a>&nbsp;&nbsp;
 <a href="https://grafana.com/"><img src="https://upload.wikimedia.org/wikipedia/commons/a/a1/Grafana_logo.svg" alt="Grafana" width="60"/></a>&nbsp;&nbsp;
 <a href="https://prometheus.io/"><img src="https://upload.wikimedia.org/wikipedia/commons/3/38/Prometheus_software_logo.svg" alt="Prometheus" width="60"/></a>&nbsp;&nbsp;
+<a href="https://wapiti.sourceforge.io/"><img src="https://wapiti-scanner.github.io/wapiti_400.png" alt="Wapiti" width="60"/></a>
+<a href="https://coveralls.io/"><img src="https://avatars.githubusercontent.com/u/16691566?s=280&v=4" alt="Coveralls" width="60"/></a>
 <br>
 <i>Github Actions · Snyk · Grafana · Prometheus</i>
 </p> 
