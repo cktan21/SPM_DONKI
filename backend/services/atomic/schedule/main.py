@@ -40,7 +40,7 @@ def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
         if str(e) == "Task with this ID already exists.":
             raise HTTPException(
                 status_code=400,
-                detail={"message": "Task with this ID already exists."}
+                detail="Task with this ID already exists."
             )
         else:
             # For any other unexpected errors
