@@ -17,7 +17,8 @@ class SupabaseClient:
             "deadline": deadline,
             "status": status
         }).execute()
-        return response
+        data = response.data
+        return data[0] if data else None
 
     # Get Schedule
     def fetch_schedule(self, tid):
@@ -34,4 +35,5 @@ class SupabaseClient:
     # Update Schedule
     def update_schedule(self, tid, updated_data):
         response = self.client.table("SCHEDULE").update(updated_data).eq("tid", tid).execute()
-        return response.data
+        data = response.data
+        return data[0] if data else None
