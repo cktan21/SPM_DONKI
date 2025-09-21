@@ -86,7 +86,7 @@ async def update_task(
     rows = getattr(resp, "data", None) or []
     
     if not rows:
-        raise HTTPException(status_code=404, detail="Task not found or not permitted")
+        raise HTTPException(status_code=404, detail="Task not updated")
     
     return {"message": "Task updated successfully", "task": rows[0]}
 
