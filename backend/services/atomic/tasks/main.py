@@ -33,13 +33,11 @@ async def create_task(
         }
     )
 ):
-    # Ensure task has a valid name
+    # Ensure task has a valid name & Owner ID
     if "name" not in task or task["name"].strip() == "":
         raise HTTPException(status_code=400, detail="Task name is required")
-    
-    # Required server-side defaults
-    # if "status" not in task or task["status"]=="":
-    #     task["status"] = "not_started"
+    if "created_by_uid" not in task:
+        raise HTTPException(status_code=400, detail="Task Owner ID is required")
 
     task["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
 
