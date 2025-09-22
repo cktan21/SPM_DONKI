@@ -1,22 +1,44 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import Response
+from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
-import uvicorn
-import jwt  # you can use PyJWT
-from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError
 import os
+import uvicorn
+import jwt
+from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError
+from datetime import datetime, timedelta
 
 load_dotenv()
 
-app = FastAPI(title="Atomic Microservice: User Service")
+app = FastAPI(title="User Service")
 supabase = SupabaseClient()
 
-# Get your Supabase JWT secret from .env
-JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # or os.getenv("SUPABASE_JWT_SECRET")
+# -----------------------
+# CORS
+# -----------------------
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -----------------------
+# JWT config
+# -----------------------
+JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 
+# -----------------------
+# Models
+# -----------------------
 class SignupRequest(BaseModel):
     email: str
     password: str
@@ -26,38 +48,30 @@ class LoginRequest(BaseModel):
     password: str
 
 # -----------------------
-# Decode JWT and get user
+# Helper: current user from cookie
 # -----------------------
-def get_current_user(request: Request):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        raise HTTPException(status_code=401, detail="No token provided")
-
-    token = auth_header.replace("Bearer ", "")
+def get_current_user_from_cookie(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         payload = jwt.decode(
             token,
             JWT_SECRET,
             algorithms=[JWT_ALGORITHM],
-            audience="authenticated",  # or options={"verify_aud": False}
+            audience="authenticated",
+            options={"verify_exp": False}  # use refresh token for expiry
         )
-        print("Decoded sub:", payload["sub"])
         auth_id = payload.get("sub")
         if not auth_id:
-            raise HTTPException(status_code=401, detail="No subject (sub) in token")
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    except PyJWTError as e:
+            raise HTTPException(status_code=401, detail="Invalid token: no sub")
+    except (ExpiredSignatureError, InvalidTokenError, PyJWTError) as e:
         raise HTTPException(status_code=401, detail=f"JWT error: {str(e)}")
 
-    # Fetch user from user table
     user_data = supabase.client.table("USER").select("*").eq("auth_id", auth_id).execute()
     if not user_data.data:
         raise HTTPException(status_code=401, detail="User not found")
-
     return user_data.data[0]
 
 # -----------------------
@@ -65,73 +79,103 @@ def get_current_user(request: Request):
 # -----------------------
 @app.post("/signup")
 def signup(req: SignupRequest):
-    resp = supabase.client.auth.sign_up({
-        "email": req.email,
-        "password": req.password
-    })
-    if not resp.user:
-        raise HTTPException(status_code=400, detail="Signup failed")
+    try:
+        resp = supabase.client.auth.sign_up({"email": req.email, "password": req.password})
+        if not resp.user:
+            return JSONResponse(status_code=400, content={"detail": "Signup failed"})
 
-    # no need to insert into user table manually if you have the trigger
-    return {"message": "User signed up", "user_id": resp.user.id}
+        # Auto-login
+        session = supabase.client.auth.sign_in_with_password({"email": req.email, "password": req.password})
+
+        response = JSONResponse(
+            status_code=201,
+            content={"message": "User signed up and logged in", "user_id": resp.user.id}
+        )
+        # Set cookies
+        response.set_cookie(
+            key="access_token",
+            value=session.session.access_token,
+            httponly=True,
+            secure=False,       # False for localhost; True for HTTPS in prod
+            samesite="lax",
+            max_age=3600        # 1 hour
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=session.session.refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=14*24*3600  # 2 weeks
+        )
+        return response
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e) or "Internal server error"})
+
 
 # -----------------------
 # Login
 # -----------------------
 @app.post("/login")
 def login(req: LoginRequest):
-    resp = supabase.client.auth.sign_in_with_password({
-        "email": req.email,
-        "password": req.password
-    })
-    if not resp.session:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    try:
+        resp = supabase.client.auth.sign_in_with_password({"email": req.email, "password": req.password})
+        if not resp.session:
+            return JSONResponse(status_code=401, content={"detail": "Invalid email or password"})
 
-    return {
-        "access_token": resp.session.access_token,
-        "refresh_token": resp.session.refresh_token
-    }
+        access_token = resp.session.access_token
+        refresh_token = resp.session.refresh_token
+
+        response = JSONResponse(
+            status_code=200,
+            content={"message": "Login successful"}
+        )
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=3600
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=14*24*3600
+        )
+        return response
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e) or "Internal server error"})
+
 
 # -----------------------
-# Logout   ->  Having issues with service role key, redirect to frontend logout
+# Logout
 # -----------------------
-# @app.post("/logout")
-# def logout(request: Request):
-#     token = request.headers.get("Authorization")
-#     if not token:
-#         raise HTTPException(status_code=401, detail="No token provided")
-
-#     token = token.replace("Bearer ", "")
-
-#     try:
-#         # Invalidate the session using the admin endpoint
-#         resp = supabase.client.auth.admin.sign_out(token)
-#         if resp.get("error"):
-#             raise HTTPException(status_code=400, detail=resp["error"]["message"])
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Logout failed: {e}")
-
-#     return {"message": "Logged out successfully"}
+@app.post("/logout")
+def logout():
+    response = JSONResponse(status_code=200, content={"message": "Logged out"})
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return response
 
 # -----------------------
-# Role-protected endpoint
+# Check logged in
 # -----------------------
-@app.get("/lockedf")
-def get_lockedf(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in ["Manager", "Director"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-    return {"lockedf": []}
+@app.get("/me")
+def me(current_user: dict = Depends(get_current_user_from_cookie)):
+    return JSONResponse(status_code=200, content={"user": current_user})
 
 # -----------------------
 # Health check
 # -----------------------
 @app.get("/")
 def read_root():
-    return {"message": "User Service is running 🚀🥺"}
-
-@app.get("/favicon.ico")
-async def get_favicon():
-    return Response(status_code=204)
+    return JSONResponse(status_code=200, content={"message": "User Service is running"})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5100)
