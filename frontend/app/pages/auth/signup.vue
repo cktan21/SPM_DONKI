@@ -16,51 +16,53 @@ const email = ref("")
 const password = ref("")
 const loading = ref(false)
 const errorMessage = ref("")
-const checkedAuth = ref(false)  // to prevent flicker
 
 const BASE_URL = "http://localhost:5100"
 
 // ----------------------
-// Auto-redirect if authenticated
+// Auto-redirect if already authenticated
 // ----------------------
+const checkedAuth = ref(false)
+
 onMounted(async () => {
   try {
     const res = await fetch(`${BASE_URL}/me`, {
       method: "GET",
-      credentials: "include"  // cookies sent automatically
+      credentials: "include" // send cookies automatically
     })
     if (res.ok) {
-      router.replace("/dashboard")
+      router.replace("/dashboard") // already logged in
     }
   } catch {
-    // user not authenticated, show login form
+    // not logged in, show signup form
   } finally {
     checkedAuth.value = true
   }
 })
 
 // ----------------------
-// Login handler
+// Signup handler
 // ----------------------
-async function handleLogin() {
+async function handleSignup() {
   loading.value = true
   errorMessage.value = ""
 
   try {
-    const res = await fetch(`${BASE_URL}/login`, {
+    const res = await fetch(`${BASE_URL}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",  // very important!
+      credentials: "include", // cookies will be set by backend
       body: JSON.stringify({ email: email.value, password: password.value })
     })
 
+    const data = await res.json().catch(() => ({}))
+
     if (!res.ok) {
-      const data = await res.json()
-      errorMessage.value = data.detail || `Login failed (${res.status})`
+      errorMessage.value = data.detail || `Signup failed (${res.status})`
       return
     }
 
-    // Redirect after login
+    // Success → cookies already set by backend
     router.replace("/dashboard")
 
   } catch (err: any) {
@@ -73,43 +75,43 @@ async function handleLogin() {
 
 <template>
   <div v-if="checkedAuth" class="w-full h-screen lg:grid lg:grid-cols-2">
-    <!-- Login Form -->
+    <!-- Left side: Signup form -->
     <div class="flex items-center justify-center min-h-screen lg:py-12">
       <div class="mx-auto grid w-[350px] gap-6">
         <div class="grid gap-2 text-center">
-          <h1 class="text-3xl font-bold">Login</h1>
+          <h1 class="text-3xl font-bold">Sign Up</h1>
           <p class="text-balance text-muted-foreground">
-            Enter your email below to login
+            Create a new account by entering your email and password
           </p>
         </div>
 
+        <!-- Form -->
         <div class="grid gap-4">
           <div class="grid gap-2">
             <Label for="email">Email</Label>
-            <Input id="email" type="email" placeholder="hello@spmdonki.com" v-model="email" required />
+            <Input id="email" type="email" placeholder="hello@example.com" v-model="email" required />
           </div>
 
           <div class="grid gap-2">
-            <div class="flex items-center">
-              <Label for="password">Password</Label>
-            </div>
+            <Label for="password">Password</Label>
             <Input id="password" type="password" v-model="password" required />
           </div>
 
-          <Button :disabled="loading" @click="handleLogin" class="w-full">
-            {{ loading ? "Logging in..." : "Login" }}
+          <Button :disabled="loading" @click="handleSignup" class="w-full">
+            {{ loading ? "Signing up..." : "Sign Up" }}
           </Button>
 
           <p v-if="errorMessage" class="text-red-500 text-sm">{{ errorMessage }}</p>
         </div>
 
+        <!-- Login link -->
         <div class="mt-4 text-center text-sm">
-          Don't have an account? <a href="./signup" class="underline">Sign up</a>
+          Already have an account? <a href="./login" class="underline">Login</a>
         </div>
       </div>
     </div>
 
-    <!-- Cover image -->
+    <!-- Right side: Cover image -->
     <div class="hidden lg:block">
       <img :src="coverImage" alt="Cover image" class="h-screen w-full object-cover dark:brightness-[0.2] dark:grayscale" />
     </div>
