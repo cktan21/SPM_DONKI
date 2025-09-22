@@ -54,7 +54,7 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail=f"JWT error: {str(e)}")
 
     # Fetch user from user table
-    user_data = supabase.client.table("user").select("*").eq("auth_id", auth_id).execute()
+    user_data = supabase.client.table("USER").select("*").eq("auth_id", auth_id).execute()
     if not user_data.data:
         raise HTTPException(status_code=401, detail="User not found")
 
