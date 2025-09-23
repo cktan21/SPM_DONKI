@@ -32,7 +32,7 @@ class SupabaseClient:
         return response
     
     def delete_task(self, task_id, user_id):
-            """Delete a task only if the creator matches user_id"""
+            """Delete a task only if the owner matches user_id"""
             response = (
                 self.client
                 .table("TASK")
