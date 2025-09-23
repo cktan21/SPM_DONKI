@@ -39,7 +39,6 @@ async def get_task(
 
     return {"message": "Task retrieved successfully", "task": rows[0]}
 
-
 #Create task 
 @app.post("/tasks", summary="Create a new task")
 async def create_task(
@@ -107,6 +106,25 @@ async def update_task(
         raise HTTPException(status_code=404, detail="Task not updated")
     
     return {"message": "Task updated successfully", "task": rows[0]}
+
+#Delete Task
+@app.delete("/tasks/{task_id}", summary="Delete a task")
+async def delete_task(task_id: str = Path(..., description="ID of the task to delete"),
+                      body: Dict[str, str] = Body(...)
+                      ):
+    
+    user_id = body.get("user_id")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="User ID is required")  
+    
+    resp = supabase.delete_task(task_id, user_id)
+    rows = getattr(resp, "data", None) or []
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Task not found or not permitted")
+
+    return {"message": "Task deleted successfully", "task": rows[0]}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5500)
