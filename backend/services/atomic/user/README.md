@@ -28,13 +28,21 @@ Output:
 "message": "User Service is running 🚀🥺"
 ```
 
->Function Name
+>### Get user by user ID (for internal validation use)
 
-GET http://localhost:5000/recommendation/{id} //add your endpoints here
+GET http://localhost:5100/internal/{task_id}
 
-----Add Description here----
+> http://127.0.0.1:5100/internal/0ec8a99d-3aab-4ec6-b692-fda88656844f
 
 Sample Output:
-```bash
-
+```json
+{
+  "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+  "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
+  "email": "rc@example.com",
+  "role": "user",
+  "created_at": "2025-09-22T05:11:59.671524+00:00",
+  "exists": true,
+  "internal_api_key": "secret"
+}
 ```

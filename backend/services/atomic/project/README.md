@@ -28,13 +28,19 @@ Output:
 "message": "Project Service is running 🚀😫"
 ```
 
->Function Name
+>### Get project by project ID
 
-GET http://localhost:5200/recommendation/{id} //add your endpoints here
+GET http://localhost:5200/{project_id}
 
-----Add Description here----
+> http://localhost:5200/40339da5-9a62-4195-bbe5-c69f2fc04ed6
 
 Sample Output:
-```bash
-
-```
+```json
+{
+  "message": "Project retrieved successfully",
+  "project": {
+    "id": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+    "uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
+    "created_at": "2025-09-14T14:08:09.069584+00:00"
+  }
+}

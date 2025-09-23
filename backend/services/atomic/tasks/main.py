@@ -20,6 +20,26 @@ def read_root():
 async def get_favicon():
     return Response(status_code=204)
 
+# Get task by task ID
+@app.get("/{task_id}", summary="Get a task by ID", response_description="Task row")
+async def get_task(
+    task_id: str = Path(..., description="Primary key of the task (uuid)")
+):
+    # Query the TASK table by task_id
+    resp = (
+        supabase.client.table("TASK")
+        .select("*")
+        .eq("id", task_id)
+        .execute()
+    )
+    rows = getattr(resp, "data", None) or []
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {"message": "Task retrieved successfully", "task": rows[0]}
+
+
 #Create task 
 @app.post("/tasks", summary="Create a new task")
 async def create_task(

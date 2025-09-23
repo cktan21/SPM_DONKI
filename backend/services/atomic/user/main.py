@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -169,6 +169,60 @@ def logout():
 @app.get("/me")
 def me(current_user: dict = Depends(get_current_user_from_cookie)):
     return JSONResponse(status_code=200, content={"user": current_user})
+
+# -----------------------
+# Get user by userID -- used for backend check
+# -----------------------
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
+
+def verify_internal_api_key(x_internal_api_key: str = Header(None, convert_underscores=False)):
+    """Verify internal API key for service-to-service communication"""
+    if not INTERNAL_API_KEY:
+        # Fail fast so you don’t silently compare against None
+        raise HTTPException(status_code=500, detail="INTERNAL_API_KEY is not set on the server")
+
+    if not x_internal_api_key or x_internal_api_key != INTERNAL_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing internal API key")
+
+    return True
+
+
+# Internal endpoint for service-to-service user validation by ID
+@app.get("/internal/{user_id}")
+def validate_user_internal(user_id: str):
+    """
+    Internal endpoint for service-to-service user validation by user ID.
+    Uses INTERNAL_API_KEY from environment directly (no header needed).
+    """
+    try:
+        # Fetch user from user table by ID
+        user_data = supabase.client.table("USER").select(
+            "id, auth_id, email, role, created_at"
+        ).eq("id", user_id).execute()
+
+        if not user_data.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user = user_data.data[0]
+
+        # Return minimal info (and key if you want to confirm it's loaded)
+        return {
+            "id": user["id"],
+            "auth_id": user["auth_id"],
+            "email": user["email"],
+            "role": user["role"],
+            "created_at": user["created_at"],
+            "exists": True,
+            "internal_api_key": INTERNAL_API_KEY,  # optional: expose for debug
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to validate user: {str(e)}"
+        )
+
 
 # -----------------------
 # Health check
