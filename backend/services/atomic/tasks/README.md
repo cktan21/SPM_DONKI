@@ -58,7 +58,22 @@ Sample Output:
 
 POST http://localhost:5500/tasks
 
-Create a new task
+Create a new task (include pid if task belongs to a project, parentTaskId if it’s a subtask)
+
+Sample Request Body:
+```json
+{
+  "name": "New Task Title",
+  "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+  "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+  "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+  "collaborators": [
+    "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+    "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"
+  ],
+  "desc": "Optional description",
+  "notes": "Optional notes"
+}
 
 Sample Output:
 ```json
@@ -69,9 +84,12 @@ Sample Output:
     "name": "New Task Title",
     "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
     "updated_timestamp": "2025-09-16T16:54:30.006993+00:00",
-    "parentTaskId": null,
-    "collaborators": null,
-    "pid": null,
+    "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+    "collaborators": [
+      "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+      "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"
+    ],
+    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
     "desc": "Optional description",
     "notes": "Optional notes"
   }
@@ -104,3 +122,35 @@ Sample Output:
   }
 }
 ```
+
+>### Delete Task
+
+DELETE http://localhost:5500/tasks/{task_id}
+
+Delete a task by task ID. Only the owner of the task can delete it.  
+
+Sample Request Body:
+```json
+{
+  "user_id": "7b055ff5-84f4-47bc-be7d-5905caec3ec6"
+}
+
+Sample Output:
+```json
+{
+  "message": "Task deleted successfully",
+  "task": {
+    "id": "bbdfaf7d-448b-491b-8179-daa28640774e",
+    "name": "New Task Title",
+    "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+    "updated_timestamp": "2025-09-16T16:54:30.006993+00:00",
+    "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+    "collaborators": [
+      "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+      "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"
+    ],
+    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+    "desc": "Optional description",
+    "notes": "Optional notes"
+  }
+}
