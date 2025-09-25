@@ -31,7 +31,26 @@ async def get_favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
 
-# Composite endpoint
+# Composite endpoints
+@app.get("/tasks", summary="Get all tasks via composite service", response_description="List of all tasks")
+async def get_all_tasks_composite():
+    """
+    Composite endpoint to fetch all tasks from Task MS.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{TASK_SERVICE_URL}/tasks")
+            response.raise_for_status()
+            return response.json()  # forward the Task MS response
+
+    except httpx.HTTPStatusError as e:
+        return e.response.json()  # forward Task MS error
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Task MS unavailable: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
 @app.post("/createTask", summary="Create task via composite service", response_description="Created task via Task MS")
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
