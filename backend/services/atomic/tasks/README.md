@@ -27,6 +27,45 @@ Output:
 ```bash
 "message": "Task Service is running 🚀😱"
 ```
+### Get All Tasks
+
+GET http://localhost:5500/tasks
+
+Retrieve all tasks in the system.
+
+Sample Output:
+```json
+{
+    "message": "2 task(s) retrieved",
+    "tasks": [
+        {
+            "id": "1991067d-18d4-48c4-987b-7c06743725b4",
+            "name": "get coffee",
+            "created_by_uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
+            "updated_timestamp": "2025-09-14T14:26:42.564234+00:00",
+            "parentTaskId": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
+            "collaborators": null,
+            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+            "desc": "black coffee w latte",
+            "notes": null
+        },
+        {
+            "id": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
+            "name": "Complete Project Setup2",
+            "created_by_uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
+            "updated_timestamp": "2025-09-16T16:40:34.659965+00:00",
+            "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+            "collaborators": [
+                "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+                "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"
+            ],
+            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+            "desc": "Set up the initial project structure and dependencies",
+            "notes": "Remember to update the README file"
+        }
+    ]
+}
+
 >### Get task by task ID
 
 GET http://localhost:5500/{task_id}
@@ -56,7 +95,7 @@ Sample Output:
 
 >### Create Task
 
-POST http://localhost:5500/tasks
+POST http://localhost:5500/createTask
 
 Create a new task (include pid if task belongs to a project, parentTaskId if it’s a subtask)
 

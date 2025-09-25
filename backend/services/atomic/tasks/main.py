@@ -20,6 +20,12 @@ def read_root():
 async def get_favicon():
     return Response(status_code=204)
 
+#Get All tasks
+@app.get("/tasks", summary="Get all tasks")
+async def get_all_tasks():
+    tasks = supabase.get_all_tasks()
+    return {"message": f"{len(tasks)} task(s) retrieved", "tasks": tasks}
+
 # Get task by task ID
 @app.get("/{task_id}", summary="Get a task by ID", response_description="Task row")
 async def get_task(

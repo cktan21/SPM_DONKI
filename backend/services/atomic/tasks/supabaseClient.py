@@ -8,6 +8,20 @@ class SupabaseClient:
         self.key = os.getenv("SUPABASE_API_KEY")
         self.client: Client = create_client(self.url, self.key)
     
+    def get_all_tasks(self, filter_by: dict = None):
+        """
+        Fetch all tasks from TASK table.
+        Optional filter_by: dictionary with column:value pairs for filtering
+        """
+        query = self.client.table("TASK").select("*")
+        
+        if filter_by:
+            for key, value in filter_by.items():
+                query = query.eq(key, value)
+        
+        resp = query.execute()
+        return getattr(resp, "data", None) or []
+
     def update_task(self, task_id, updates):
         """Update a task with the provided data and return the updated row"""
         # Perform the update
