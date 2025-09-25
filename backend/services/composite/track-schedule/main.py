@@ -49,6 +49,28 @@ async def get_all_tasks_composite():
         raise HTTPException(status_code=503, detail=f"Task MS unavailable: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+@app.get("/tasks/{task_id}", summary="Get a task by ID via composite service", response_description="Task row")
+async def get_task_composite(
+    task_id: str = Path(..., description="Primary key of the task (uuid)")
+):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{TASK_SERVICE_URL}/{task_id}")
+            response.raise_for_status()
+            return response.json()  # forward Task MS response
+
+        except httpx.HTTPStatusError as e:
+            # Forward error message from Task MS
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found in Task MS")
+            else:
+                raise HTTPException(
+                    status_code=e.response.status_code,
+                    detail=f"Task MS returned an error: {e.response.text}"
+                )
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Failed to connect to Task MS: {str(e)}")
 
 
 @app.post("/createTask", summary="Create task via composite service", response_description="Created task via Task MS")
