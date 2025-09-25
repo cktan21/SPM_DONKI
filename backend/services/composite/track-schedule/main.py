@@ -31,6 +31,55 @@ async def get_favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
 
+# Composite endpoint
+@app.post("/createTask", summary="Create task via composite service", response_description="Created task via Task MS")
+async def create_task_composite(
+    task_json: Dict[str, Any] = Body(
+        ...,
+        example={
+            "name": "New Task Title",
+            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+            "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+            "collaborators": [
+                "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+                "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"
+            ],
+            "desc": "Optional description",
+            "notes": "Optional notes"
+        }
+    )
+):
+    """
+    Composite function to create a task:
+    1. Validate parentTaskId, collaborators, project ID
+    2. Call Task MS via helper function to create the task
+    """
+    try:
+        # Validate parentTaskId if provided
+        if "parentTaskId" in task_json and task_json["parentTaskId"]:
+            await validate_parent_task_id(task_json["parentTaskId"])
+
+        # Validate collaborators if provided
+        if "collaborators" in task_json and task_json["collaborators"]:
+            await validate_collaborators(task_json["collaborators"])
+
+        # Validate project ID if provided
+        if "pid" in task_json and task_json["pid"]:
+            await validate_project_id(task_json["pid"])
+
+        # Call helper function to create the task
+        task_response = await create_task_service(task_json)
+
+        return task_response
+
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+    
 @app.put("/{task_id}", summary="Update task via composite service", response_description="Updated task with validation")
 async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
@@ -178,6 +227,28 @@ async def validate_project_id(project_id: str):
 
 
 # Call the atomic services
+async def create_task_service(task_json: Dict[str, Any]):
+    """Send a new task to the task service"""
+
+    #get current user UID with helper function
+
+    #append to task_json
+
+    # UID for testing
+    task_json["created_by_uid"] = "7b055ff5-84f4-47bc-be7d-5905caec3ec6"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(f"{TASK_SERVICE_URL}/tasks", json=task_json)
+            response.raise_for_status()  # raise error if status != 2xx
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            # Forward Task MS error as-is
+            return e.response.json()
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
+
+
 async def update_task_service(task_id: str, updates: Dict[str, Any]):
     """Send updates to the task service"""
     async with httpx.AsyncClient() as client:
@@ -190,8 +261,8 @@ async def update_task_service(task_id: str, updates: Dict[str, Any]):
             return response.json()
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
-
-
+        
+# Schedule Service
 async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]):
     """Send schedule updates to the schedule service matching the PUT /{tid} endpoint"""
     async with httpx.AsyncClient() as client:
@@ -218,6 +289,8 @@ async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]
             print(f"Warning: Failed to connect to schedule service: {str(e)}")
             return {"status": "service_unavailable", "message": "Schedule service unavailable"}
 
+#User Service
+#async def get_current_user_UID():
 
 class ValidationError(Exception):
     """Custom exception for validation errors"""
