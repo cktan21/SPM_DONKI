@@ -239,7 +239,7 @@ async def create_task_service(task_json: Dict[str, Any]):
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(f"{TASK_SERVICE_URL}/tasks", json=task_json)
+            response = await client.post(f"{TASK_SERVICE_URL}/createTask", json=task_json)
             response.raise_for_status()  # raise error if status != 2xx
             return response.json()
         except httpx.HTTPStatusError as e:

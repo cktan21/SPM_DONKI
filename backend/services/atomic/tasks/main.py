@@ -40,7 +40,7 @@ async def get_task(
     return {"message": "Task retrieved successfully", "task": rows[0]}
 
 #Create task 
-@app.post("/tasks", summary="Create a new task")
+@app.post("/createTask", summary="Create a new task")
 async def create_task(
     task: Dict[str, Any] = Body(
         ...,
