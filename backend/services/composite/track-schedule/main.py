@@ -5,7 +5,6 @@ import asyncio
 from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
-import json
 
 load_dotenv()
 
