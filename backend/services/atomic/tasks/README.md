@@ -164,9 +164,10 @@ Sample Output:
 
 >### Delete Task
 
-DELETE http://localhost:5500/tasks/{task_id}
+DELETE http://localhost:5500/tasks/{task_id}?user_id=<user_id>
 
 Delete a task by task ID. Only the owner of the task can delete it.  
+User ID must be passed as a query parameter
 
 Sample Request Body:
 ```json

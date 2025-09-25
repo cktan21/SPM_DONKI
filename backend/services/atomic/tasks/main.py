@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body, Path
+from fastapi import FastAPI, HTTPException, Body, Path, Request
 from fastapi.responses import Response
 from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
@@ -114,13 +114,19 @@ async def update_task(
     return {"message": "Task updated successfully", "task": rows[0]}
 
 #Delete Task
-@app.delete("/tasks/{task_id}", summary="Delete a task")
-async def delete_task(task_id: str = Path(..., description="ID of the task to delete"),
-                      body: Dict[str, str] = Body(...)
-                      ):
-    
-    user_id = body.get("user_id")
 
+@app.delete("/tasks/{task_id}", summary="Delete a task")
+async def delete_task(
+    task_id: str = Path(..., description="ID of the task to delete"),
+    request: Request = None
+):
+    """
+    Delete a task. User ID must be passed as a query parameter:
+    /tasks/{task_id}?user_id=<current_user_id>
+    """
+    # Get user_id from query params
+    user_id = request.query_params.get("user_id")
+    
     if not user_id:
         raise HTTPException(status_code=400, detail="User ID is required")  
     

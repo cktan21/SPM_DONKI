@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -216,6 +217,20 @@ async def update_task_composite(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@app.delete("/tasks/{task_id}", summary="Delete a task via composite service")
+async def delete_task_composite(task_id: str = Path(..., description="Primary key of the task (uuid)")):
+    try:
+        result = await delete_task_service(task_id)
+        return result
+
+    except httpx.RequestError as e:
+        # Handle network/service unavailable errors
+        raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
+
+    except Exception as e:
+        # Catch-all for unexpected errors
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 
 # Helper functions for validations 
 async def validate_parent_task_id(parent_task_id: str):
@@ -272,7 +287,7 @@ async def create_task_service(task_json: Dict[str, Any]):
     """Send a new task to the task service"""
 
     #get current user UID with helper function
-
+    #get_current_user_UID():
     #append to task_json
 
     # UID for testing
@@ -302,7 +317,32 @@ async def update_task_service(task_id: str, updates: Dict[str, Any]):
             return response.json()
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
-        
+
+async def delete_task_service(task_id: str):
+    #get current user UID with helper function
+    #get_current_user_UID():
+    #append to task_json
+
+    # UID for testing
+    user_id="7b055ff5-84f4-47bc-be7d-5905caec3ec6"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.delete(f"{TASK_SERVICE_URL}/tasks/{task_id}?user_id={user_id}")
+            response.raise_for_status()
+            return response.json()  # forward Task MS response
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found in Task MS")
+            else:
+                raise HTTPException(
+                    status_code=e.response.status_code,
+                    detail=f"Task MS returned an error: {e.response.text}"
+                )
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"Failed to connect to Task MS: {str(e)}")
+
 # Schedule Service
 async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]):
     """Send schedule updates to the schedule service matching the PUT /{tid} endpoint"""
