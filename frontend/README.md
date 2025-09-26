@@ -10,16 +10,7 @@ Navigate to your frontend project folder:
 
 cd frontend
 
-Install dependencies (choose your package manager):
-
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
+Install dependencies:
 
 # bun
 bun install
@@ -89,14 +80,7 @@ Notes:
 
 This means you can organize pages in nested folders, and the URL will follow the folder structure automatically.
 
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
+# dev
 
 # bun
 bun run dev
@@ -107,28 +91,10 @@ bun run dev
 
 Build for production:
 
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
 # bun
 bun run build
 
 Preview production build locally:
-
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
 
 # bun
 bun run preview

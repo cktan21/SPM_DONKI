@@ -1,5 +1,6 @@
 .codacy
 .vscode
+codacy.instructions.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -211,3 +212,7 @@ __marimo__/
 
 #Mac Stuff
 .DS_Store
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
