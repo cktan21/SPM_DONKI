@@ -17,6 +17,8 @@ Some of the stuff such as the templates in `Themes` may not have the source code
 
 Shadcn-vue github: https://github.com/unovue/shadcn-vue
 
+Tailwind CSS: https://tailwindcss.com/docs
+
 ---
 
 1️⃣ Setup
@@ -46,19 +48,19 @@ Example:
 npx shadcn-vue@latest add button
 
 By default, after you run the code above, newly added components will appear under [components/ui/<component-name>/]. 
-Note this is aother component ui folder that is created outside of the app directory. This is technically the default way. 
+Note this is aother component/ui folder that is created outside of the app directory. This is technically the default way. 
 
 However, due to some importing problems which is not so simple to fix, i've added another component/ui inside the app directory, so 
 its alot easier to import. You find them at [app/components/ui]
 
-So if you happen to add any component using npx ```shadcn-vue@latest add <component-name>```, it will be in the [component/ui] folder outside the app 
+So if you happen to add any component using ```npx shadcn-vue@latest add <component-name>```, it will be in the [component/ui] folder outside the app 
 directory. You should move the newly added component into the [app/component/ui]
 
 ---
 
 3️⃣ Required: Create lib/utils.ts inside app/
 
-<!-- I've forced commit this util.ts, so its unlikely you will need to manually add this file anymore. 
+<!-- I've forced committed this util.ts, so its unlikely you will need to manually add this file anymore. 
 But in any cases you need, follow the steps below -->
 
 shadcn-vue components rely on a helper cn in lib/utils.ts.  
@@ -192,16 +194,8 @@ No official `*` shortcut exists. To add multiple components:
 
 npx shadcn-vue@latest add accordion alert alert-dialog avatar badge button calendar card checkbox dialog drawer dropdown-menu form hover-card input label menubar navigation-menu popover progress radio-group scroll-area select separator sheet skeleton slider switch table tabs textarea toast toggle tooltip
 
-Note: This populates all standard components under [components/ui/] outside of the app directory. After populating, you should move all the individual
-components into [app/components/ui]
-
----
-
-9️⃣ Useful Links
-
-* [Nuxt 4 Documentation](https://nuxt.com/docs)  
-* [Tailwind CSS v4](https://tailwindcss.com/docs)  
-* [shadcn-vue Documentation](https://shadcn-vue.com/docs)
+Note: This populates all standard components under [components/ui/], which is outside of the app directory. After populating, you should move all 
+the individual components into [app/components/ui]
 
 ---
 
@@ -239,7 +233,7 @@ frontend/
 └─ tsconfig.json
 
 > All team members should maintain this structure.  
-> `components/ui/` and `app/lib/utils.ts` **must exist** for shadcn-vue components to work.
+> `app/components/ui/` and `app/lib/utils.ts` **must exist** for shadcn-vue components to work.
 
 ---
 
