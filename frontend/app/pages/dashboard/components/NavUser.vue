@@ -50,9 +50,7 @@ const handleLogout = async () => {
     })
     
     if (response.ok) {
-      // Clear any cached auth state
-      const authState = useState('auth.user', () => null)
-      authState.value = null
+      useState("userData").value = null;
       
       // Redirect to login
       await navigateTo('/auth/login')

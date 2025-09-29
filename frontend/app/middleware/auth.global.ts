@@ -29,6 +29,17 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   const BASE_URL = "http://localhost:5100";
   const publicPages = ["/auth/login"]; // Only login page is public
 
+  // Check if auth state is already cached
+  const authState = useState<CheckCookiesResponse | null>("userData").value;
+
+  if (authState && authState.user && authState.user.id) {
+    // Cached auth state exists → no need to call checkCookies
+    if (publicPages.includes(to.path)) {
+      return navigateTo("/dashboard");
+    }
+    return true;
+  }
+
   try {
     const res = await $fetch<CheckCookiesResponse>(`${BASE_URL}/checkCookies`, {
       method: "GET",
@@ -36,15 +47,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     });
 
     if (res.user && res.user.id) {
-      // Authenticated
+      // Authenticated → store in auth state cache
+      useState<CheckCookiesResponse>("userData").value = res;
 
-      // If going to a public page (login) → redirect to dashboard
       if (publicPages.includes(to.path)) {
         return navigateTo("/dashboard");
       }
-
-      // Store user data in local state for reuse (optional)
-      useState("userData").value = res.user;
 
       return true; // Allow navigation
     } else {
@@ -57,7 +65,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   } catch (err) {
     console.error("Auth check failed:", err);
 
-    // If check fails and NOT going to a public page → redirect to login
     if (!publicPages.includes(to.path)) {
       return navigateTo("/auth/login");
     }

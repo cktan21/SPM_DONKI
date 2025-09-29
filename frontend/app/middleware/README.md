@@ -56,6 +56,13 @@ The authentication cookies are set by backend routes (`localhost:5100/login` and
 - On every route navigation (including page load and route change)
 - Or when page is first loaded/refreshed
 
+```
+This middleware uses Nuxt's useState("userData") as the authentication state cache (authState).
+
+It stores the decoded user_data JWT in useState("userData") as the auth state cache. 
+This prevents repeated /checkCookies calls during navigation, improving performance.
+```
+
 ### Step 1: Check Cached Auth State
 
 ```
