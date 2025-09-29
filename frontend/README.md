@@ -2,205 +2,201 @@
 
 This project uses Nuxt 4, Tailwind CSS v4, and shadcn-vue components. Follow these instructions to get started and handle common issues.
 
-Documentation for Nuxt: https://nuxt.com/docs/4.x/getting-started/introduction
+**Documentation for Nuxt:** https://nuxt.com/docs/4.x/getting-started/introduction
 
-<!-- NOTE: Search for shadcn-vue not shadcn. shadcn is for Next.js  -->
+> **NOTE:** Search for shadcn-vue not shadcn. shadcn is for Next.js
 
-Components for Shadcn-vue: https://www.shadcn-vue.com/docs/components/accordion.html
+**Components for Shadcn-vue:** https://www.shadcn-vue.com/docs/components/accordion.html
 
 You can also look at their `Home` or `Themes` page for some prebuilt pages or templates:
 
-Themes: https://www.shadcn-vue.com
-Blocks: https://www.shadcn-vue.com/blocks.html
+- **Themes:** https://www.shadcn-vue.com
+- **Blocks:** https://www.shadcn-vue.com/blocks.html
 
 Some of the stuff such as the templates in `Themes` may not have the source code on shadcn-vue website. You can look for it at their github repo
 
-Shadcn-vue github: https://github.com/unovue/shadcn-vue
+**Shadcn-vue github:** https://github.com/unovue/shadcn-vue
 
-Tailwind CSS: https://tailwindcss.com/docs
+**Tailwind CSS:** https://tailwindcss.com/docs
 
----
-
-1️⃣ Setup
+## Setup
 
 Navigate to your frontend project folder:
 
+```bash
 cd frontend
+```
 
 Install dependencies:
 
+```bash
 # bun
 bun install
+```
 
----
+## shadcn-vue Components
 
-2️⃣ shadcn-vue Components
+All UI components live in `app/components/ui/` (*** For this specific project only, read below to find out more)
 
-All UI components live in app/components/ui/ (*** For this specific project only, read below to find out more)
-**Important:** Commit this folder to Git so team members don’t need to regenerate components.
+> **Important:** Commit this folder to Git so team members don't need to regenerate components.
 
 If you need a component that is not inside [app/component/ui], you can add them by running the command below:
 
+```bash
 npx shadcn-vue@latest add <component-name>
+```
 
 Example:
 
+```bash
 npx shadcn-vue@latest add button
+```
 
-By default, after you run the code above, newly added components will appear under [components/ui/<component-name>/]. 
-Note this is aother component/ui folder that is created outside of the app directory. This is technically the default way. 
+By default, after you run the code above, newly added components will appear under `[components/ui/<component-name>/]`. Note this is another component/ui folder that is created outside of the app directory. This is technically the default way.
 
-However, due to some importing problems which is not so simple to fix, i've added another component/ui inside the app directory, so 
-its alot easier to import. You find them at [app/components/ui]
+However, due to some importing problems which is not so simple to fix, i've added another component/ui inside the app directory, so its alot easier to import. You find them at `[app/components/ui]`
 
-So if you happen to add any component using ```npx shadcn-vue@latest add <component-name>```, it will be in the [component/ui] folder outside the app 
-directory. You should move the newly added component into the [app/component/ui]
+So if you happen to add any component using `npx shadcn-vue@latest add <component-name>`, it will be in the `[component/ui]` folder outside the app directory. You should move the newly added component into the `[app/component/ui]`
 
----
+## Required: Create lib/utils.ts inside app/
 
-3️⃣ Required: Create lib/utils.ts inside app/
+<!-- I've forced committed this util.ts, so its unlikely you will need to manually add this file anymore. But in any cases you need, follow the steps below -->
 
-<!-- I've forced committed this util.ts, so its unlikely you will need to manually add this file anymore. 
-But in any cases you need, follow the steps below -->
+shadcn-vue components rely on a helper cn in lib/utils.ts. You **must create this folder and file under `app/`**:
 
-shadcn-vue components rely on a helper cn in lib/utils.ts.  
-You **must create this folder and file under `app/`**:
+**1. Create folder:**
 
-1. Create folder:
-
+```
 frontend/app/lib/
+```
 
-2. Create file utils.ts and copy & paste the code below:
+**2. Create file utils.ts and copy & paste the code below:**
 
-
+```typescript
 export function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ')
 }
+```
 
+**3. Components can now import it:**
 
-3. Components can now import it:
-
+```typescript
 import { cn } from "@/lib/utils"
-
+```
 
 <!-- Side Note: -->
 
-In Nuxt 4, `@/` points to the `app/` folder by default.
+> In Nuxt 4, `@/` points to the `app/` folder by default.
 
----
-
-4️⃣ Running the Development Server
+## Running the Development Server
 
 Start the development server at http://localhost:3000:
 
+```bash
+# bun
+bun run dev
+```
+
 Routing is based on the folder structure under app/pages. Each .vue file automatically becomes a route.
 
-Examples:
+**Examples:**
 
-- app/pages/index.vue               → http://localhost:3000/
-- app/pages/abc.vue                 → http://localhost:3000/abc
-- app/pages/auth/login.vue          → http://localhost:3000/auth/login
-- app/pages/dashboard/settings.vue  → http://localhost:3000/dashboard/settings
+- `app/pages/index.vue` → http://localhost:3000/
+- `app/pages/abc.vue` → http://localhost:3000/abc
+- `app/pages/auth/login.vue` → http://localhost:3000/auth/login
+- `app/pages/dashboard/settings.vue` → http://localhost:3000/dashboard/settings
 
-Notes:
+**Notes:**
+
 1. A file named index.vue inside a folder maps to the folder route.
-   Example: app/pages/auth/index.vue → /auth
+   Example: `app/pages/auth/index.vue` → /auth
 
 2. Dynamic routes can be created using square brackets in filenames.
-   Example: app/pages/user/[id].vue → /user/:id
+   Example: `app/pages/user/[id].vue` → /user/:id
 
 This means you can organize pages in nested folders, and the URL will follow the folder structure automatically.
 
-# dev
-
-# bun
-bun run dev
-
----
-
-5️⃣ Production
+## Production
 
 Build for production:
 
+```bash
 # bun
 bun run build
+```
 
 Preview production build locally:
 
+```bash
 # bun
 bun run preview
+```
 
 Check Nuxt 4 deployment docs: https://nuxt.com/docs/getting-started/deployment
 
----
+## Troubleshooting Common Issues
 
-6️⃣ Troubleshooting Common Issues
-
-Issue: `npm install ... failed` / `BuildMessage {}`
+### Issue: `npm install ... failed` / `BuildMessage {}`
 
 CLI may fail to auto-install dependencies.
 
-Solution:
+**Solution:**
 
+```bash
 # Bun
 bun add tw-animate-css class-variance-authority lucide-vue-next clsx tailwind-merge reka-ui
 
 # OR npm
 npm install tw-animate-css class-variance-authority lucide-vue-next clsx tailwind-merge reka-ui
+```
 
 Re-run the add command if needed:
 
+```bash
 npx shadcn-vue@latest add button
+```
 
----
+### Issue: `component.json already exists`
 
-Issue: `component.json already exists`
-
-* Happens if CLI partially generated components before.  
-* **Do not delete** `components/ui/` — it is needed.  
-* Only delete `.shadcn/` or `components.json` if restarting shadcn-vue setup from scratch.
+- Happens if CLI partially generated components before.
+- **Do not delete** `components/ui/` — it is needed.
+- Only delete `.shadcn/` or `components.json` if restarting shadcn-vue setup from scratch.
 
 If you face the `component.json already exists` problem, try running `bun run dev` now, it should work
 
----
-
-Issue: Team members cannot run the project
+### Issue: Team members cannot run the project
 
 Make sure they:
 
-1. Navigate to the frontend folder.  
-2. Install dependencies (`bun install`, `npm install`, etc.).  
-3. Keep `app/components/ui/` present.  
+1. Navigate to the frontend folder.
+2. Install dependencies (`bun install`, `npm install`, etc.).
+3. Keep `app/components/ui/` present.
 4. Ensure `app/lib/utils.ts` exists for `cn` helper.
 
----
+## Notes
 
-7️⃣ Notes
+- shadcn-vue uses a registry JSON (`app.json`) to generate components.
+- Default theme/style is new-york-v4. No need to modify unless customizing.
+- Always keep `app/components/ui/` and `tailwind.config.js` committed.
+- `.shadcn/` is optional, can be ignored in Git.
 
-* shadcn-vue uses a registry JSON (`app.json`) to generate components.  
-* Default theme/style is new-york-v4. No need to modify unless customizing.  
-* Always keep `app/components/ui/` and `tailwind.config.js` committed.  
-* `.shadcn/` is optional, can be ignored in Git.
+## Optional: Adding All Components at Once
 
----
-
-8️⃣ Optional: Adding All Components at Once 
-
-*** You should not need to run this step at all, since everything is inside [app/components/ui] already.
+> *** You should not need to run this step at all, since everything is inside [app/components/ui] already.
 
 However if you like to proceed and add all components at once, you can use the code below
 
 No official `*` shortcut exists. To add multiple components:
 
+```bash
 npx shadcn-vue@latest add accordion alert alert-dialog avatar badge button calendar card checkbox dialog drawer dropdown-menu form hover-card input label menubar navigation-menu popover progress radio-group scroll-area select separator sheet skeleton slider switch table tabs textarea toast toggle tooltip
+```
 
-Note: This populates all standard components under [components/ui/], which is outside of the app directory. After populating, you should move all 
-the individual components into [app/components/ui]
+> **Note:** This populates all standard components under `[components/ui/]`, which is outside of the app directory. After populating, you should move all the individual components into `[app/components/ui]`
 
----
+## Recommended Project Folder Structure
 
-🔟 Recommended Project Folder Structure
-
+```
 frontend/
 ├─ app/
 |  ├─ app.vue
@@ -231,10 +227,9 @@ frontend/
 ├─ package.json
 ├─ README.txt         # This file
 └─ tsconfig.json
+```
 
 > All team members should maintain this structure.  
 > `app/components/ui/` and `app/lib/utils.ts` **must exist** for shadcn-vue components to work.
 
----
-
-With this setup, all team members can run the frontend, add new components safely, and troubleshoot Bun/npm issues.
+With this setup, all team members can run the frontend

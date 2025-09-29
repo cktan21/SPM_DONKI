@@ -38,6 +38,32 @@ const props = defineProps<{
 }>()
 
 const { isMobile } = useSidebar()
+
+const handleLogout = async () => {
+  try {
+    const response = await fetch('http://localhost:5100/logout', {
+      method: 'POST',
+      credentials: 'include', // Important: sends cookies
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.ok) {
+      // Clear any cached auth state
+      const authState = useState('auth.user', () => null)
+      authState.value = null
+      
+      // Redirect to login
+      await navigateTo('/auth/login')
+    } else {
+      console.error('Logout failed')
+    }
+  } catch (error) {
+    console.error('Logout error:', error)
+  }
+}
+
 </script>
 
 <template>
@@ -105,7 +131,7 @@ const { isMobile } = useSidebar()
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
+          <DropdownMenuItem @click="handleLogout">
             <LogOut />
             Log out
           </DropdownMenuItem>

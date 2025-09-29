@@ -5,7 +5,10 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": [
+      "node"
+    ]
   },
   "files": [],
   "references": [

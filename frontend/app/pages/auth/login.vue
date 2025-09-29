@@ -1,78 +1,61 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
-import { useRouter } from "vue-router"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-const router = useRouter()
+const router = useRouter();
 
 // Random cover image
-const randomIndex = Math.floor(Math.random() * 6) + 1
-const coverImage = `/auth_images/background_image_${randomIndex}.jpg`
 
-// Form state
-const email = ref("")
-const password = ref("")
-const loading = ref(false)
-const errorMessage = ref("")
-const checkedAuth = ref(false)  // to prevent flicker
+const coverImage = ref("")
 
-const BASE_URL = "http://localhost:5100"
-
-// ----------------------
-// Auto-redirect if authenticated
-// ----------------------
-onMounted(async () => {
-  try {
-    const res = await fetch(`${BASE_URL}/me`, {
-      method: "GET",
-      credentials: "include"  // cookies sent automatically
-    })
-    if (res.ok) {
-      router.replace("/dashboard")
-    }
-  } catch {
-    // user not authenticated, show login form
-  } finally {
-    checkedAuth.value = true
-  }
+onMounted(() => {
+  const randomIndex = Math.floor(Math.random() * 6) + 1
+  coverImage.value = `/auth_images/background_image_${randomIndex}.jpg`
 })
 
-// ----------------------
-// Login handler
-// ----------------------
+// Form state
+const email = ref("");
+const password = ref("");
+const loading = ref(false);
+const errorMessage = ref("");
+
+const BASE_URL = "http://localhost:5100";
+
 async function handleLogin() {
-  loading.value = true
-  errorMessage.value = ""
+  loading.value = true;
+  errorMessage.value = "";
 
   try {
     const res = await fetch(`${BASE_URL}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",  // very important!
+      credentials: "include", // sends cookies automatically
       body: JSON.stringify({ email: email.value, password: password.value })
-    })
+    });
 
     if (!res.ok) {
-      const data = await res.json()
-      errorMessage.value = data.detail || `Login failed (${res.status})`
-      return
+      const data = await res.json();
+      errorMessage.value = data.detail || `Login failed (${res.status})`;
+      return;
     }
 
-    // Redirect after login
-    router.replace("/dashboard")
+    console.log("Login successful — redirecting...");
+    router.replace("/dashboard"); // Let middleware check authentication
 
   } catch (err: any) {
-    errorMessage.value = err.message || "Network error"
+    errorMessage.value = err.message || "Network error";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
+
 </script>
 
 <template>
-  <div v-if="checkedAuth" class="w-full h-screen lg:grid lg:grid-cols-2">
+  <div class="w-full h-screen lg:grid lg:grid-cols-2">
     <!-- Login Form -->
     <div class="flex items-center justify-center min-h-screen lg:py-12">
       <div class="mx-auto grid w-[350px] gap-6">
@@ -90,9 +73,7 @@ async function handleLogin() {
           </div>
 
           <div class="grid gap-2">
-            <div class="flex items-center">
-              <Label for="password">Password</Label>
-            </div>
+            <Label for="password">Password</Label>
             <Input id="password" type="password" v-model="password" required />
           </div>
 
@@ -111,7 +92,7 @@ async function handleLogin() {
 
     <!-- Cover image -->
     <div class="hidden lg:block">
-      <img :src="coverImage" alt="Cover image" class="h-screen w-full object-cover dark:brightness-[0.2] dark:grayscale" />
+      <img v-if="coverImage" :src="coverImage" alt="Cover image" class="h-screen w-full object-cover dark:brightness-[0.2] dark:grayscale" />
     </div>
   </div>
 </template>
