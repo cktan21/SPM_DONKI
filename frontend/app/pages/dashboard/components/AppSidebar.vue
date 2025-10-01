@@ -7,9 +7,11 @@ import {
   Bot,
   Command,
   Frame,
+  CheckSquare,
   GalleryVerticalEnd,
   Map,
   PieChart,
+  ClipboardList,
   Settings2,
   SquareTerminal,
 } from "lucide-vue-next"
@@ -30,11 +32,17 @@ const props = withDefaults(defineProps<SidebarProps>(), {
   collapsible: "icon",
 })
 
+// ✅ Grab the user info (comes from middleware auth.global.ts)
+const userData = useState<any>("userData")
+const role = userData.value?.user?.role
+const email = userData.value?.user?.email
+const name = userData.value?.user?.name
 // This is sample data.
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
+    role: role,
+    email: email,
+    name: name,
     avatar: "/avatars/shadcn.jpg",
   },
   teams: [
@@ -95,7 +103,7 @@ const data = {
       ],
     },
     {
-      title: "Documentation",
+      title: "Report",
       url: "#",
       icon: BookOpen,
       items: [
@@ -107,10 +115,10 @@ const data = {
           title: "Get Started",
           url: "#",
         },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
+ // ✅ Show this only if role === "hr"
+        ...(["hr", "admin"].includes(userData.value?.user?.role)
+          ? [{ title: "Generate Report", url: "/generateReports" }]
+          : []),
         {
           title: "Changelog",
           url: "#",
@@ -142,16 +150,12 @@ const data = {
     },
   ],
   projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
+    ...(["staff","manager"].includes(userData.value?.user?.role)
+      ? [{ name: "Task", url: "/task", icon: CheckSquare}]
+      : []),
+    ...(["manager"].includes(userData.value?.user?.role)
+      ? [{ name: "Assign Task", url: "/assignTask", icon: ClipboardList }]
+      : []),
     {
       name: "Travel",
       url: "#",

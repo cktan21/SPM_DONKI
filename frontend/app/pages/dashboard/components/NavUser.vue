@@ -33,6 +33,7 @@ const props = defineProps<{
   user: {
     name: string
     email: string
+    role: string
     avatar: string
   }
 }>()
@@ -81,6 +82,7 @@ const handleLogout = async () => {
             </Avatar>
             <div class="grid flex-1 text-left text-sm leading-tight">
               <span class="truncate font-semibold">{{ user.name }}</span>
+              <span class="truncate font-semibold">{{ user.role }}</span>
               <span class="truncate text-xs">{{ user.email }}</span>
             </div>
             <ChevronsUpDown class="ml-auto size-4" />
@@ -102,6 +104,7 @@ const handleLogout = async () => {
               </Avatar>
               <div class="grid flex-1 text-left text-sm leading-tight">
                 <span class="truncate font-semibold">{{ user.name }}</span>
+                <span class="truncate font-semibold">{{ user.role }}</span>
                 <span class="truncate text-xs">{{ user.email }}</span>
               </div>
             </div>
