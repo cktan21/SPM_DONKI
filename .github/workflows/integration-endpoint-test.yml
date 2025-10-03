@@ -19,6 +19,9 @@ jobs:
         env:
             SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
             SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+            SUPABASE_JWT_SECRET: ${{secrets.SUPABASE_JWT_SECRET}}
+            SUPABASE_SERVICE_ROLE_KEY: ${{secrets.SUPABASE_SERVICE_ROLE_KEY}}
+            INTERNAL_API_KEY: ${{secrets.INTERNAL_API_KEY}}
             
         defaults:
             run:
