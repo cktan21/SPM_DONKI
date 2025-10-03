@@ -1,5 +1,8 @@
 name: Auto Sync Main to All Branches
 
+permissions:
+  contents: write
+
 # 1. Define the Trigger
 # This workflow runs only when code is pushed to the 'main' branch.
 on:
