@@ -11,6 +11,10 @@ on:
         - main
     workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 
 # Define a single job to handle the branch syncing
 jobs:
