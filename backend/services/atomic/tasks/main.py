@@ -3,6 +3,7 @@ from fastapi.responses import Response
 from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
 import uvicorn
+from postgrest.exceptions import APIError
 
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -54,11 +55,11 @@ async def create_task(
             "name": "New Task Title",
             "desc": "Optional description",
             "notes": "Optional notes",
-            "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6"  # User ID
+            "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6"
         }
     )
 ):
-    # Ensure task has a valid name & Owner ID
+    # Validation
     if "name" not in task or task["name"].strip() == "":
         raise HTTPException(status_code=400, detail="Task name is required")
     if "created_by_uid" not in task:
@@ -66,14 +67,28 @@ async def create_task(
 
     task["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
 
-    # Insert task into Supabase
-    resp = supabase.client.table("TASK").insert(task).execute()
-    rows = getattr(resp, "data", None) or []
+    try:
+        resp = supabase.client.table("TASK").insert(task).execute()
+        rows = getattr(resp, "data", None) or []
 
-    if not rows:
-        raise HTTPException(status_code=400, detail="Failed to create task")
+        if not rows:
+            raise HTTPException(status_code=400, detail="Failed to create task")
 
-    return {"message": "Task created successfully", "task": rows[0]}
+        return {"message": "Task created successfully", "task": rows[0]}
+
+    except APIError as e:
+        # Duplicate name error from Supabase/Postgres
+        if "duplicate key value" in str(e):
+            print("Task name already exist")  # ✅ Logs to backend console
+            raise HTTPException(status_code=400, detail="Task name already exist")
+        else:
+            print("Supabase API error:", str(e))
+            raise HTTPException(status_code=500, detail="Database error")
+
+    except Exception as e:
+        print("Unexpected error:", str(e))
+        raise HTTPException(status_code=500, detail="Unexpected error")
+
 
 # Update task details
 @app.put("/{task_id}", summary="Update a task", response_description="Updated task row")
@@ -114,29 +129,44 @@ async def update_task(
     return {"message": "Task updated successfully", "task": rows[0]}
 
 #Delete Task
-
-@app.delete("/tasks/{task_id}", summary="Delete a task")
+@app.delete("/{task_id}", summary="Delete a task")
 async def delete_task(
     task_id: str = Path(..., description="ID of the task to delete"),
-    request: Request = None
 ):
     """
-    Delete a task. User ID must be passed as a query parameter:
-    /tasks/{task_id}?user_id=<current_user_id>
+    Delete a task by its ID only.
     """
-    # Get user_id from query params
-    user_id = request.query_params.get("user_id")
-    
-    if not user_id:
-        raise HTTPException(status_code=400, detail="User ID is required")  
-    
-    resp = supabase.delete_task(task_id, user_id)
+    # Call Supabase delete by task_id
+    resp = supabase.delete_task(task_id)
     rows = getattr(resp, "data", None) or []
 
     if not rows:
-        raise HTTPException(status_code=404, detail="Task not found or not permitted")
+        raise HTTPException(status_code=404, detail="Task not found")
 
     return {"message": "Task deleted successfully", "task": rows[0]}
+
+# @app.delete("/{task_id}", summary="Delete a task")
+# async def delete_task(
+#     task_id: str = Path(..., description="ID of the task to delete"),
+#     request: Request = None
+# ):
+#     """
+#     Delete a task. User ID must be passed as a query parameter:
+#     /{task_id}?user_id=<current_user_id>
+#     """
+#     # Get user_id from query params
+#     user_id = request.query_params.get("user_id")
+    
+#     if not user_id:
+#         raise HTTPException(status_code=400, detail="User ID is required")  
+    
+#     resp = supabase.delete_task(task_id, user_id)
+#     rows = getattr(resp, "data", None) or []
+
+#     if not rows:
+#         raise HTTPException(status_code=404, detail="Task not found or not permitted")
+
+#     return {"message": "Task deleted successfully", "task": rows[0]}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5500)

@@ -45,14 +45,13 @@ class SupabaseClient:
 
         return response
     
-    def delete_task(self, task_id, user_id):
-            """Delete a task only if the owner matches user_id"""
-            response = (
-                self.client
-                .table("TASK")
-                .delete()
-                .eq("id", task_id)
-                .eq("created_by_uid", user_id)
-                .execute()
-            )
-            return response
+    def delete_task(self, task_id: str):
+        """Delete a task by its ID (ignores ownership)."""
+        response = (
+            self.client
+            .table("TASK")
+            .delete()
+            .eq("id", task_id)
+            .execute()
+        )
+        return response
