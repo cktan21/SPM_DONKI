@@ -65,7 +65,7 @@
       </section>
     </main>
 
-    <!-- ===== Create Modal (POST /createTask) ===== -->
+    <!-- ===== Create Modal (unchanged) ===== -->
     <div v-if="ui.showCreate" class="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4"
       @click.self="ui.showCreate = false">
       <div class="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
@@ -157,7 +157,7 @@
       </div>
     </div>
 
-    <!-- ===== Edit Modal (GET /tasks/{id} then PUT /{id}) ===== -->
+    <!-- ===== Edit Modal (names displayed instead of IDs) ===== -->
     <div v-if="ui.showEdit" class="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4"
       @click.self="ui.showEdit = false">
       <div class="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
@@ -174,23 +174,37 @@
                 class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-blue-500"
                 required />
             </div>
+
+            <!-- Project NAME (readonly) + hidden PID -->
             <div>
-              <label class="block text-sm text-neutral-300 mb-1">PID</label>
-              <input v-model="formEdit.pid"
-                class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-blue-500" />
+              <label class="block text-sm text-neutral-300 mb-1">Project</label>
+              <input :value="formEdit._projectName || '—'" readonly
+                class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-200" />
+              <input v-model="formEdit.pid" type="hidden" />
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Parent Task NAME (readonly) + hidden parentTaskId -->
             <div>
-              <label class="block text-sm text-neutral-300 mb-1">Parent Task ID</label>
-              <input v-model="formEdit.parentTaskId"
-                class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-blue-500" />
+              <label class="block text-sm text-neutral-300 mb-1">Parent Task</label>
+              <input :value="formEdit._parentTaskName || '—'" readonly
+                class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-200" />
+              <input v-model="formEdit.parentTaskId" type="hidden" />
             </div>
+
+            <!-- Collaborator NAMES (readonly chips) + hidden CSV -->
             <div>
-              <label class="block text-sm text-neutral-300 mb-1">Collaborators (CSV)</label>
-              <input v-model="formEdit.collaboratorsCsv"
-                class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-blue-500" />
+              <label class="block text-sm text-neutral-300 mb-1">Collaborators</label>
+              <div
+                class="min-h-[42px] w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 flex flex-wrap items-center gap-1">
+                <span v-if="!formEdit._collaboratorNames?.length" class="text-neutral-500 text-sm">—</span>
+                <span v-for="(n, i) in formEdit._collaboratorNames" :key="i"
+                  class="px-2 py-0.5 rounded-md border border-neutral-700 bg-neutral-800 text-xs text-neutral-200">
+                  {{ n }}
+                </span>
+              </div>
+              <input v-model="formEdit.collaboratorsCsv" type="hidden" />
             </div>
           </div>
 
@@ -273,6 +287,9 @@ type Task = {
   collaborators?: string[]
   updated_timestamp?: string
   created_by_uuid?: string
+  projectName?: string | null
+  parentTaskName?: string | null
+  collaboratorNames?: string[]
 }
 
 type Schedule = {
@@ -315,6 +332,9 @@ const formEdit = reactive({
   parentTaskId: '',
   collaboratorsCsv: '',
   schedule: { status: '', deadline: '' } as Schedule,
+  _projectName: '' as string,
+  _parentTaskName: '' as string,
+  _collaboratorNames: [] as string[],
 })
 
 function shortId(id?: string) {
@@ -324,15 +344,21 @@ function shortId(id?: string) {
 
 /** GET /tasks (for list) */
 async function loadTasks() {
+  console.log('[loadTasks] start')
+  state.loading = true
   try {
     const { data } = await api.get('/tasks')
+    console.log('loadTasks', data)
     let list: any[] = []
     if (Array.isArray(data)) list = data
     else if (Array.isArray(data?.tasks)) list = data.tasks
     else if (Array.isArray(data?.data)) list = data.data
     else if (Array.isArray(data?.result)) list = data.result
     else if (Array.isArray(data?.items)) list = data.items
-    state.tasks = list
+
+    // Normalize baseline shape; keep as Task[]
+    state.tasks = list as Task[]
+
   } catch (e: any) {
     if (e?.response) {
       console.error('Error loading tasks:', `status=${e.response.status}`, 'body=', e.response.data)
@@ -369,7 +395,8 @@ async function createTask() {
     if (formCreate.schedule.priority) sched.priority = formCreate.schedule.priority
     if (Object.keys(sched).length) payload.schedule = sched
 
-    payload.userID = USER_ID
+    payload.userID = USER_ID.value
+
     await api.post('/createTask', payload)
     await loadTasks()
     ui.showCreate = false
@@ -390,6 +417,8 @@ async function createTask() {
 /** Open Edit */
 async function openEdit(id: string) {
   state.editingId = id
+
+  // Prefill (fallback) from list so the modal doesn't look empty
   const taskFromList = state.tasks.find(x => x.id === id)
   if (taskFromList) {
     formEdit.name = taskFromList.name || ''
@@ -397,26 +426,43 @@ async function openEdit(id: string) {
     formEdit.notes = taskFromList.notes || ''
     formEdit.pid = taskFromList.pid || ''
     formEdit.parentTaskId = (taskFromList as any)?.parentTaskId || ''
-    formEdit.collaboratorsCsv = (taskFromList.collaborators || []).join(',') || ''
+
+    // collaborators can be ids or objects
+    const raw = (taskFromList.collaborators || []) as (string | {id:string;name?:string})[]
+    const ids = raw.map(c => typeof c === 'string' ? c : c.id).filter(Boolean)
+    formEdit.collaboratorsCsv = ids.join(',')
+
     formEdit.schedule.status = ''
     formEdit.schedule.deadline = ''
+
+    // display-only (may be overwritten by detail)
+    formEdit._projectName = (taskFromList as any).projectName || ''
+    formEdit._parentTaskName = (taskFromList as any).parentTaskName || ''
+    formEdit._collaboratorNames = (taskFromList as any).collaboratorNames || []
   }
+
+  // Show modal immediately
   ui.showEdit = true
 
   try {
-    const { data } = await api.get(`/tasks/${id}`)
+    // ========= Fetch full task details =========
+     const { data } = await api.get(`/tasks/${id}`)
+
+    // Accept both composite-like and flat shapes
     let taskData: any = {}
     let scheduleData: any = {}
-    if (data.task) {
+
+    if (data?.task) {
       taskData = data.task
-      scheduleData = data.schedule || {}
-    } else if (data.id) {
+      scheduleData = data.schedule?.data || data.schedule || {}
+    } else if (data?.id) {
       taskData = data
       scheduleData = data
     } else {
-      taskData = data
+      taskData = data || {}
     }
 
+    // ------- Map basic task fields -------
     if (taskData.name !== undefined) formEdit.name = taskData.name || ''
     if (taskData.desc !== undefined) formEdit.desc = taskData.desc || ''
     if (taskData.description !== undefined) formEdit.desc = taskData.description || ''
@@ -425,26 +471,40 @@ async function openEdit(id: string) {
     if (taskData.parentTaskId !== undefined) formEdit.parentTaskId = taskData.parentTaskId || ''
     if (taskData.parent_task_id !== undefined) formEdit.parentTaskId = taskData.parent_task_id || ''
 
-    if (taskData.collaborators !== undefined) {
-      if (Array.isArray(taskData.collaborators)) {
-        formEdit.collaboratorsCsv = taskData.collaborators.join(',')
-      } else if (typeof taskData.collaborators === 'string') {
-        formEdit.collaboratorsCsv = taskData.collaborators
-      }
-    }
-
+    // ------- Map schedule fields -------
     if (scheduleData.status !== undefined) formEdit.schedule.status = scheduleData.status || ''
     if (taskData.status !== undefined) formEdit.schedule.status = taskData.status || ''
 
-    if (scheduleData.deadline !== undefined) {
-      formEdit.schedule.deadline = scheduleData.deadline ? toLocalDatetimeInput(scheduleData.deadline) : ''
-    } else if (taskData.deadline !== undefined) {
-      formEdit.schedule.deadline = taskData.deadline ? toLocalDatetimeInput(taskData.deadline) : ''
+    const rawDeadline =
+      scheduleData?.deadline ??
+      taskData?.deadline ??
+      (data?.schedule?.data?.deadline ?? data?.schedule?.deadline)
+
+    if (rawDeadline) formEdit.schedule.deadline = toLocalDatetimeInput(rawDeadline)
+
+    // ------- ✅ Map NAMES directly from response -------
+    // Project name
+    formEdit._projectName = taskData?.project?.name ?? taskData?.projectName ?? formEdit._projectName ?? ''
+
+    // Parent task name
+    formEdit._parentTaskName =
+      taskData?.parent_task?.name ??
+      taskData?.parentTaskName ??
+      formEdit._parentTaskName ??
+      ''
+
+    // Collaborators: array of { id, name }
+    if (Array.isArray(taskData.collaborators)) {
+      const collabObjs = taskData.collaborators as Array<{ id: string; name?: string }>
+      formEdit._collaboratorNames = collabObjs.map(c => c?.name || shortId(c.id)).filter(Boolean)
+      // keep ids hidden for save
+      formEdit.collaboratorsCsv = collabObjs.map(c => c.id).join(',')
     }
   } catch (e: any) {
     console.error('Error fetching detailed task data:', e?.response?.data || e?.message || e)
   }
 }
+
 
 /** PUT /{id} */
 async function saveEdit() {
@@ -468,8 +528,6 @@ async function saveEdit() {
     if (formEdit.schedule.status) payload.status = formEdit.schedule.status
     if (formEdit.schedule.deadline) payload.deadline = formEdit.schedule.deadline
 
-    console.log('Requesting:', api.defaults.baseURL + '/' + state.editingId)
-    
     await api.put(`/${state.editingId}`, payload)
     await loadTasks()
     ui.showEdit = false

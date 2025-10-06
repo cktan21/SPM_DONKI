@@ -454,6 +454,7 @@ def validate_user_internal(user_id: str):
             "auth_id": user["auth_id"],
             "email": user["email"],
             "role": user["role"],
+            "name": user.get("name"),
             "created_at": user["created_at"],
             "exists": True,
             "internal_api_key": INTERNAL_API_KEY,  # optional: expose for debug

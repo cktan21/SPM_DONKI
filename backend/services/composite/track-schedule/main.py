@@ -82,42 +82,58 @@ async def get_all_tasks_composite():
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@app.get("/tasks/{user_id}", summary="Get all tasks where user is a collaborator", response_description="List of tasks with enriched details where user is a collaborator")
+@app.get("/tasks/user/{user_id}",summary="Get all tasks where user is a collaborator",response_description="List of tasks with enriched details where user is a collaborator (+ user name)"
+)
 async def get_tasks_by_user_composite(
     user_id: str = Path(..., description="User ID to fetch tasks for (where user is a collaborator)")
 ):
     """
-    Composite endpoint to fetch all tasks where the user is a collaborator:
-    1. Get all tasks from Task MS
-    2. Filter tasks where user_id is in the collaborators array
-    3. For each filtered task, enrich with schedule and project data
-    4. Return list of enriched tasks
+    Composite endpoint:
+    1. Fetch all tasks from Task MS
+    2. Filter tasks where user_id is in collaborators
+    3. Enrich each task with schedule and project data
+    4. Fetch user's display name from Users MS and include in response
     """
     async with httpx.AsyncClient() as client:
         try:
-            # 1. Get all tasks from Task MS
+            # ---- 0) Fetch user info (for name) ----
+            user_name: str | None = None
+            try:
+                # Internal user validation endpoint (service-to-service)
+                user_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{user_id}")
+                if user_resp.status_code == 200:
+                    u = user_resp.json() or {}
+                    # Prefer explicit name; otherwise fall back to email local-part; otherwise id
+                    if u.get("name"):
+                        user_name = u["name"]
+                    elif u.get("email"):
+                        user_name = u["email"].split("@")[0]
+                    else:
+                        user_name = user_id
+                else:
+                    user_name = user_id
+            except Exception:
+                # If Users MS is unavailable, still proceed with id as name fallback
+                user_name = user_id
+
+            # ---- 1) Get all tasks from Task MS ----
             print(f"Fetching tasks from: {TASK_SERVICE_URL}/tasks")
             tasks_response = await client.get(f"{TASK_SERVICE_URL}/tasks")
             tasks_response.raise_for_status()
             response_data = tasks_response.json()
-            
             print(f"Received response: {response_data}")
-            
-            # Extract tasks array from response
+
             all_tasks = response_data.get("tasks", [])
-            
             if not isinstance(all_tasks, list):
                 raise HTTPException(status_code=500, detail="Unexpected response format from Task MS")
 
             print(f"Total tasks found: {len(all_tasks)}")
 
-            # 2. Filter tasks where user_id is in collaborators
+            # ---- 2) Filter tasks where user_id is in collaborators ----
             user_tasks = []
             for task in all_tasks:
                 collaborators = task.get("collaborators")
                 print(f"Task {task.get('id')}: collaborators = {collaborators}")
-                
-                # Check if collaborators exists and user_id is in it
                 if collaborators and isinstance(collaborators, list) and user_id in collaborators:
                     user_tasks.append(task)
                     print(f"✓ User {user_id} found in task {task.get('id')}")
@@ -127,17 +143,22 @@ async def get_tasks_by_user_composite(
             if not user_tasks:
                 return {
                     "user_id": user_id,
+                    "user": {"id": user_id, "name": user_name},
                     "tasks": [],
                     "count": 0,
-                    "message": "No tasks found where user is a collaborator"
+                    "message": "No tasks found where user is a collaborator",
+                    "metadata": {
+                        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                        "total_tasks_checked": len(all_tasks)
+                    }
                 }
 
-            # 3. Enrich each task with schedule and project data
+            # ---- 3) Enrich each task with schedule and project data ----
             enriched_tasks = []
             for task in user_tasks:
                 task_id = task.get("id")
-                
-                # Get schedule information
+
+                # schedule
                 schedule_data = None
                 try:
                     schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
@@ -146,7 +167,7 @@ async def get_tasks_by_user_composite(
                 except Exception:
                     schedule_data = {"message": "No schedule found for this task"}
 
-                # Get project information if task has a project ID
+                # project
                 project_data = None
                 if task.get("pid"):
                     try:
@@ -162,9 +183,121 @@ async def get_tasks_by_user_composite(
                     "project": project_data
                 })
 
-            # 4. Return comprehensive response
+            # ---- 4) Return with user name ----
             return {
                 "user_id": user_id,
+                "user": {"id": user_id, "name": user_name},
+                "tasks": enriched_tasks,
+                "count": len(enriched_tasks),
+                "metadata": {
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "total_tasks_checked": len(all_tasks)
+                }
+            }
+
+        except httpx.HTTPStatusError as e:
+            print(f"HTTPStatusError: {e}")
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Task MS returned an error: {e.response.text}"
+            )
+        except httpx.RequestError as e:
+            print(f"RequestError: {e}")
+            raise HTTPException(status_code=503, detail=f"Failed to connect to services: {str(e)}")
+        except Exception as e:
+            print(f"Unexpected error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get(
+    "/tasks/project/{project_id}",
+    summary="Get all tasks for a given project",
+    response_description="List of tasks enriched with schedule and project details"
+)
+async def get_tasks_by_project_composite(
+    project_id: str = Path(..., description="Project ID to fetch tasks for")
+):
+    """
+    Composite endpoint:
+    1. Fetch all tasks from Task MS
+    2. Filter tasks where pid == project_id
+    3. Enrich each task with schedule and project data
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            # ---- 0) Fetch project info (for context) ----
+            project_data = None
+            try:
+                proj_resp = await client.get(f"{PROJECTS_SERVICE_URL}/{project_id}")
+                if proj_resp.status_code == 200:
+                    project_data = proj_resp.json()
+            except Exception:
+                project_data = {"message": "Project information unavailable"}
+
+            # ---- 1) Get all tasks from Task MS ----
+            print(f"Fetching tasks from: {TASK_SERVICE_URL}/tasks")
+            tasks_response = await client.get(f"{TASK_SERVICE_URL}/tasks")
+            tasks_response.raise_for_status()
+            response_data = tasks_response.json()
+            print(f"Received response: {response_data}")
+
+            all_tasks = response_data.get("tasks", [])
+            if not isinstance(all_tasks, list):
+                raise HTTPException(status_code=500, detail="Unexpected response format from Task MS")
+
+            print(f"Total tasks found: {len(all_tasks)}")
+
+            # ---- 2) Filter tasks for this project ----
+            project_tasks = []
+            for task in all_tasks:
+                pid = task.get("pid")
+                print(f"Task {task.get('id')}: pid = {pid}")
+                if pid == project_id:
+                    project_tasks.append(task)
+                    print(f"✓ Task {task.get('id')} belongs to project {project_id}")
+
+            print(f"Total project tasks found: {len(project_tasks)}")
+
+            if not project_tasks:
+                return {
+                    "project_id": project_id,
+                    "project": project_data or {"id": project_id},
+                    "tasks": [],
+                    "count": 0,
+                    "message": "No tasks found for this project",
+                    "metadata": {
+                        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                        "total_tasks_checked": len(all_tasks)
+                    }
+                }
+
+            # ---- 3) Enrich each task ----
+            enriched_tasks = []
+            for task in project_tasks:
+                task_id = task.get("id")
+
+                # schedule
+                schedule_data = None
+                try:
+                    schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                    if schedule_response.status_code == 200:
+                        schedule_data = schedule_response.json()
+                except Exception:
+                    schedule_data = {"message": "No schedule found for this task"}
+
+                # reattach project info for convenience
+                enriched_tasks.append({
+                    "task": task,
+                    "schedule": schedule_data,
+                    "project": project_data
+                })
+
+            # ---- 4) Return ----
+            return {
+                "project_id": project_id,
+                "project": project_data or {"id": project_id},
                 "tasks": enriched_tasks,
                 "count": len(enriched_tasks),
                 "metadata": {
@@ -190,99 +323,143 @@ async def get_tasks_by_user_composite(
 
 
 
-
-@app.get("/tasks/{task_id}", summary="Get a task by ID via composite service", response_description="Comprehensive task information with schedule and project details")
+@app.get(
+    "/tasks/{task_id}",
+    summary="Get full task details (composite)",
+    response_description="Returns task with schedule, project, creator, collaborators, and parent task names"
+)
 async def get_task_composite(
-    task_id: str = Path(..., description="Primary key of the task (uuid)")
+    task_id: str = Path(..., description="UUID of the task to retrieve")
 ):
     """
-    Composite endpoint to fetch comprehensive task information:
-    1. Get task details from Task MS
-    2. Get schedule information from Schedule MS
-    3. Get project information (if task has pid)
-    4. Get collaborator details from Users MS
-    5. Return enriched task data
+    Composite endpoint:
+    1. Fetch task from Task MS (unwrap inner task object if needed)
+    2. Fetch schedule info from Schedule MS
+    3. Fetch project name via pid (from Project MS)
+    4. Fetch creator name via created_by_uid (from Users MS)
+    5. Fetch collaborators[] names via User MS
+    6. Fetch parent task name if parentTaskId exists
     """
+
     async with httpx.AsyncClient() as client:
         try:
-            # 1. Get basic task information
-            task_response = await client.get(f"{TASK_SERVICE_URL}/{task_id}")
-            if task_response.status_code == 404:
+            # === 1. Get Task ===
+            task_resp = await client.get(f"{TASK_SERVICE_URL}/{task_id}")
+            if task_resp.status_code == 404:
                 raise HTTPException(status_code=404, detail="Task not found")
-            task_response.raise_for_status()
-            task_data = task_response.json()
+            task_resp.raise_for_status()
 
-            # 2. Get schedule information for this task
+            raw_task = task_resp.json()
+            task_data = raw_task.get("task", raw_task)
+            if not isinstance(task_data, dict):
+                raise HTTPException(status_code=500, detail="Invalid task format from Task MS")
+
+            # === 2. Get Schedule ===
             schedule_data = None
             try:
-                schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
-                if schedule_response.status_code == 200:
-                    schedule_data = schedule_response.json()
-            except httpx.HTTPStatusError:
-                # Schedule not found is okay, just means no schedule exists
-                schedule_data = {"message": "No schedule found for this task"}
+                s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                if s_resp.status_code == 200:
+                    schedule_data = s_resp.json()
+                else:
+                    schedule_data = {"message": "No schedule found"}
+            except Exception:
+                schedule_data = {"message": "No schedule found"}
 
-            # 3. Get project information if task has a project ID
-            project_data = None
+            # === 3. Get Project (by pid) ===
+            project_obj = None
             if task_data.get("pid"):
                 try:
-                    project_response = await client.get(f"{PROJECTS_SERVICE_URL}/{task_data['pid']}")
-                    if project_response.status_code == 200:
-                        project_data = project_response.json()
-                except httpx.HTTPStatusError:
-                    project_data = {"message": "Project information unavailable"}
+                    pr_resp = await client.get(f"{PROJECTS_SERVICE_URL}/{task_data['pid']}")
+                    if pr_resp.status_code == 200:
+                        pr_json = pr_resp.json()
+                        # print(pr_json["project"].get("name") , "project value")
+                        project_obj = {
+                            "id": pr_json.get("id", task_data["pid"]),
+                            "name": pr_json["project"].get("name")  or "Unnamed Project"
+                        }
+                    else:
+                        project_obj = {"id": task_data["pid"], "name": "Project unavailable"}
+                except Exception:
+                    project_obj = {"id": task_data["pid"], "name": "Project unavailable"}
 
-            # 4. Get collaborator details if task has collaborators
-            collaborator_details = []
-            if task_data.get("collaborators"):
-                for collaborator_id in task_data["collaborators"]:
-                    try:
-                        collab_response = await client.get(
-                            f"{USERS_SERVICE_URL}/internal/{collaborator_id}",
-                            headers={"X-Internal-API-Key": INTERNAL_API_KEY}
-                        )
-                        if collab_response.status_code == 200:
-                            collaborator_details.append(collab_response.json())
-                        else:
-                            collaborator_details.append({
-                                "id": collaborator_id,
-                                "message": "User details unavailable"
-                            })
-                    except httpx.HTTPStatusError:
-                        collaborator_details.append({
-                            "id": collaborator_id,
-                            "message": "User not found"
+            # === 4. Get Creator ===
+            created_by = None
+            if task_data.get("created_by_uid"):
+                try:
+                    user_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{task_data['created_by_uid']}")
+                    if user_resp.status_code == 200:
+                        user_json = user_resp.json()
+                        # print(user_json, "user value")
+                        created_by = {
+                            "id": user_json.get("id"),
+                            "name": user_json.get("name") or (user_json.get("email") or "").split("@")[0]
+                        }
+                    else:
+                        created_by = {"id": task_data["created_by_uid"], "name": "Unknown User"}
+                except Exception:
+                    created_by = {"id": task_data["created_by_uid"], "name": "Unavailable"}
+
+            # === 5. Get Collaborators (list of {id, name}) ===
+            collaborators_info = []
+            for cid in (task_data.get("collaborators") or []):
+                try:
+                    c_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{cid}")
+                    if c_resp.status_code == 200:
+                        c_json = c_resp.json()
+                        collaborators_info.append({
+                            "id": c_json.get("id"),
+                            "name": c_json.get("name") or (c_json.get("email") or "").split("@")[0]
                         })
+                    else:
+                        collaborators_info.append({"id": cid, "name": "Unknown User"})
+                except Exception:
+                    collaborators_info.append({"id": cid, "name": "Unavailable"})
 
-            # 5. Compose the comprehensive response
-            composite_response = {
-                "task": task_data,
+            # === 6. Get Parent Task (id + name only) ===
+            parent_task = None
+            if task_data.get("parentTaskId"):
+                try:
+                    p_resp = await client.get(f"{TASK_SERVICE_URL}/{task_data['parentTaskId']}")
+                    if p_resp.status_code == 200:
+                        p_json = p_resp.json().get("task", p_resp.json())
+                        parent_task = {
+                            "id": p_json.get("id", task_data["parentTaskId"]),
+                            "name": p_json.get("name") or "Unnamed Task"
+                        }
+                    else:
+                        parent_task = {"id": task_data["parentTaskId"], "name": "Parent task unavailable"}
+                except Exception:
+                    parent_task = {"id": task_data["parentTaskId"], "name": "Parent task unavailable"}
+
+            # === 7. Combine ===
+            return {
+                "message": "Task retrieved successfully",
+                "task": {
+                    **task_data,
+                    "project": project_obj,
+                    "created_by": created_by,
+                    "collaborators": collaborators_info,
+                    "parent_task": parent_task,
+                },
                 "schedule": schedule_data,
-                "project": project_data,
-                "collaborator_details": collaborator_details,
                 "metadata": {
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
-                    "services_queried": {
-                        "task_service": True,
-                        "schedule_service": schedule_data is not None,
-                        "project_service": project_data is not None,
-                        "users_service": len(collaborator_details) > 0
-                    }
-                }
+                    "queried_services": {
+                        "task": True,
+                        "schedule": schedule_data is not None,
+                        "project": project_obj is not None,
+                        "users": True,
+                        "parent_task": parent_task is not None,
+                    },
+                },
             }
 
-            return composite_response
-
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                raise HTTPException(status_code=404, detail="Task not found in Task MS")
-            else:
-                raise HTTPException(
-                    status_code=e.response.status_code,
-                    detail=f"Task MS returned an error: {e.response.text}"
-                )
         except httpx.RequestError as e:
-            raise HTTPException(status_code=503, detail=f"Failed to connect to services: {str(e)}")
+            raise HTTPException(status_code=503, detail=f"Failed to connect to service: {str(e)}")
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=f"Upstream error: {e.response.text}")
+
+    
 
 @app.post("/createTask", summary="Create task via composite service with full workflow", response_description="Created task with schedule and notifications")
 async def create_task_composite(
