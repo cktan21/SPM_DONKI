@@ -21,7 +21,7 @@ const password = ref("");
 const loading = ref(false);
 const errorMessage = ref("");
 
-const BASE_URL = "http://localhost:5100";
+const BASE_URL = "http://localhost:8000/user";
 
 // Frontend validation function
 function validateForm(): boolean {

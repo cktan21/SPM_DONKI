@@ -7,42 +7,44 @@ It ensures that only authenticated users can access protected pages, and redirec
 > **Note:** This middleware handles authentication checks for all pages in the application automatically. No imports or anything is required by any page.
 
 This middleware automatically runs:
+
 1. On every navigation between pages (client-side navigation)
 2. On page load or refresh (server-side navigation)
 
 ## Purpose
 
-- Automatically verify whether the user is logged in
-- Redirect unauthenticated users to `/auth/login` page
-- Redirect authenticated users away from public pages like `/auth/login` to `/dashboard` page
-- Cache authentication status during navigation to avoid unnecessary API calls
-- Use cookies for authentication state (`access_token`, `refresh_token`, and `user_data`)
+-   Automatically verify whether the user is logged in
+-   Redirect unauthenticated users to `/auth/login` page
+-   Redirect authenticated users away from public pages like `/auth/login` to `/dashboard` page
+-   Cache authentication status during navigation to avoid unnecessary API calls
+-   Use cookies for authentication state (`access_token`, `refresh_token`, and `user_data`)
 
 ## How it Works
 
 **First visit / page refresh**  
-Middleware calls the backend endpoint `localhost:5100/checkCookies` to verify authentication status based on cookies.
+Middleware calls the backend endpoint `localhost:8000/user/checkCookies` to verify authentication status based on cookies.
 
 **Between navigations**  
 Authentication status is cached in Nuxt's `useState`, so middleware does not re-check every navigation.
 
 **On refresh or new browser session**  
-`useState` resets, and middleware re-checks `localhost:5100/checkCookies` again.
+`useState` resets, and middleware re-checks `localhost:8000/user/checkCookies` again.
 
 ### Key Difference
+
 `/checkCookies` now also returns a `user_data` cookie.  
 This cookie contains a JWT with user details (`id`, `email`, `role`, `name`) and is used to avoid extra database calls for user info.  
 Middleware uses this cookie directly to cache `userData`.
 
 ## Cookies
 
-The authentication cookies are set by backend routes (`localhost:5100/login` and `/signup`):
+The authentication cookies are set by backend routes (`localhost:8000/user/login` and `/signup`):
 
-| Cookie Name    | Purpose                                           | Expiry              |
-|----------------|---------------------------------------------------|---------------------|
-| `access_token` | Short-term JWT token for authentication         | 1 hour              |
-| `refresh_token`| Used to get a new access token without logging in | 24 hours            |
-| `user_data`    | Encoded JWT with user details (`id, email, role, name`) | 1 hour              |
+| Cookie Name     | Purpose                                                 | Expiry   |
+| --------------- | ------------------------------------------------------- | -------- |
+| `access_token`  | Short-term JWT token for authentication                 | 1 hour   |
+| `refresh_token` | Used to get a new access token without logging in       | 24 hours |
+| `user_data`     | Encoded JWT with user details (`id, email, role, name`) | 1 hour   |
 
 > Cookies are sent automatically with requests using `credentials: "include"`.
 
@@ -53,13 +55,14 @@ The authentication cookies are set by backend routes (`localhost:5100/login` and
 ```
 
 **Middleware Trigger happens:**
-- On every route navigation (including page load and route change)
-- Or when page is first loaded/refreshed
+
+-   On every route navigation (including page load and route change)
+-   Or when page is first loaded/refreshed
 
 ```
 This middleware uses Nuxt's useState("userData") as the authentication state cache (authState).
 
-It stores the decoded user_data JWT in useState("userData") as the auth state cache. 
+It stores the decoded user_data JWT in useState("userData") as the auth state cache.
 This prevents repeated /checkCookies calls during navigation, improving performance.
 ```
 
@@ -72,17 +75,18 @@ This prevents repeated /checkCookies calls during navigation, improving performa
           |
           ├── YES → Allow navigation (no backend call)
           |
-          └── NO → Call backend [localhost:5100/checkCookies]
+          └── NO → Call backend [localhost:8000/user/checkCookies]
 ```
 
 **Example:**
-- User just logged in → authState cached → No extra `/checkCookies` call
-- User opens app fresh in a new tab → authState empty → backend `/checkCookies` call triggered
+
+-   User just logged in → authState cached → No extra `/checkCookies` call
+-   User opens app fresh in a new tab → authState empty → backend `/checkCookies` call triggered
 
 ### Step 2: Call /checkCookies
 
 ```
-[Backend: localhost:5100/checkCookies]
+[Backend: localhost:8000/user/checkCookies]
     |
     +── Check access_token cookie
            |
@@ -96,10 +100,11 @@ This prevents repeated /checkCookies calls during navigation, improving performa
 ```
 
 **Example scenarios:**
-- **Scenario A:** Access token still valid → No extra login needed
-- **Scenario B:** Access token expired, refresh token valid → Refresh tokens silently, keep user logged in
-- **Scenario C:** Both tokens expired → Redirect to login
-- **Scenario D:** No cookies → Redirect to login
+
+-   **Scenario A:** Access token still valid → No extra login needed
+-   **Scenario B:** Access token expired, refresh token valid → Refresh tokens silently, keep user logged in
+-   **Scenario C:** Both tokens expired → Redirect to login
+-   **Scenario D:** No cookies → Redirect to login
 
 ### Step 3: Handle Navigation Based on Page Type
 
@@ -118,14 +123,16 @@ Middleware Checks Page Type:
 ```
 
 **Example pages:**
-- **Public:** `/auth/login` (no auth required)
-- **Protected:** `/dashboard`, `/profile`, `/settings`
+
+-   **Public:** `/auth/login` (no auth required)
+-   **Protected:** `/dashboard`, `/profile`, `/settings`
 
 > Protected pages are basically all other pages not listed as public. Currently only login page is listed as public.
 
 ### Step 4: Middleware Outcomes
 
 **Outcome:**
+
 1. **Authenticated** → Proceed
 2. **Not authenticated** → Redirect to `/auth/login`
 
@@ -146,10 +153,10 @@ console.log(userData.name);
 
 ### Scenario 1: User opens browser, goes to `/dashboard`
 
-1. Middleware triggers → No cached authState → call `localhost:5100/checkCookies`
-2. `localhost:5100/checkCookies` validates `access_token`:
-   - Access token expired
-   - Refresh token valid → refresh tokens → regenerate `user_data` cookie
+1. Middleware triggers → No cached authState → call `localhost:8000/user/checkCookies`
+2. `localhost:8000/user/checkCookies` validates `access_token`:
+    - Access token expired
+    - Refresh token valid → refresh tokens → regenerate `user_data` cookie
 3. Middleware caches authState → allows navigation to `localhost:3000/dashboard`
 
 ### Scenario 2: User manually types `/auth/login`
@@ -162,7 +169,7 @@ Middleware triggers → No access token → redirect to `localhost:3000/auth/log
 
 ### Scenario 4: User opens new incognito tab → visits `/profile`
 
-1. Middleware triggers → No cached authState → call `localhost:5100/checkCookies`
+1. Middleware triggers → No cached authState → call `localhost:8000/user/checkCookies`
 2. Cookies missing or invalid → redirect to `localhost:3000/auth/login`
 
 ## Flow Diagrams
@@ -196,7 +203,7 @@ Page Type Check:
 
 ## Key Notes
 
-- This middleware runs automatically at every navigation or page load
-- Auth state is cached in memory for efficiency
-- Refresh tokens are used silently to maintain sessions without user interruption
-- Cookies are automatically sent with requests; no need for explicit header auth on every call
+-   This middleware runs automatically at every navigation or page load
+-   Auth state is cached in memory for efficiency
+-   Refresh tokens are used silently to maintain sessions without user interruption
+-   Cookies are automatically sent with requests; no need for explicit header auth on every call

@@ -14,7 +14,7 @@ func TestServiceEndpoints(t *testing.T) {
 		"Project Service":  "http://localhost:5200",
 		"Schedule Service": "http://localhost:5300",
 		"Tasks Service": "http://localhost:5500",
-		"User Service": "http://localhost:5100",
+		"User Service": "http://localhost:8000/user",
 		"Kong API Gateway - Project": "http://localhost:8000/project",
 		"Kong API Gateway - Schedule": "http://localhost:8000/schedule",
 		"Kong API Gateway - Tasks": "http://localhost:8000/tasks",

@@ -44,7 +44,7 @@ app.add_middleware(
 
 # Configuration for external services
 TASK_SERVICE_URL = "http://localhost:5500"
-USERS_SERVICE_URL = "http://localhost:5100"  
+USERS_SERVICE_URL = "http://localhost:8000/user"  
 PROJECTS_SERVICE_URL = "http://localhost:5200"  
 SCHEDULE_SERVICE_URL = "http://localhost:5300"  
 
