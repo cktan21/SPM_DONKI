@@ -52,8 +52,8 @@ jobs:
           git checkout $BRANCH
           
           # 2. Try to merge 'main' into the current branch
-          # --no-ff ensures a merge commit is always created, documenting the sync
-          if git merge origin/main --no-ff -m "chore(sync): Automatic merge of main branch updates from ${{ github.sha }}"; then
+          # --ff-only ensures only fast-forward merges (no merge commit created)
+          if git merge origin/main --ff-only; then
             echo "Successfully merged 'main' into '$BRANCH'. Pushing changes."
             
             # 3. Push the successful merge
