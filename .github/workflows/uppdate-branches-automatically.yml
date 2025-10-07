@@ -52,23 +52,24 @@ jobs:
           git checkout $BRANCH
           
           # 2. Try to merge 'main' into the current branch
-          # --ff-only ensures only fast-forward merges (no merge commit created)
+          # First try fast-forward, then fallback to regular merge if needed
           if git merge origin/main --ff-only; then
-            echo "Successfully merged 'main' into '$BRANCH'. Pushing changes."
-            
-            # 3. Push the successful merge
-            if git push origin $BRANCH; then
-              echo "Successfully pushed to '$BRANCH'."
-            else
-              echo "Error: Failed to push changes to '$BRANCH'. Check branch protection rules."
-            fi
-            
+            echo "Fast-forward merge successful for '$BRANCH'."
+          elif git merge origin/main --no-edit; then
+            echo "Regular merge successful for '$BRANCH'."
           else
             # Merge conflict occurred
-            # Output a warning in the GitHub Actions UI and abort the local merge attempt
             echo "::warning title=Merge Conflict Detected::Automatic merge failed for branch '$BRANCH'. A merge conflict has occurred and needs to be resolved manually by the feature branch owner."
             git merge --abort
-            
+            echo "-----------------------------------"
+            continue
+          fi
+          
+          # 3. Push the successful merge
+          if git push origin $BRANCH; then
+            echo "Successfully pushed to '$BRANCH'."
+          else
+            echo "Error: Failed to push changes to '$BRANCH'. Check branch protection rules."
           fi
           echo "-----------------------------------"
         done
