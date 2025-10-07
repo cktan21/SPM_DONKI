@@ -35,23 +35,40 @@ jobs:
               uses: actions/setup-go@v4
               with:
                 go-version: '1.25'
-                cache: false #Skip Cache cause there isn't any external dependencies
+                cache: true # Enable caching for faster builds
             
             - name: Setup Docker Buildx
               uses: docker/setup-buildx-action@v3
 
-            - name: Start services
-              run: docker compose up -d --build
-            
-            - name: Wait for services to be ready
+            - name: Cache Docker layers
+              uses: actions/cache@v3
+              with:
+                path: /tmp/.buildx-cache
+                key: ${{ runner.os }}-buildx-${{ github.sha }}
+                restore-keys: |
+                  ${{ runner.os }}-buildx-
+
+            - name: Start services (with parallel build and cache)
               run: |
-                echo "Waiting for services to start..."
-                sleep 5s # Adjust this sleep time as needed based on your service startup time.
-                echo "Services should be up now."
+                # Set up Docker BuildKit for layer caching
+                export DOCKER_BUILDKIT=1
+                export BUILDKIT_PROGRESS=plain
+                
+                # Use parallel builds with cache
+                docker compose up -d --build --parallel
+                
+                # Wait for services to be healthy instead of fixed sleep
+                echo "Waiting for services to be ready..."
+                timeout 60s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 1; done'
+                echo "Services are ready!"
             
-            - name: Run go test integration tests
-              run: cd ../test/integration; go test -v 
+            - name: Run go test integration tests (with timeout)
+              run: |
+                cd ../test/integration
+                go test -v -timeout 5m -race  # Add race detection and timeout
 
             - name: Container Cleanup
               if: always()
-              run: docker compose down
+              run: |
+                docker compose down --volumes --remove-orphans
+                docker system prune -f  # Clean up unused resources
