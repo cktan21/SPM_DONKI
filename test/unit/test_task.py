@@ -1,6 +1,35 @@
-import uuid
+import sys
+import os
+import pytest
+from unittest.mock import patch, MagicMock
 from typing import Any, Dict
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+from backend.services.atomic.tasks.supabaseClient import SupabaseClient
+
+
+# -------------------------------
+# Fixtures
+# -------------------------------
+@pytest.fixture
+def mock_client():
+    """Patch create_client and return a mocked Supabase client."""
+    with patch("backend.services.atomic.tasks.supabaseClient.create_client") as mock_create_client:
+        client = MagicMock()
+        mock_create_client.return_value = client
+        yield client
+
+
+@pytest.fixture
+def supabase_client(mock_client):
+    """Return SupabaseClient with mocked client."""
+    return SupabaseClient()
+
+
+# -------------------------------
+# Helper functions
+# -------------------------------
 def sample_create_payload(**overrides) -> Dict[str, Any]:
     payload = {
         "name": "New Task Title",
@@ -10,6 +39,7 @@ def sample_create_payload(**overrides) -> Dict[str, Any]:
     }
     payload.update(overrides)
     return payload
+
 
 def sample_update_payload(**overrides) -> Dict[str, Any]:
     payload = {
@@ -26,82 +56,115 @@ def sample_update_payload(**overrides) -> Dict[str, Any]:
     payload.update(overrides)
     return payload
 
-# --- CREATE TESTS ---
 
-def test_create_tc1_successful_task_creation(client):
-    """TC1: Positive: Created new task, successful returns message 'Task created successfully'"""
-    print("\n[Create:TC1] Creating a new task (expect success)")
+# -------------------------------
+# Get All Tasks tests
+# -------------------------------
+def test_get_all_tasks_success(mock_client, supabase_client):
+    """Test successful retrieval of all tasks"""
+    expected_tasks = [
+        {"id": "task1", "name": "Task 1"},
+        {"id": "task2", "name": "Task 2"}
+    ]
     
-    resp = client.post("/tasks", json=sample_create_payload())
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.execute.return_value.data = expected_tasks
     
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["message"] == "Task created successfully"
-    assert "task" in data and "id" in data["task"]
+    result = supabase_client.get_all_tasks()
     
-    print("[Create:TC1] Positive test case: PASS -> ", data["message"], "ID:", data["task"]["id"], flush=True)
-
-def test_create_tc2_unsuccessful_task_creation(client, fake_supabase):
-    """TC2: Negative: Unsuccessful create. Return message 'Failed to create task'"""
-    print("\n[Create:TC2] Creating a new task (simulate DB failure)")
-    
-    # Simulate database failure
-    fake_supabase.flags["force_insert_empty"] = True
-    
-    resp = client.post("/tasks", json=sample_create_payload())
-    
-    assert resp.status_code == 400
-    data = resp.json()
-    assert data["detail"] == "Failed to create task"
-    
-    print("[Create:TC2] Negative test case PASS ->", data["detail"], flush=True)
-
-# --- UPDATE TESTS ---
-
-def test_update_tc1_update_all_fields_success_message(client):
-    """TC1: Positive: Update all allowed fields --> check that return message 'Task updated successfully'"""
-    print("\n[Update:TC1] Update all allowed fields (expect success message)")
-    
-    # First create a task
-    create_resp = client.post("/tasks", json=sample_create_payload())
-    assert create_resp.status_code == 200
-    task = create_resp.json()["task"]
-    task_id = task["id"]
-    
-    # Update all allowed fields
-    upd = sample_update_payload()
-    resp = client.put(f"/{task_id}", json=upd)
-    
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["message"] == "Task updated successfully"
-    
-    # Verify the returned task data reflects the changes
-    updated_task = data["task"]
-    assert updated_task["name"] == upd["name"]
-    assert updated_task["desc"] == upd["desc"]
-    assert updated_task["notes"] == upd["notes"]
-    assert updated_task["parentTaskId"] == upd["parentTaskId"]
-    assert updated_task["pid"] == upd["pid"]
-    assert updated_task["collaborators"] == upd["collaborators"]
-    
-    print("[Update:TC1] Positive test case: PASS ->", data["message"], "- All fields verified in response", flush=True)
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.select.assert_called_once_with("*")
+    assert result == expected_tasks
 
 
-def test_update_tc2_update_failed_message(client, fake_supabase):
-    """TC2: Negative: Update failed --> check that return message 'Task not updated'"""
-    print("\n[Update:TC3] Update non-existent task (expect failure message)")
+def test_get_all_tasks_empty(mock_client, supabase_client):
+    """Test get_all_tasks when no tasks exist"""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.execute.return_value.data = []
     
-    # Use a non-existent task ID
-    non_existent_id = str(uuid.uuid4())
+    result = supabase_client.get_all_tasks()
     
-    # Simulate update failure
-    fake_supabase.flags["force_update_empty"] = True
+    assert result == []
+
+
+def test_get_all_tasks_with_filter(mock_client, supabase_client):
+    """Test get_all_tasks with filter parameters"""
+    filter_by = {"created_by_uid": "user123"}
+    expected_tasks = [{"id": "task1", "created_by_uid": "user123"}]
     
-    resp = client.put(f"/{non_existent_id}", json=sample_update_payload())
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = expected_tasks
     
-    assert resp.status_code == 404
-    data = resp.json()
-    assert data["detail"] == "Task not updated"
+    result = supabase_client.get_all_tasks(filter_by)
     
-    print("[Update:TC2] Negative test case: PASS ->", data["detail"], flush=True)
+    mock_table.select.return_value.eq.assert_called_once_with("created_by_uid", "user123")
+    assert result == expected_tasks
+
+
+# -------------------------------
+# Update Task tests
+# -------------------------------
+def test_update_task_success(mock_client, supabase_client):
+    """Test successful task update"""
+    task_id = "task123"
+    updates = {"name": "Updated Task", "desc": "Updated description"}
+    updated_task = {"id": task_id, "name": "Updated Task", "desc": "Updated description"}
+    
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated_task]
+    
+    result = supabase_client.update_task(task_id, updates)
+    
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.update.assert_called_once_with(updates)
+    mock_table.update.return_value.eq.assert_called_once_with("id", task_id)
+    assert result.data == [updated_task]
+
+
+def test_update_task_not_found(mock_client, supabase_client):
+    """Test update task when task doesn't exist"""
+    task_id = "nonexistent"
+    updates = {"name": "Updated Task"}
+    
+    mock_table = mock_client.table.return_value
+    # Mock the update to return empty data, which triggers the fetch logic
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = []
+    # Mock the subsequent fetch to also return empty data
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = []
+    
+    result = supabase_client.update_task(task_id, updates)
+    
+    # Verify both update and select were called
+    mock_table.update.assert_called_once_with(updates)
+    mock_table.select.assert_called_once_with("*")
+    assert result.data == []
+
+
+# -------------------------------
+# Delete Task tests
+# -------------------------------
+def test_delete_task_success(mock_client, supabase_client):
+    """Test successful task deletion"""
+    task_id = "task123"
+    deleted_task = {"id": task_id, "name": "Deleted Task"}
+    
+    mock_table = mock_client.table.return_value
+    mock_table.delete.return_value.eq.return_value.execute.return_value.data = [deleted_task]
+    
+    result = supabase_client.delete_task(task_id)
+    
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.delete.return_value.eq.assert_called_once_with("id", task_id)
+    assert result.data == [deleted_task]
+
+
+def test_delete_task_not_found(mock_client, supabase_client):
+    """Test delete task when task doesn't exist"""
+    task_id = "nonexistent"
+    
+    mock_table = mock_client.table.return_value
+    mock_table.delete.return_value.eq.return_value.execute.return_value.data = []
+    
+    result = supabase_client.delete_task(task_id)
+    
+    assert result.data == []
