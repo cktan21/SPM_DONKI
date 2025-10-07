@@ -4,7 +4,7 @@
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --port 5600
+uvicorn main:app --reload --port 4000
 ```
 
 To deactivate server:
@@ -14,24 +14,24 @@ deactivate
 > Docker Development
 ```bash
 docker build -t my-fastapi-app .
-docker run -p 5500:5500 --name my-fastapi-container my-fastapi-app
+docker run -p 4000:4000 --name my-fastapi-container my-fastapi-app
 ```
 
 ## EndPoints
 
 ### Health Check
 
-GET http://localhost:5600
+GET http://localhost:4000
 
 Output:
 ```bash
-"message":"Composite Task Update Service is running 🚀","service":"track-schedule-composite"
+"message":"Composite Track Schedule Service is running 🚀","service":"track-schedule-composite"
 ```
 >### Create task
 
-POST http://127.0.0.1:5600/createTask
+POST http://127.0.0.1:4000/createTask
 
-> http://127.0.0.1:5600/createTask
+> http://127.0.0.1:4000/createTask
 
 Sample Output:
 ```json
@@ -105,9 +105,9 @@ Sample Output:
 
 >### Get task by userID
 
-POST http://127.0.0.1:5600/tasks/{userId}
+POST http://127.0.0.1:4000/tasks/{userId}
 
-> http://127.0.0.1:5600/tasks/17a40371-66fe-411a-963b-a977cc7cb475
+> http://127.0.0.1:4000/tasks/17a40371-66fe-411a-963b-a977cc7cb475
 
 Sample Output:
 ```json
@@ -187,9 +187,9 @@ Sample Output:
 
 >### Get task by taskID
 
-POST http://127.0.0.1:5600/tasks/{task_id}
+POST http://127.0.0.1:4000/tasks/{task_id}
 
-> http://127.0.0.1:5600/tasks/17a40371-66fe-411a-963b-a977cc7cb475
+> http://127.0.0.1:4000/tasks/17a40371-66fe-411a-963b-a977cc7cb475
 
 Sample Output:
 ```json
@@ -269,9 +269,9 @@ Sample Output:
 
 >### Update task
 
-PUT http://localhost:5600/{task_id}
+PUT http://localhost:4000/{task_id}
 
-> http://localhost:5600/c34e506a-548b-4f05-8356-e68c11370cab
+> http://localhost:4000/c34e506a-548b-4f05-8356-e68c11370cab
 
 Sample Output:
 ```json
@@ -333,9 +333,9 @@ Sample Output:
 
 >### Delete task
 
-DELETE http://localhost:5600/{task_id}
+DELETE http://localhost:4000/{task_id}
 
-> http://localhost:5600/67d81199-265d-423a-9998-e3955f4f58ac
+> http://localhost:4000/67d81199-265d-423a-9998-e3955f4f58ac
 
 Sample Output:
 ```json

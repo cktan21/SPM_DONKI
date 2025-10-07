@@ -107,6 +107,16 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_API_KEY: ${SUPABASE_API_KEY}
 
+  track-schedule:
+    build: ./services/composite/track-schedule
+    container_name: track-schedule
+    networks:
+      - spm-net
+    ports:
+      - "4000:4000"
+    environment: # rem you need to always add for each ms
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+
 #   rabbitmq:
 #     image: rabbitmq:3-management
 #     container_name: rabbitmq

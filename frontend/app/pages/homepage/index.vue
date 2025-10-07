@@ -272,9 +272,9 @@ console.log('Using USER_ID:', USER_ID) // Debug log
 
 // ===== SERVICE BASE URLS =====
 const trackScheduleComposite = 'http://localhost:5600'
-const TASKS_atomic = 'http://localhost:5500'
-const PROJECTS_Atomic = 'http://localhost:5200'
-const USERS_atomic = 'http://localhost:5700'
+const TASKS_atomic = 'http://localhost:8000/tasks'
+const PROJECTS_Atomic = 'http://localhost:8000/project'
+const USERS_atomic = 'http://localhost:8000/user'
 
 
 type Task = {

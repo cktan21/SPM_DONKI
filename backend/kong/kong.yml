@@ -8,7 +8,8 @@ services:
   #     - name: rabbitmq-management-route
   #       paths:
   #         - /rabbitmq
-      
+
+  # Atomic Microservices
   - name: project-service
     url: http://project:5200
     routes:
@@ -36,6 +37,14 @@ services:
       - name: user-route
         paths:
           - /user
+  
+  # Composite Microservices
+  - name: track-schedule-service
+    url: http://track-schedule:4000
+    routes:
+      - name: track-schedule-route
+        paths:
+          - /track-schedule
 
 
 plugins:

@@ -43,10 +43,10 @@ app.add_middleware(
 
 
 # Configuration for external services
-TASK_SERVICE_URL = "http://localhost:5500"
-USERS_SERVICE_URL = "http://localhost:8000/user"  
-PROJECTS_SERVICE_URL = "http://localhost:5200"  
-SCHEDULE_SERVICE_URL = "http://localhost:5300"  
+TASK_SERVICE_URL = "http://localhost:8000/tasks"
+USERS_SERVICE_URL = "http://localhost:8000/user"
+PROJECTS_SERVICE_URL = "http://localhost:8000/project"  
+SCHEDULE_SERVICE_URL = "http://localhost:8000/schedule"  
 
 # for validating user
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
@@ -54,7 +54,7 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 # Root endpoint
 @app.get("/")
 def read_root():
-    return {"message": "Composite Task Update Service is running 🚀", "service": "track-schedule-composite"}
+    return {"message": "Composite Track Schedule Service is running 🚀", "service": "track-schedule-composite"}
 
 # Favicon handler
 @app.get("/favicon.ico")
@@ -961,4 +961,4 @@ class ValidationError(Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5600)
+    uvicorn.run(app, host="0.0.0.0", port=4000)
