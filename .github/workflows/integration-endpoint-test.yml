@@ -48,14 +48,14 @@ jobs:
                 restore-keys: |
                   ${{ runner.os }}-buildx-
 
-            - name: Start services (with parallel build and cache)
+            - name: Start services (with cache)
               run: |
                 # Set up Docker BuildKit for layer caching
                 export DOCKER_BUILDKIT=1
                 export BUILDKIT_PROGRESS=plain
                 
-                # Use parallel builds with cache
-                docker compose up -d --build --parallel
+                # Build and start services (Docker Compose will build in parallel by default)
+                docker compose up -d --build
                 
                 # Wait for services to be healthy instead of fixed sleep
                 echo "Waiting for services to be ready..."
