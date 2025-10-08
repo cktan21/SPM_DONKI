@@ -4,6 +4,15 @@ import { useRouter } from "vue-router"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const router = useRouter()
 
@@ -12,8 +21,10 @@ const randomIndex = Math.floor(Math.random() * 6) + 1
 const coverImage = `/auth_images/background_image_${randomIndex}.jpg`
 
 // Form state
+const name = ref("")
 const email = ref("")
 const password = ref("")
+const role = ref("")  // Added role reactive variable
 const loading = ref(false)
 const errorMessage = ref("")
 
@@ -52,7 +63,12 @@ async function handleSignup() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include", // cookies will be set by backend
-      body: JSON.stringify({ email: email.value, password: password.value })
+      body: JSON.stringify({
+        name: name.value,
+        email: email.value,
+        password: password.value,
+        role: role.value
+      })
     })
 
     const data = await res.json().catch(() => ({}))
@@ -81,39 +97,60 @@ async function handleSignup() {
         <div class="grid gap-2 text-center">
           <h1 class="text-3xl font-bold">Sign Up</h1>
           <p class="text-balance text-muted-foreground">
-            Create a new account by entering your email and password
+            Create a new account for new staff
           </p>
         </div>
 
-        <!-- Form -->
-        <div class="grid gap-4">
+        <div class="grid gap-4 max-w-md"> <!-- container with max width -->
+
+          <div class="grid gap-2">
+            <Label for="name">Name</Label>
+            <Input id="name" type="text" placeholder="Michael Jordan" v-model="name" required class="w-full" />
+          </div>
+
           <div class="grid gap-2">
             <Label for="email">Email</Label>
-            <Input id="email" type="email" placeholder="hello@example.com" v-model="email" required />
+            <Input id="email" type="email" placeholder="hello@example.com" v-model="email" required class="w-full" />
           </div>
 
           <div class="grid gap-2">
             <Label for="password">Password</Label>
-            <Input id="password" type="password" v-model="password" required />
+            <Input id="password" type="password" v-model="password" required class="w-full" />
           </div>
 
-          <Button :disabled="loading" @click="handleSignup" class="w-full">
+          <div class="grid gap-2">
+            <Label for="selectrole">Select Role</Label>
+            <Select v-model="role">
+              <SelectTrigger class="w-full text-left">
+                <SelectValue placeholder="Select a role" class="text-left" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel><b></b></SelectLabel>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="hr">HR</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button :disabled="loading" @click="handleSignup" class="w-full mt-5">
             {{ loading ? "Signing up..." : "Sign Up" }}
           </Button>
 
           <p v-if="errorMessage" class="text-red-500 text-sm">{{ errorMessage }}</p>
         </div>
 
-        <!-- Login link -->
-        <div class="mt-4 text-center text-sm">
-          Already have an account? <a href="./login" class="underline">Login</a>
-        </div>
+        
       </div>
     </div>
 
     <!-- Right side: Cover image -->
     <div class="hidden lg:block">
-      <img :src="coverImage" alt="Cover image" class="h-screen w-full object-cover dark:brightness-[0.2] dark:grayscale" />
+      <img :src="coverImage" alt="Cover image"
+        class="h-screen w-full object-cover dark:brightness-[0.2] dark:grayscale" />
     </div>
   </div>
 </template>
