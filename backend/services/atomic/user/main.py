@@ -42,6 +42,8 @@ JWT_ALGORITHM = "HS256"
 class SignupRequest(BaseModel):
     email: str
     password: str
+    role: str = "user"  # default if not provided
+    name: str = "New User"  # default if not provided
 
 class LoginRequest(BaseModel):
     email: str
@@ -341,7 +343,13 @@ def signup(req: SignupRequest):
         # Attempt signup
         resp = supabase.client.auth.sign_up({
             "email": req.email,
-            "password": req.password
+            "password": req.password,
+            "options": {
+                "data": {
+                    "role": req.role,
+                    "name": req.name
+                }
+            }
         })
 
         if not resp.user:
