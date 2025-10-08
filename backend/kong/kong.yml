@@ -56,7 +56,8 @@ plugins:
   - name: cors
     config:
       origins:
-        - "*"
+        - "http://localhost:3000"
+        - "http://127.0.0.1:3000"
       methods:
         - HEAD
         - GET
@@ -66,13 +67,15 @@ plugins:
         - DELETE
         - OPTIONS
       headers:
+        - Authorization          # Uncommented to allow auth headers
         - Access-Control-Allow-Origin
         - Accept
         - Accept-Version
         - Content-Length
         - Content-MD5
         - Content-Type
-        # - Authorization # Maybe remove this
+      credentials: true         # Added this line to allow credentials
+
 
   # - name: prometheus
   #   enabled: true
