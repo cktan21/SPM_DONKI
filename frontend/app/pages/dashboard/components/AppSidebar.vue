@@ -156,6 +156,9 @@ const data = {
     ...(["manager"].includes(userData.value?.user?.role)
       ? [{ name: "Assign Task", url: "/assignTask", icon: ClipboardList }]
       : []),
+    ...(["hr"].includes(userData.value?.user?.role)
+      ? [{ name: "Create Signup", url: "/auth/signup", icon: ClipboardList }]
+      : []),
     {
       name: "Travel",
       url: "#",
