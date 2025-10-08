@@ -23,14 +23,16 @@ interface CheckCookiesResponse {
 const routeAccess: Record<string, string[]> = {
     "/generatereport": ["hr"],               // Only HR
     "/settings": ["admin"],                  // Only Admin
-    "/profile": ["hr", "admin", "user"],     // Multiple roles allowed
+    "/profile": ["hr", "admin", "user"],    // Multiple roles allowed
+    "/auth/signup": ["hr"],                  // Only HR can access signup
 };
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
     if (process.server) return; // Only run client-side
 
     const BASE_URL = "http://localhost:8000/user";
-    const publicPages = ["/auth/login"]; // Pages accessible without login
+    // Pages accessible without login
+    const publicPages = ["/auth/login"];  // /auth/signup is protected, so not included here
 
     // ---- Helper functions ----
     const checkAccess = (userRole: string) => {
