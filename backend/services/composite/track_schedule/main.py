@@ -42,10 +42,10 @@ app.add_middleware(
 
 
 # Configuration for external services
-TASK_SERVICE_URL = "http://localhost:8000/tasks"
-USERS_SERVICE_URL = "http://localhost:8000/user"
-PROJECTS_SERVICE_URL = "http://localhost:8000/project"  
-SCHEDULE_SERVICE_URL = "http://localhost:8000/schedule"  
+TASK_SERVICE_URL = "http://tasks:5500"
+USERS_SERVICE_URL = "http://users:5100" 
+PROJECTS_SERVICE_URL = "http://project:5200"
+SCHEDULE_SERVICE_URL = "http://schedule:5300"
 
 # for validating user
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")

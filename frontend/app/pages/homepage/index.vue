@@ -271,7 +271,7 @@ console.log('Using USER_ID:', USER_ID.value)
 console.log('Using USER_ID:', USER_ID) // Debug log
 
 // ===== SERVICE BASE URLS =====
-const trackScheduleComposite = 'http://localhost:5600'
+const trackScheduleComposite = 'http://localhost:8000/track-schedule'
 const TASKS_atomic = 'http://localhost:8000/tasks'
 const PROJECTS_Atomic = 'http://localhost:8000/project'
 const USERS_atomic = 'http://localhost:8000/user'
@@ -379,6 +379,7 @@ async function createTask() {
       name: formCreate.name.trim(),
       desc: formCreate.desc?.trim() || undefined,
       notes: formCreate.notes?.trim() || undefined,
+      created_by_uid: USER_ID.value
     }
     if (formCreate.pid?.trim()) payload.pid = formCreate.pid.trim()
     if (formCreate.parentTaskId?.trim()) payload.parentTaskId = formCreate.parentTaskId.trim()
@@ -394,8 +395,6 @@ async function createTask() {
     if (formCreate.schedule.deadline) sched.deadline = formCreate.schedule.deadline
     if (formCreate.schedule.priority) sched.priority = formCreate.schedule.priority
     if (Object.keys(sched).length) payload.schedule = sched
-
-    payload.userID = USER_ID.value
 
     await api.post('/createTask', payload)
     await loadTasks()
