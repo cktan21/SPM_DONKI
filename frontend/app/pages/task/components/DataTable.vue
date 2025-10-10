@@ -6,7 +6,6 @@ import type {
   VisibilityState,
 } from '@tanstack/vue-table'
 import type { Task } from '../data/schema'
-
 import {
   FlexRender,
   getCoreRowModel,
@@ -18,6 +17,7 @@ import {
   useVueTable,
 } from '@tanstack/vue-table'
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { valueUpdater } from '@/lib/utils'
 import {
   Table,
@@ -34,7 +34,9 @@ interface DataTableProps {
   columns: ColumnDef<Task, any>[]
   data: Task[]
 }
+
 const props = defineProps<DataTableProps>()
+const router = useRouter()
 
 const sorting = ref<SortingState>([])
 const columnFilters = ref<ColumnFiltersState>([])
@@ -62,6 +64,11 @@ const table = useVueTable({
   getFacetedRowModel: getFacetedRowModel(),
   getFacetedUniqueValues: getFacetedUniqueValues(),
 })
+
+const handleRowClick = (row: any) => {
+  const taskId = row.original.id
+  router.push(`/task/${taskId}`)
+}
 </script>
 
 <template>
@@ -82,13 +89,14 @@ const table = useVueTable({
               v-for="row in table.getRowModel().rows"
               :key="row.id"
               :data-state="row.getIsSelected() && 'selected'"
+              class="cursor-pointer hover:bg-muted/50"
+              @click="handleRowClick(row)"
             >
               <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
                 <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
               </TableCell>
             </TableRow>
           </template>
-
           <TableRow v-else>
             <TableCell
               :colspan="columns.length"
@@ -100,7 +108,6 @@ const table = useVueTable({
         </TableBody>
       </Table>
     </div>
-
     <DataTablePagination :table="table" />
   </div>
 </template>
