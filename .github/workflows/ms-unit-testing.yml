@@ -38,7 +38,8 @@ jobs:
                     anyio \
                     uvicorn \
                     pytest \
-                    pytest-cov
+                    pytest-cov \
+                    pytest-asyncio
             
             - name: Running Unit Tests & Generating Coverage Report
               run: |
