@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, Path, Body
 from typing import Dict, Any, List, Optional
 import httpx
-import asyncio
 from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
