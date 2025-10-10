@@ -1,4 +1,18 @@
-// frontendtest/lib/utils.ts
+
+import type { Updater } from '@tanstack/vue-table'
+import type { ClassValue } from 'clsx'
+import type { Ref } from 'vue'
+import { clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
 export function cn(...classes: (string | boolean | undefined)[]) {
     return classes.filter(Boolean).join(' ')
+}
+
+
+export function valueUpdater<T extends Updater<any>>(updaterOrValue: T, ref: Ref) {
+  ref.value
+    = typeof updaterOrValue === 'function'
+      ? updaterOrValue(ref.value)
+      : updaterOrValue
 }
