@@ -115,7 +115,7 @@ Sample Output:
 
 ### Delete Schedule w Task ID
 
-GET http://localhost:5300/{task_id}
+DELETE http://localhost:5300/{task_id}
 
 > http://localhost:5300/b1692687-4e49-41b1-bb04-3f5c18d6faf7
 
