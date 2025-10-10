@@ -78,6 +78,8 @@ def insert_new_project(new_data: Dict[str, Any] = Body(...) ):
 # Update the row
 @app.put("/{id}")
 def update_project(id: str, new_data: Dict[str, Any] = Body(...)):
+    if not new_data:
+        raise HTTPException(status_code=400, detail="Update payload cannot be empty")
     try:
         data = supabase.update_project(id, new_data)
         if not data:
