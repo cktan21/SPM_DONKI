@@ -1,36 +1,51 @@
 <script setup lang="ts">
+import { h } from 'vue'
 import { columns } from './components/columns'
-import DataTable from './components/DataTable.vue'
-import UserNav from './components/UserNav.vue'
 import tasks from './data/tasks.json'
+import DataTable from './components/DataTable.vue'
+import { Button } from '@/components/ui/button'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const handleCreateTask = () => {
+  router.push('/task/create')
+}
 </script>
 
 <template>
-  <div class="md:hidden">
-    <VPImage
-      alt="Tasks"
-      width="1280"
-      height="1214" class="block" :image="{
-        dark: '/examples/tasks-dark.png',
-        light: '/examples/tasks-light.png',
-      }"
-    />
-  </div>
+  <div class="container mx-auto py-10">
+    <div class="space-y-6">
+      <!-- Header section with title and create button -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight">Tasks</h1>
+          <p class="text-muted-foreground">
+            Manage your tasks and view their details
+          </p>
+        </div>
+        <Button @click="handleCreateTask">
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            stroke-width="2" 
+            stroke-linecap="round" 
+            stroke-linejoin="round"
+            class="mr-2"
+          >
+            <path d="M5 12h14"/>
+            <path d="M12 5v14"/>
+          </svg>
+          Create Task
+        </Button>
+      </div>
 
-  <div class="hidden h-full flex-1 flex-col space-y-8 p-8 md:flex">
-    <div class="flex items-center justify-between space-y-2">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">
-          Project ABC!
-        </h2>
-        <p class="text-muted-foreground">
-          Here's a list of your tasks!
-        </p>
-      </div>
-      <div class="flex items-center space-x-2">
-        <UserNav />
-      </div>
+      <!-- Data table -->
+      <DataTable :data="tasks" :columns="columns" />
     </div>
-    <DataTable :data="tasks" :columns="columns" />
   </div>
 </template>

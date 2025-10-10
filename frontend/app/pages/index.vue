@@ -1,9 +1,16 @@
-<!-- This page is just to make the login the default page.
- 
-If you go to localhost:3000/, it would redirect to localhost:3000/auth/login -->
+<script setup lang="ts">
+definePageMeta({
+  layout: false
+})
 
-<script setup>
-import { navigateTo } from "#app";
-
-navigateTo("/auth/login");
+// Use navigateTo server-side safe
+if (process.client) {
+  await navigateTo("/auth/login", { replace: true, external: false })
+}
 </script>
+
+<template>
+  <div class="min-h-screen flex items-center justify-center bg-background">
+    <p class="text-muted-foreground">Redirecting...</p>
+  </div>
+</template>
