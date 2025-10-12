@@ -81,7 +81,10 @@ async def get_all_tasks_composite():
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@app.get("/tasks/user/{user_id}",summary="Get all tasks where user is a collaborator",response_description="List of tasks with enriched details where user is a collaborator (+ user name)"
+@app.get(
+    "/tasks/user/{user_id}",
+    summary="Get all tasks where user is a collaborator",
+    response_description="List of tasks with enriched details where user is a collaborator (+ user name)"
 )
 async def get_tasks_by_user_composite(
     user_id: str = Path(..., description="User ID to fetch tasks for (where user is a collaborator)")
@@ -91,18 +94,18 @@ async def get_tasks_by_user_composite(
     1. Fetch all tasks from Task MS
     2. Filter tasks where user_id is in collaborators
     3. Enrich each task with schedule and project data
-    4. Fetch user's display name from Users MS and include in response
+    4. Flatten key schedule fields (progress, deadline, priority) for easier rendering
+    5. Nest subtasks under parent tasks
+    6. Fetch user's display name from Users MS and include in response
     """
     async with httpx.AsyncClient() as client:
         try:
             # ---- 0) Fetch user info (for name) ----
             user_name: str | None = None
             try:
-                # Internal user validation endpoint (service-to-service)
                 user_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{user_id}")
                 if user_resp.status_code == 200:
                     u = user_resp.json() or {}
-                    # Prefer explicit name; otherwise fall back to email local-part; otherwise id
                     if u.get("name"):
                         user_name = u["name"]
                     elif u.get("email"):
@@ -112,7 +115,6 @@ async def get_tasks_by_user_composite(
                 else:
                     user_name = user_id
             except Exception:
-                # If Users MS is unavailable, still proceed with id as name fallback
                 user_name = user_id
 
             # ---- 1) Get all tasks from Task MS ----
@@ -176,18 +178,37 @@ async def get_tasks_by_user_composite(
                     except Exception:
                         project_data = {"message": "Project information unavailable"}
 
-                enriched_tasks.append({
+                # ✅ 4) Dual-mode flattening: keep schedule object + expose key fields top-level
+                enriched_task = {
                     "task": task,
                     "schedule": schedule_data,
-                    "project": project_data
-                })
+                    "project": project_data,
+                    "progress": schedule_data.get("progress") if schedule_data else None,
+                    "deadline": schedule_data.get("deadline") if schedule_data else None,
+                    "priority": schedule_data.get("priority") if schedule_data else None
+                }
 
-            # ---- 4) Return with user name ----
+                enriched_tasks.append(enriched_task)
+
+            # ✅ 5) NEST SUBTASKS UNDER PARENT TASKS
+            task_map = {t["task"]["id"]: t for t in enriched_tasks}
+            nested_tasks = []
+
+            for entry in enriched_tasks:
+                task = entry["task"]
+                parent_id = task.get("parentTaskId")
+                if parent_id and parent_id in task_map:
+                    parent_entry = task_map[parent_id]
+                    parent_entry.setdefault("subtasks", []).append(entry)
+                else:
+                    nested_tasks.append(entry)
+
+            # ✅ 6) Return with nested tasks and user info
             return {
                 "user_id": user_id,
                 "user": {"id": user_id, "name": user_name},
-                "tasks": enriched_tasks,
-                "count": len(enriched_tasks),
+                "tasks": nested_tasks,
+                "count": len(nested_tasks),
                 "metadata": {
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
                     "total_tasks_checked": len(all_tasks)
@@ -208,6 +229,8 @@ async def get_tasks_by_user_composite(
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
 
 
 @app.get(
