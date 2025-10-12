@@ -55,7 +55,8 @@ async def create_task(
             "name": "New Task Title",
             "desc": "Optional description",
             "notes": "Optional notes",
-            "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6"
+            "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+            "priorityLevel": 8,  # Optional
         }
     )
 ):
@@ -65,7 +66,15 @@ async def create_task(
     if "created_by_uid" not in task:
         raise HTTPException(status_code=400, detail="Task Owner ID is required")
 
+    #Default timestam
     task["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
+
+    # --- Priority logic ---
+    level = int(task.get("priorityLevel", 5))  # Default 5
+    task["priorityLevel"] = max(1, min(level, 10))  # Clamp 1–10
+    task["priorityLabel"] = (
+        "High" if level >= 8 else "Medium" if level >= 4 else "Low"
+    )
 
     try:
         resp = supabase.client.table("TASK").insert(task).execute()
@@ -107,7 +116,8 @@ async def update_task(
     ),
 ):
     # Filter to only allow specific fields
-    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes"}
+    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes",
+                       "priorityLevel", "priorityLabel"}
 
     # filtered_updates --> dictionary with only allowed fields
     filtered_updates = {}
@@ -115,6 +125,14 @@ async def update_task(
         if key in allowed_fields:
             # Update the value for the key
             filtered_updates[key] = value
+
+    # --- Priority logic ---
+    if "priorityLevel" in filtered_updates:
+        level = int(filtered_updates["priorityLevel"])
+        filtered_updates["priorityLevel"] = max(1, min(level, 10))
+        filtered_updates["priorityLabel"] = (
+            "High" if level >= 8 else "Medium" if level >= 4 else "Low"
+        )
     
     # Add server-side timestamp
     filtered_updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
