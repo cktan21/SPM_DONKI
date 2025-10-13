@@ -34,8 +34,7 @@ async def get_task(
 ):
     rows = supabase.get_all_tasks(filter_by={"id": task_id})
     if not rows:
-        raise HTTPException(status_code=404, detail="Task not found")
-
+        return {"message": "Task not found", "task": None}
     return {"message": "Task retrieved successfully", "task": rows[0]}
 
 # Get task by project ID
@@ -45,7 +44,7 @@ async def get_tasks_by_project(
 ):
     tasks = supabase.get_all_tasks(filter_by={"pid": project_id})
     if not tasks:
-        raise HTTPException(status_code=404, detail="No tasks found for this project")
+        return {"message": "No tasks found for this project", "tasks": []}
     return {"message": f"{len(tasks)} task(s) retrieved", "tasks": tasks}
 
 
@@ -56,7 +55,7 @@ async def get_tasks_by_parent_task(
 ):
     tasks = supabase.get_all_tasks(filter_by={"parentTaskId": parent_task_id})
     if not tasks:
-        raise HTTPException(status_code=404, detail="No children tasks found for this parent task")
+        return {"message": "No children tasks found for this parent task", "tasks": []}
     return {"message": f"{len(tasks)} children task(s) retrieved", "tasks": tasks}
 
 #Create task 
