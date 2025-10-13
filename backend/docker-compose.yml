@@ -124,6 +124,8 @@ services:
       - spm-net
     ports:
       - "4100:4100"
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
 
 #   rabbitmq:
 #     image: rabbitmq:3-management

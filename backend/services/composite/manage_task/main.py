@@ -487,20 +487,26 @@ async def get_task_composite(
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
         ...,
-        example={
-            "name": "New Task Title",
-            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-            "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
-            "collaborators": [
-                "0ec8a99d-3aab-4ec6-b692-fda88656844f",
-                "17a40371-66fe-411a-963b-a977cc7cb475"
-            ],
-            "desc": "Optional description",
-            "notes": "Optional notes",
-            "schedule": {
-                "status": "todo",
-                "deadline": "2024-12-31T23:59:59Z",
-                "priority": "medium"
+        examples={
+            "example1": {
+                "summary": "Create a new task",
+                "description": "A complete example of creating a task with all optional fields",
+                "value": {
+                    "name": "New Task Title",
+                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                    "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+                    "collaborators": [
+                        "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+                        "17a40371-66fe-411a-963b-a977cc7cb475"
+                    ],
+                    "desc": "Optional description",
+                    "notes": "Optional notes",
+                    "schedule": {
+                        "status": "todo",
+                        "deadline": "2024-12-31T23:59:59Z",
+                        "priority": "medium"
+                    }
+                }
             }
         }
     )
@@ -691,15 +697,21 @@ async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
     updates: Dict[str, Any] = Body(
         ...,
-        example={
-            "name": "Update task from composite service",
-            "parentTaskId": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
-            "collaborators": ["0ec8a99d-3aab-4ec6-b692-fda88656844f", "17a40371-66fe-411a-963b-a977cc7cb475"],
-            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-            "desc": "Set up the initial project structure and dependencies",
-            "notes": "Remember to update the README file",
-            "status": "in_progress",
-            "deadline": "2024-12-31T23:59:59Z"
+        examples={
+            "example1": {
+                "summary": "Update task with all fields",
+                "description": "A complete example of updating a task with all possible fields",
+                "value": {
+                    "name": "Update task from composite service",
+                    "parentTaskId": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
+                    "collaborators": ["0ec8a99d-3aab-4ec6-b692-fda88656844f", "17a40371-66fe-411a-963b-a977cc7cb475"],
+                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                    "desc": "Set up the initial project structure and dependencies",
+                    "notes": "Remember to update the README file",
+                    "status": "in_progress",
+                    "deadline": "2024-12-31T23:59:59Z"
+                }
+            }
         }
     ),
 ):
