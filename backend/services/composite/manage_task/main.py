@@ -53,7 +53,7 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 # Root endpoint
 @app.get("/")
 def read_root():
-    return {"message": "Composite Track Schedule Service is running 🚀", "service": "track-schedule-composite"}
+    return {"message": "Composite Manage Task Service is running 🚀", "service": "manage-task-composite"}
 
 # Favicon handler
 @app.get("/favicon.ico")
@@ -366,7 +366,7 @@ async def get_task_composite(
     async with httpx.AsyncClient() as client:
         try:
             # === 1. Get Task ===
-            task_resp = await client.get(f"{TASK_SERVICE_URL}/{task_id}")
+            task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
             if task_resp.status_code == 404:
                 raise HTTPException(status_code=404, detail="Task not found")
             task_resp.raise_for_status()
@@ -441,7 +441,7 @@ async def get_task_composite(
             parent_task = None
             if task_data.get("parentTaskId"):
                 try:
-                    p_resp = await client.get(f"{TASK_SERVICE_URL}/{task_data['parentTaskId']}")
+                    p_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_data['parentTaskId']}")
                     if p_resp.status_code == 200:
                         p_json = p_resp.json().get("task", p_resp.json())
                         parent_task = {
@@ -786,7 +786,7 @@ async def validate_parent_task_id(parent_task_id: str):
     """Validate that parentTaskId exists and is valid"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"{TASK_SERVICE_URL}/{parent_task_id}")
+            response = await client.get(f"{TASK_SERVICE_URL}/tid/{parent_task_id}")
             if response.status_code == 404:
                 raise ValidationError(f"Parent task with ID {parent_task_id} not found")
             elif response.status_code != 200:

@@ -28,23 +28,35 @@ async def get_all_tasks():
     return {"message": f"{len(tasks)} task(s) retrieved", "tasks": tasks}
 
 # Get task by task ID
-@app.get("/{task_id}", summary="Get a task by ID", response_description="Task row")
+@app.get("/tid/{task_id}", summary="Get a task by its ID", response_description="Task row")
 async def get_task(
     task_id: str = Path(..., description="Primary key of the task (uuid)")
 ):
-    # Query the TASK table by task_id
-    resp = (
-        supabase.client.table("TASK")
-        .select("*")
-        .eq("id", task_id)
-        .execute()
-    )
-    rows = getattr(resp, "data", None) or []
-
+    rows = supabase.get_all_tasks(filter_by={"id": task_id})
     if not rows:
-        raise HTTPException(status_code=404, detail="Task not found")
-
+        return {"message": "Task not found", "task": None}
     return {"message": "Task retrieved successfully", "task": rows[0]}
+
+# Get task by project ID
+@app.get("/pid/{project_id}", summary="Get all tasks by project ID")
+async def get_tasks_by_project(
+    project_id: str = Path(..., description="Project ID")
+):
+    tasks = supabase.get_all_tasks(filter_by={"pid": project_id})
+    if not tasks:
+        return {"message": "No tasks found for this project", "tasks": []}
+    return {"message": f"{len(tasks)} task(s) retrieved", "tasks": tasks}
+
+
+# Get task by parent Task ID
+@app.get("/ptid/{parent_task_id}", summary="Get all tasks by parent Task ID")
+async def get_tasks_by_parent_task(
+    parent_task_id: str = Path(..., description="Parent Task ID")
+):
+    tasks = supabase.get_all_tasks(filter_by={"parentTaskId": parent_task_id})
+    if not tasks:
+        return {"message": "No children tasks found for this parent task", "tasks": []}
+    return {"message": f"{len(tasks)} children task(s) retrieved", "tasks": tasks}
 
 #Create task 
 @app.post("/createTask", summary="Create a new task")

@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from backend.services.composite.track_schedule import main
+from backend.services.composite.manage_task import main
 
 pytestmark = pytest.mark.asyncio
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio
 async def test_get_all_tasks_composite_success():
     fake_tasks = {"tasks": [{"id": "33949f99-20d0-423d-9b26-f09292b2e40d", "name": "Task 1"}]}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_response = AsyncMock()
         mock_response.json = Mock(return_value=fake_tasks)
@@ -27,7 +27,7 @@ async def test_get_all_tasks_composite_success():
 
 
 async def test_get_all_tasks_composite_failure():
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = Exception("boom")
         mock_client_cls.return_value.__aenter__.return_value = mock_client
@@ -47,7 +47,7 @@ async def test_get_tasks_by_user_composite_success():
     fake_schedule = {"id": "s1", "task_id": "33949f99-20d0-423d-9b26-f09292b2e40d"}
     fake_project = {"id": "p1", "project": {"name": "Demo"}}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
             AsyncMock(status_code=200, json=Mock(return_value=fake_user)),
@@ -69,7 +69,7 @@ async def test_get_tasks_by_user_composite_no_tasks():
     fake_user = {"id": user_id, "name": "Alice"}
     fake_tasks = {"tasks": []}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
             AsyncMock(status_code=200, json=Mock(return_value=fake_user)),
@@ -92,7 +92,7 @@ async def test_get_tasks_by_project_composite_success():
     fake_tasks = {"tasks": [{"id": "33949f99-20d0-423d-9b26-f09292b2e40d", "pid": "p1"}]}
     fake_schedule = {"id": "s1", "task_id": "33949f99-20d0-423d-9b26-f09292b2e40d"}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
             AsyncMock(status_code=200, json=Mock(return_value=fake_project)),
@@ -109,7 +109,7 @@ async def test_get_tasks_by_project_composite_success():
 
 
 # -------------------------------
-# /tasks/{task_id}
+# /tasks/tid/{task_id}
 # -------------------------------
 async def test_get_task_composite_success():
     task_id = "33949f99-20d0-423d-9b26-f09292b2e40d"
@@ -118,7 +118,7 @@ async def test_get_task_composite_success():
     fake_project = {"id": "p1", "project": {"name": "Demo"}}
     fake_user = {"id": "u1", "name": "Alice"}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
             AsyncMock(status_code=200, json=Mock(return_value=fake_task), raise_for_status=Mock()),
@@ -153,7 +153,7 @@ async def test_create_task_composite_success(monkeypatch):
     monkeypatch.setattr(main, "create_task_service", fake_create_task_service)
     monkeypatch.setattr(main, "create_schedule_service", fake_create_schedule_service)
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
             AsyncMock(status_code=200, json=Mock(return_value=fake_project)),
@@ -182,7 +182,7 @@ async def test_delete_task_composite_success():
     fake_schedule_delete = {"deleted": True}
     fake_task_delete = {"deleted": True}
 
-    with patch("backend.services.composite.track_schedule.main.httpx.AsyncClient") as mock_client_cls:
+    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.delete.side_effect = [
             AsyncMock(status_code=204, json=Mock(return_value=fake_schedule_delete)),

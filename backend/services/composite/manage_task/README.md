@@ -25,7 +25,7 @@ GET http://localhost:4000
 
 Output:
 ```bash
-"message":"Composite Track Schedule Service is running 🚀","service":"track-schedule-composite"
+"message":"Composite Manage Task Service is running 🚀","service":"manage-task-composite"
 ```
 >### Create task
 

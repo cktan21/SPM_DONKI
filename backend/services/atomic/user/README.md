@@ -26,7 +26,7 @@ docker run -p 5100:5100 --name my-fastapi-container my-fastapi-app
 
 ### Health Check
 
-GET http://localhost:8000/user
+GET http://localhost:5100
 
 Output:
 
@@ -65,7 +65,7 @@ Postman usage:
 
 > ## Login
 
-POST http://localhost:8000/user/login
+POST http://localhost:5100/login
 
 `Example: POST http://127.0.0.1:5100/login`
 
@@ -116,7 +116,7 @@ Notes:
 
 > ## Logout
 
-POST http://localhost:8000/user/logout
+POST http://localhost:5100/logout
 
 `Example: POST http://127.0.0.1:5100/logout`
 
@@ -173,7 +173,7 @@ Security Features:
 > This route works just how a get user details route would work, where it will always return user details in its response.
 > When middleware calls this route, it will obtain the reponse and pass it to every front end pages as a useState variable.
 
-GET http://localhost:8000/user/checkCookies
+GET http://localhost:5100/checkCookies
 
 `Example: GET http://127.0.0.1:5100/checkCookies`
 
@@ -305,7 +305,7 @@ Security Features:
 
 > ## Signup
 
-POST http://localhost:8000/user/signup
+POST http://localhost:5100/signup
 
 `Example: POST http://127.0.0.1:5100/signup`
 
@@ -357,7 +357,7 @@ Notes:
 
 > ### Get user by user ID (for internal validation use)
 
-GET http://localhost:8000/user/internal/{task_id}
+GET http://localhost:5100/internal/{task_id}
 
 > http://127.0.0.1:5100/internal/0ec8a99d-3aab-4ec6-b692-fda88656844f
 

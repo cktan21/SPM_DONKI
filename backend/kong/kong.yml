@@ -39,12 +39,19 @@ services:
           - /user
   
   # Composite Microservices
-  - name: track-schedule-service
-    url: http://track-schedule:4000
+  - name: manage-task-service
+    url: http://manage-task:4000
     routes:
-      - name: track-schedule-route
+      - name: manage-task-route
         paths:
-          - /track-schedule
+          - /manage-task
+  
+  - name: manage-project-service
+    url: http://manage-project:4100
+    routes:
+      - name: manage-project-route
+        paths:
+          - /manage-project
 
 
 plugins:

@@ -15,12 +15,12 @@ func TestServiceEndpoints(t *testing.T) {
 		"Schedule Service": "http://localhost:5300",
 		"Tasks Service": "http://localhost:5500",
 		"User Service": "http://localhost:5100",
-		"Track-Schedule Service": "http://localhost:4000",
+		"Manage-Task Service": "http://localhost:4000",
 		"Kong API Gateway - Project": "http://localhost:8000/project",
 		"Kong API Gateway - Schedule": "http://localhost:8000/schedule",
 		"Kong API Gateway - Tasks": "http://localhost:8000/tasks",
 		"Kong API Gateway - User": "http://localhost:8000/user",
-		"Kong API Gateway - Track-Schedule": "http://localhost:8000/track-schedule",
+		"Kong API Gateway - Track-Schedule": "http://localhost:8000/manage-task",
 	}
 
 	// Use a WaitGroup to ensure all goroutines finish before the test completes.
