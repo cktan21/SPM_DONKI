@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, Path
 import httpx
 import asyncio
-from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 
@@ -165,10 +164,10 @@ async def get_project(
                     "project": None,
                 }
             
-            res = httpx.get(f"{TASK_SERVICE_URL}/pid/{project_id}")
+            res = await client.get(f"{TASK_SERVICE_URL}/pid/{project_id}")
             res.raise_for_status()
             task_data = res.json()
-            project["tasks"] = task_data["tasks"]
+            project["tasks"] = task_data.get("tasks", [])
             return {
                 "message": "Project retrieved successfully",
                 "project_id": project_id,
