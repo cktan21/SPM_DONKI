@@ -4,7 +4,7 @@
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --port 4000
+uvicorn main:app --reload --port 4100
 ```
 
 To deactivate server:
@@ -14,24 +14,99 @@ deactivate
 > Docker Development
 ```bash
 docker build -t my-fastapi-app .
-docker run -p 4000:4000 --name my-fastapi-container my-fastapi-app
+docker run -p 4100:4100 --name my-fastapi-container my-fastapi-app
 ```
 
 ## EndPoints
 
 ### Health Check
 
-GET http://localhost:4000
+GET http://localhost:4100
 
 Output:
 ```bash
-"message":"Composite Track Schedule Service is running 🚀","service":"track-schedule-composite"
+"message":"Composite Manage Task Service is running 🚀","service":"manage-task-composite"
 ```
->### Create task
 
-POST http://127.0.0.1:4000/createTask
+### Get Projects by User ID
 
-> http://127.0.0.1:4000/createTask
+POST http://127.0.0.1:4100/uid/{user_id}
+
+> http://127.0.0.1:4100/uid/fc001efc-0e9c-4700-a041-e914f6d9d101
+
+Sample Output:
+```json
+{
+    "40339da5-9a62-4195-bbe5-c69f2fc04ed6": {
+        "name": "software",
+        "desc": "",
+        "tasks": [
+            {
+                "id": "d695f875-a0c9-42b3-baf9-a367a437367d",
+                "name": "New Task Title",
+                "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+                "updated_timestamp": "2025-10-05T22:26:16.650616+00:00",
+                "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+                "collaborators": [
+                    "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+                    "655a9260-f871-480f-abea-ded735b2170a"
+                ],
+                "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                "desc": "Optional description",
+                "notes": "Optional notes",
+                "priorityLevel": 5,
+                "priorityLabel": "Medium"
+            },
+            {
+                "id": "be238e36-2506-432a-a267-e2a1308ff22b",
+                "name": "New Task Title2",
+                "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+                "updated_timestamp": "2025-10-06T08:39:43.761577+00:00",
+                "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+                "collaborators": [
+                    "d568296e-3644-4ac0-9714-dcaa0aaa5fb0",
+                    "fb892a63-2401-46fc-b660-bf3fe1196d4e"
+                ],
+                "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                "desc": "Optional description",
+                "notes": "Optional notes",
+                "priorityLevel": 5,
+                "priorityLabel": "Medium"
+            }
+        ]
+    },
+    "01dd2989-eb1c-4729-80bd-1cb046e4799b": {
+        "name": "SPM",
+        "desc": "",
+        "tasks": []
+    }
+}
+```
+
+### Get Project by Project ID
+
+POST http://127.0.0.1:4100/pid/{project_id}
+> http://127.0.0.1:4100/pid/40339da5-9a62-4195-bbe5-c69f2fc04ed6
+Sample Output:
+```json
+{
+    "message": "Project retrieved successfully",
+    "project": {
+        "id": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+        "uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
+        "created_at": "2025-09-14T14:08:09.069584+00:00",
+        "name": "software",
+        "desc": null
+    }
+}
+```
+
+
+### Create task
+
+POST http://127.0.0.1:4100/createTask
+
+> http://127.0.0.1:4100/createTask
 
 Sample Output:
 ```json
@@ -103,11 +178,11 @@ Sample Output:
 }
 ```
 
->### Get task by userID
+### Get task by userID
 
-POST http://127.0.0.1:4000/tasks/{userId}
+POST http://127.0.0.1:4100/tasks/{userId}
 
-> http://127.0.0.1:4000/tasks/17a40371-66fe-411a-963b-a977cc7cb475
+> http://127.0.0.1:4100/tasks/17a40371-66fe-411a-963b-a977cc7cb475
 
 Sample Output:
 ```json
@@ -187,9 +262,9 @@ Sample Output:
 
 >### Get task by taskID
 
-POST http://127.0.0.1:4000/tasks/{task_id}
+POST http://127.0.0.1:4100/tasks/{task_id}
 
-> http://127.0.0.1:4000/tasks/17a40371-66fe-411a-963b-a977cc7cb475
+> http://127.0.0.1:4100/tasks/17a40371-66fe-411a-963b-a977cc7cb475
 
 Sample Output:
 ```json
@@ -269,9 +344,9 @@ Sample Output:
 
 >### Update task
 
-PUT http://localhost:4000/{task_id}
+PUT http://localhost:4100/{task_id}
 
-> http://localhost:4000/c34e506a-548b-4f05-8356-e68c11370cab
+> http://localhost:4100/c34e506a-548b-4f05-8356-e68c11370cab
 
 Sample Output:
 ```json
@@ -333,9 +408,9 @@ Sample Output:
 
 >### Delete task
 
-DELETE http://localhost:4000/{task_id}
+DELETE http://localhost:4100/{task_id}
 
-> http://localhost:4000/67d81199-265d-423a-9998-e3955f4f58ac
+> http://localhost:4100/67d81199-265d-423a-9998-e3955f4f58ac
 
 Sample Output:
 ```json

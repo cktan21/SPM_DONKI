@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-app = FastAPI(title="Composite Microservice: track-schedule Service")
+app = FastAPI(title="Composite Microservice: manage-project Service")
 
 DEFAULT_ORIGINS = [
     "http://localhost:3000",
@@ -53,7 +53,7 @@ INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 # Root endpoint
 @app.get("/")
 def read_root():
-    return {"message": "Composite Track Schedule Service is running 🚀", "service": "track-schedule-composite"}
+    return {"message": "Composite Manage Project Service is running 🚀", "service": "manage-project-composite"}
 
 # Favicon handler
 @app.get("/favicon.ico")
@@ -61,22 +61,44 @@ async def get_favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
 
-# Composite endpoints
-@app.get("/tasks", summary="Get all tasks via composite service", response_description="List of all tasks")
-async def get_all_tasks_composite():
+# Get all projects by user
+@app.get("/uid/{uid}", summary="Get all projects by user via composite service", response_description="List of all projects with Tasks")
+async def get_project_with_tasks(uid: str):
     """
-    Composite endpoint to fetch all tasks from Task MS.
+    Composite endpoint to fetch all projects by user from Project MS.
+    1. Fetch all projects by user from Project MS.
+    2. Fetch all tasks by project from Task MS.
+    3. Return all projects with tasks.
     """
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{TASK_SERVICE_URL}/tasks")
+            response = await client.get(f"{PROJECTS_SERVICE_URL}/uid/{uid}")
             response.raise_for_status()
-            return response.json()  # forward the Task MS response
+            pms_res = response.json()
+            project_list = pms_res["project"]
 
+            tbr_project_list = {}
+            project_ids = []
+            for project in project_list:
+                pid = project.get("id")
+                name = project.get("name")
+                desc = project.get("desc") or ""    
+                project_ids.append(pid)
+                tbr_project_list[pid] = {"name": name, "desc": desc, "tasks": []}
+            
+            for pid in project_ids:
+                response = httpx.request("GET", f"{TASK_SERVICE_URL}/pid/{pid}")
+                if response.status_code == 200:
+                    tbr_project_list[pid]["tasks"] = response.json()['tasks']
+                else:
+                    tbr_project_list[pid]["tasks"] = []
+            
+            return tbr_project_list
+        
     except httpx.HTTPStatusError as e:
-        return e.response.json()  # forward Task MS error
+        return e.response.json()  # forward Project MS error
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Task MS unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Project MS unavailable: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
@@ -983,4 +1005,4 @@ class ValidationError(Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=4000)
+    uvicorn.run(app, host="0.0.0.0", port=4100)

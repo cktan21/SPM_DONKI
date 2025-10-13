@@ -271,7 +271,7 @@ console.log('Using USER_ID:', USER_ID.value)
 console.log('Using USER_ID:', USER_ID) // Debug log
 
 // ===== SERVICE BASE URLS =====
-const trackScheduleComposite = 'http://localhost:8000/track-schedule'
+const trackScheduleComposite = 'http://localhost:8000/manage-task'
 const TASKS_atomic = 'http://localhost:8000/tasks'
 const PROJECTS_Atomic = 'http://localhost:8000/project'
 const USERS_atomic = 'http://localhost:8000/user'

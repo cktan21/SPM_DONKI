@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from backend.services.composite.track_schedule import main
+from backend.services.composite.manage_task import main
 
 pytestmark = pytest.mark.asyncio
 
@@ -109,7 +109,7 @@ async def test_get_tasks_by_project_composite_success():
 
 
 # -------------------------------
-# /tasks/{task_id}
+# /tasks/tid/{task_id}
 # -------------------------------
 async def test_get_task_composite_success():
     task_id = "33949f99-20d0-423d-9b26-f09292b2e40d"

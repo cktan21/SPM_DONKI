@@ -57,7 +57,7 @@ Sample Output:
 
 ### Get project by Owner UID
 
-GET http://localhost:5200/uid/{project_id}
+GET http://localhost:5200/uid/{user_id}
 
 > http://localhost:5200/uid/fc001efc-0e9c-4700-a041-e914f6d9d101
 
