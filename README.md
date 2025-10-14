@@ -44,7 +44,7 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 ``` -->
 
 ## Technical Architecture Diagram
-<img width="1195" height="911" alt="image" src="assets/TechnicalArchitecture.jpg" />
+<img width="1195" height="911" alt="image" src="assets/TechnicalArchitecture.svg" />
 
 
 ## Notable Technical Implementations
