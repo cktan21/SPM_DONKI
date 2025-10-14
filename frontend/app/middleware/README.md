@@ -272,3 +272,4 @@ Page Type Check:
 -   ✅ Faster initial paint (correct UI on first render)
 -   ✅ Better SEO (server renders authenticated content)
 -   ✅ Reduced API calls (only calls `/checkCookies` when needed)
+-   ✅ Prevents multiple redirects (single redirect to `/auth/login` on auth failure)

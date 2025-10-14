@@ -92,10 +92,9 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     };
 
     const handleUnauthorized = () => {
-        if (!from?.path || from.path === to.path) {
-            return navigateTo("/dashboard");
-        }
-        return navigateTo(from.path);
+        // If user doesn't have access to current page, redirect to login
+        // Don't redirect to dashboard as that might also require authentication
+        return navigateTo("/auth/login");
     };
 
     // ---- 1. Try to decode cookie if present and userData not cached ----
@@ -160,15 +159,16 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
                 }
 
                 return true;
+            } else {
+                // No valid user data in response
+                console.log("[Client] No valid user data in response");
+                return navigateTo("/auth/login");
             }
         } catch (err) {
             console.error("[Client] Auth check failed:", err);
-            // Not authenticated - redirect to login
+            // API call failed - redirect to login
             return navigateTo("/auth/login");
         }
-
-        // No valid session - redirect to login
-        return navigateTo("/auth/login");
     }
 
     return true;
