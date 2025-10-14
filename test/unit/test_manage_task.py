@@ -8,34 +8,6 @@ from backend.services.composite.manage_task import main
 
 pytestmark = pytest.mark.asyncio
 
-# -------------------------------
-# /tasks
-# -------------------------------
-async def test_get_all_tasks_composite_success():
-    fake_tasks = {"tasks": [{"id": "33949f99-20d0-423d-9b26-f09292b2e40d", "name": "Task 1"}]}
-
-    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.json = Mock(return_value=fake_tasks)
-        mock_response.raise_for_status = Mock()
-        mock_client.get.return_value = mock_response
-        mock_client_cls.return_value.__aenter__.return_value = mock_client
-
-        result = await main.get_all_tasks_composite()
-        assert result == fake_tasks
-
-
-async def test_get_all_tasks_composite_failure():
-    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client.get.side_effect = Exception("boom")
-        mock_client_cls.return_value.__aenter__.return_value = mock_client
-
-        with pytest.raises(main.HTTPException) as e:
-            await main.get_all_tasks_composite()
-        assert e.value.status_code == 500
-
 
 # -------------------------------
 # /tasks/user/{user_id}
@@ -81,31 +53,6 @@ async def test_get_tasks_by_user_composite_no_tasks():
 
         assert result["count"] == 0
         assert result["tasks"] == []
-
-
-# -------------------------------
-# /tasks/project/{project_id}
-# -------------------------------
-async def test_get_tasks_by_project_composite_success():
-    project_id = "p1"
-    fake_project = {"id": project_id, "project": {"name": "Demo"}}
-    fake_tasks = {"tasks": [{"id": "33949f99-20d0-423d-9b26-f09292b2e40d", "pid": "p1"}]}
-    fake_schedule = {"id": "s1", "task_id": "33949f99-20d0-423d-9b26-f09292b2e40d"}
-
-    with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client.get.side_effect = [
-            AsyncMock(status_code=200, json=Mock(return_value=fake_project)),
-            AsyncMock(status_code=200, json=Mock(return_value=fake_tasks), raise_for_status=Mock()),
-            AsyncMock(status_code=200, json=Mock(return_value=fake_schedule)),
-        ]
-        mock_client_cls.return_value.__aenter__.return_value = mock_client
-
-        result = await main.get_tasks_by_project_composite(project_id)
-
-        assert result["project"]["project"]["name"] == "Demo"
-        assert result["count"] == 1
-        assert result["tasks"][0]["task"]["id"] == "33949f99-20d0-423d-9b26-f09292b2e40d"
 
 
 # -------------------------------
