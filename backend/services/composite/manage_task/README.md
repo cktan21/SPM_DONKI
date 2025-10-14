@@ -27,7 +27,7 @@ Output:
 ```bash
 "message":"Composite Manage Task Service is running 🚀","service":"manage-task-composite"
 ```
->### Create task
+### Create task
 
 POST http://127.0.0.1:4000/createTask
 
@@ -103,7 +103,7 @@ Sample Output:
 }
 ```
 
->### Get task by userID
+### Get task by userID
 
 POST http://127.0.0.1:4000/tasks/{userId}
 
@@ -185,7 +185,7 @@ Sample Output:
 }
 ```
 
->### Get task by taskID
+### Get task by taskID
 
 POST http://127.0.0.1:4000/tasks/{task_id}
 
@@ -267,7 +267,7 @@ Sample Output:
 }
 ```
 
->### Update task
+### Update task
 
 PUT http://localhost:4000/{task_id}
 
@@ -331,7 +331,7 @@ Sample Output:
 }
 ```
 
->### Delete task
+### Delete task
 
 DELETE http://localhost:4000/{task_id}
 

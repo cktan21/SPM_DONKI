@@ -21,20 +21,24 @@ This middleware automatically runs:
 
 ## How it Works
 
-**First visit / page refresh**  
-Middleware calls the backend endpoint `localhost:8000/user/checkCookies` to verify authentication status based on cookies.
+**SSR (Server-Side Rendering)**  
+Middleware reads the `user_data` cookie directly using Nuxt's `useCookie()`, decodes the JWT, and caches user information in `useState`. This ensures the server renders the correct UI (with user-specific navigation items) on first load.
+
+**Client-Side Hydration**  
+Since the cookie is decoded on both server and client, the `userData` state is consistent, preventing hydration mismatches.
 
 **Between navigations**  
 Authentication status is cached in Nuxt's `useState`, so middleware does not re-check every navigation.
 
-**On refresh or new browser session**  
-`useState` resets, and middleware re-checks `localhost:8000/user/checkCookies` again.
+**On cookie expiry**  
+If the cookie is expired or missing, the client-side calls `localhost:8000/user/checkCookies` to validate/refresh the session.
 
-### Key Difference
+### Key Implementation Details
 
-`/checkCookies` now also returns a `user_data` cookie.  
-This cookie contains a JWT with user details (`id`, `email`, `role`, `name`) and is used to avoid extra database calls for user info.  
-Middleware uses this cookie directly to cache `userData`.
+-   **`useCookie('user_data')`**: Nuxt composable that works on both server and client to read the httpOnly cookie
+-   **JWT Decoding**: Client-side decoding of the JWT for UI purposes only (not for authorization)
+-   **Consistent State**: Both SSR and client have the same `userData` state, eliminating hydration mismatches
+-   **Reduced API Calls**: Only calls `/checkCookies` when cookie is missing/invalid, not on every navigation
 
 ## Cookies
 
@@ -66,31 +70,37 @@ It stores the decoded user_data JWT in useState("userData") as the auth state ca
 This prevents repeated /checkCookies calls during navigation, improving performance.
 ```
 
-### Step 1: Check Cached Auth State
+### Step 1: Read user_data Cookie and Decode JWT
 
 ```
 [Middleware Check]
     |
-    +── Is authState cached in memory? (Nuxt store / middleware state)
+    +── Read user_data cookie with useCookie()
           |
-          ├── YES → Allow navigation (no backend call)
+          ├── Cookie exists → Decode JWT → Cache in useState
+          |                                      |
+          |                                      ├── Valid & not expired → Allow navigation
+          |                                      └── Expired → Continue to client validation
           |
-          └── NO → Call backend [localhost:8000/user/checkCookies]
+          └── No cookie → Continue to next step
 ```
 
 **Example:**
 
--   User just logged in → authState cached → No extra `/checkCookies` call
--   User opens app fresh in a new tab → authState empty → backend `/checkCookies` call triggered
+-   **SSR**: Cookie exists → Decode JWT → Render UI with user data
+-   **Client**: Cookie already decoded in SSR → Consistent state → No hydration mismatch
+-   **No Cookie**: Skip decoding, proceed to backend validation on client
 
-### Step 2: Call /checkCookies
+### Step 2: Client-Side Validation (if needed)
+
+This step **only runs on the client** when the cookie is missing, invalid, or expired.
 
 ```
-[Backend: localhost:8000/user/checkCookies]
+[Client: Call localhost:8000/user/checkCookies]
     |
-    +── Check access_token cookie
+    +── Check access_token cookie on backend
            |
-           ├── Valid → Valid → decode user_data cookie → return user info + cache userData → Allow navigation
+           ├── Valid → decode user_data cookie → return user info + cache userData → Allow navigation
            |
            └── Expired → Check refresh_token cookie
                      |
@@ -101,10 +111,12 @@ This prevents repeated /checkCookies calls during navigation, improving performa
 
 **Example scenarios:**
 
--   **Scenario A:** Access token still valid → No extra login needed
--   **Scenario B:** Access token expired, refresh token valid → Refresh tokens silently, keep user logged in
+-   **Scenario A:** Cookie decoded successfully in SSR → No `/checkCookies` call needed
+-   **Scenario B:** Access token expired, refresh token valid → Client calls `/checkCookies` → Refresh tokens silently
 -   **Scenario C:** Both tokens expired → Redirect to login
 -   **Scenario D:** No cookies → Redirect to login
+
+**Key Improvement:** By reading the cookie directly, we avoid calling `/checkCookies` on every page load when the session is still valid.
 
 ### Step 3: Handle Navigation Based on Page Type
 
@@ -153,11 +165,14 @@ console.log(userData.name);
 
 ### Scenario 1: User opens browser, goes to `/dashboard`
 
-1. Middleware triggers → No cached authState → call `localhost:8000/user/checkCookies`
-2. `localhost:8000/user/checkCookies` validates `access_token`:
-    - Access token expired
-    - Refresh token valid → refresh tokens → regenerate `user_data` cookie
-3. Middleware caches authState → allows navigation to `localhost:3000/dashboard`
+**SSR Phase:**
+
+1. Middleware triggers on server → Reads `user_data` cookie using `useCookie()`
+2. Decodes JWT → Extracts user info (`id`, `email`, `role`, `name`)
+3. Caches in `useState("userData")`
+4. Server renders dashboard with correct sidebar items for user's role
+
+**Client Hydration:** 5. Client receives HTML → Vue hydrates 6. Middleware runs on client → Cookie already decoded → Uses cached `userData` 7. **No hydration mismatch!** Server and client have identical user state
 
 ### Scenario 2: User manually types `/auth/login`
 
@@ -165,30 +180,56 @@ Middleware triggers → AuthState already cached → redirect to `localhost:3000
 
 ### Scenario 3: User clicks logout → cookies cleared → visits `/dashboard`
 
-Middleware triggers → No access token → redirect to `localhost:3000/auth/login`
+**SSR Phase:**
 
-### Scenario 4: User opens new incognito tab → visits `/profile`
+1. Middleware triggers → Reads `user_data` cookie → Cookie missing
+2. Server renders unauthenticated state
 
-1. Middleware triggers → No cached authState → call `localhost:8000/user/checkCookies`
-2. Cookies missing or invalid → redirect to `localhost:3000/auth/login`
+**Client Phase:** 3. Middleware on client → No cookie → Calls `/checkCookies` 4. Backend returns 401 → Redirect to `localhost:3000/auth/login`
+
+### Scenario 4: User's cookie expires while browsing
+
+**On next navigation:**
+
+1. Middleware reads cookie → Decodes JWT → Detects expiration
+2. Client calls `/checkCookies` to validate `refresh_token`
+3. Backend refreshes tokens → Updates cookies → User stays logged in
+
+### Scenario 5: User opens new incognito tab → visits `/profile`
+
+**SSR Phase:**
+
+1. Middleware triggers → No cookies available
+2. Server renders minimal/unauthenticated state
+
+**Client Phase:** 3. Middleware on client → Calls `/checkCookies` 4. No cookies → Backend returns 401 → Redirect to `localhost:3000/auth/login`
 
 ## Flow Diagrams
 
-### Main Authentication Flow
+### Main Authentication Flow (Updated)
 
 ```
-[Browser Navigation]
+[Browser Navigation / Page Load]
       |
       v
-[Middleware Trigger]
+[Middleware Trigger - Runs on Both SSR & Client]
       |
-      ├── Is authState cached? ── YES ──► Allow navigation
+      ├── [SSR & Client] Read user_data cookie with useCookie()
+      |         |
+      |         ├── Cookie exists ──► Decode JWT ──► Cache in useState
+      |         |                                          |
+      |         |                                          ├── Valid & not expired ──► Allow
+      |         |                                          └── Expired ──► Continue
+      |         |
+      |         └── Cookie missing ──► Continue
       |
-      └── NO ──► Call /checkCookies
+      ├── [Server] No valid cookie ──► Render unauthenticated state (let client handle)
+      |
+      └── [Client] No valid cached state ──► Call /checkCookies
                |
-               ├── access_token valid ──► Set authState → Allow
+               ├── access_token valid ──► Return user data → Cache → Allow
                |
-               ├── access_token expired & refresh_token valid ──► Refresh tokens → regenerate user_data cookie → Set authState → Allow
+               ├── access_token expired & refresh_token valid ──► Refresh tokens → Update cookies → Allow
                |
                └── Invalid/missing tokens ──► Redirect to /auth/login
 ```
@@ -203,7 +244,31 @@ Page Type Check:
 
 ## Key Notes
 
--   This middleware runs automatically at every navigation or page load
--   Auth state is cached in memory for efficiency
+-   This middleware runs automatically at every navigation or page load **on both server and client**
+-   Auth state is cached in memory for efficiency using Nuxt's `useState`
+-   `useCookie()` allows reading httpOnly cookies in SSR context, fixing hydration mismatches
+-   JWT decoding is done for UI purposes only; authorization still happens on the backend
 -   Refresh tokens are used silently to maintain sessions without user interruption
 -   Cookies are automatically sent with requests; no need for explicit header auth on every call
+
+## Hydration Mismatch Fix
+
+**Problem:** Previously, the middleware only ran on the client (`if (process.server) return`), causing:
+
+-   Server rendered UI without user data → Shows generic/logged-out UI
+-   Client fetched user data → Shows user-specific UI
+-   Result: Vue hydration mismatch warnings
+
+**Solution:** Now the middleware:
+
+-   Reads the `user_data` cookie on **both server and client** using `useCookie()`
+-   Decodes the JWT to get user info on both sides
+-   Server renders with correct user-specific UI
+-   Client receives matching HTML → No hydration mismatch!
+
+**Benefits:**
+
+-   ✅ Eliminates hydration warnings
+-   ✅ Faster initial paint (correct UI on first render)
+-   ✅ Better SEO (server renders authenticated content)
+-   ✅ Reduced API calls (only calls `/checkCookies` when needed)
