@@ -205,6 +205,20 @@ async def get_tasks_by_user_composite(
                 else:
                     nested_tasks.append(entry)
 
+            # ---- 5b) COMPUTE PROGRESS FOR TASKS WITH SUBTASKS ----
+            for entry in nested_tasks:
+                subtasks = entry.get("subtasks", [])
+                if subtasks:
+                    total = len(subtasks)
+                    completed = sum(
+                        1 for sub in subtasks
+                        if (sub.get("schedule") or {}).get("status") == "complete"
+                    )
+                    entry["progress"] = round((completed / total) * 100, 2)  # two decimals
+                else:
+                    # leave existing progress from schedule if no subtasks
+                    entry["progress"] = entry.get("progress", 0)
+
             # ✅ 6) Return with nested tasks and user info
             return {
                 "user_id": user_id,
