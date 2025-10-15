@@ -17,18 +17,18 @@ export const columns: ColumnDef<Task>[] = [
         'modelValue':
           table.getIsAllPageRowsSelected() ||
           (table.getIsSomePageRowsSelected() && 'indeterminate'),
-        'onUpdate:modelValue': value => table.toggleAllPageRowsSelected(!!value),
+        'onUpdate:modelValue': (value) => { return table.toggleAllPageRowsSelected(!!value) },
         'ariaLabel': 'Select all',
         'class': 'translate-y-0.5',
       }),
     cell: ({ row }) =>
       h(Checkbox, {
         'modelValue': row.getIsSelected(),
-        'onUpdate:modelValue': value => row.toggleSelected(!!value),
+        'onUpdate:modelValue': (value) => { return row.toggleSelected(!!value) },
         'ariaLabel': 'Select row',
         'class': 'translate-y-0.5',
         // prevent row click when clicking checkbox
-        'onClick': (e: Event) => e.stopPropagation(),
+        'onClick': (e: Event) => { e.stopPropagation(); return undefined },
       }),
     enableSorting: false,
     enableHiding: false,
@@ -48,9 +48,11 @@ export const columns: ColumnDef<Task>[] = [
     accessorKey: 'title',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Title' }),
     cell: ({ row }) => {
-      const label = labels.find(label => label.value === row.original.label)
+      const label = labels.find((label) => label.value === row.original.label)
       return h('div', { class: 'flex space-x-2' }, [
-        label ? h(Badge, { variant: 'outline' }, () => label.label) : null,
+        label
+          ? h(Badge, { variant: 'outline' }, () => { return label.label })
+          : null,
         h('span', { class: 'max-w-[500px] truncate font-medium' }, row.getValue('title')),
       ])
     },
@@ -61,14 +63,14 @@ export const columns: ColumnDef<Task>[] = [
     accessorKey: 'status',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Status' }),
     cell: ({ row }) => {
-      const status = statuses.find(status => status.value === row.getValue('status'))
+      const status = statuses.find((status) => status.value === row.getValue('status'))
       if (!status) return null
       return h('div', { class: 'flex w-[100px] items-center' }, [
-        status.icon && h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
+        status.icon ? h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }) : null,
         h('span', status.label),
       ])
     },
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    filterFn: (row, id, value) => { return value.includes(row.getValue(id)) },
   },
 
   // Priority column
@@ -76,14 +78,14 @@ export const columns: ColumnDef<Task>[] = [
     accessorKey: 'priority',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Priority' }),
     cell: ({ row }) => {
-      const priority = priorities.find(priority => priority.value === row.getValue('priority'))
+      const priority = priorities.find((priority) => priority.value === row.getValue('priority'))
       if (!priority) return null
       return h('div', { class: 'flex items-center' }, [
-        priority.icon && h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
+        priority.icon ? h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }) : null,
         h('span', {}, priority.label),
       ])
     },
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    filterFn: (row, id, value) => { return value.includes(row.getValue(id)) },
   },
 
   // Actions column
