@@ -138,15 +138,11 @@ async function handleLogin() {
                 />
               </div>
 
-              <Button :disabled="loading" @click="handleLogin" class="w-full">
+              <Button :disabled="loading" @click="handleLogin" class="w-full mt-4">
                 {{ loading ? "Logging in..." : "Login" }}
               </Button>
 
               <p v-if="errorMessage" class="text-red-500 text-sm text-center">{{ errorMessage }}</p>
-            </div>
-
-            <div class="mt-4 text-center text-sm text-gray-600">
-              Don't have an account? <a href="./signup" class="underline text-black">Sign up</a>
             </div>
           </div>
         </div>

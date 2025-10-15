@@ -9,18 +9,32 @@ import DataTableColumnHeader from './DataTableColumnHeader.vue'
 import DataTableRowActions from './DataTableRowActions.vue'
 
 export const columns: ColumnDef<Task>[] = [
+  // ✅ Select checkbox column (first column)
   {
     id: 'select',
-    header: ({ table }) => h(Checkbox, {
-      'modelValue': table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate'),
-      'onUpdate:modelValue': value => table.toggleAllPageRowsSelected(!!value),
-      'ariaLabel': 'Select all',
-      'class': 'translate-y-0.5',
-    }),
-    cell: ({ row }) => h(Checkbox, { 'modelValue': row.getIsSelected(), 'onUpdate:modelValue': value => row.toggleSelected(!!value), 'ariaLabel': 'Select row', 'class': 'translate-y-0.5' }),
+    header: ({ table }) =>
+      h(Checkbox, {
+        'modelValue':
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && 'indeterminate'),
+        'onUpdate:modelValue': value => table.toggleAllPageRowsSelected(!!value),
+        'ariaLabel': 'Select all',
+        'class': 'translate-y-0.5',
+      }),
+    cell: ({ row }) =>
+      h(Checkbox, {
+        'modelValue': row.getIsSelected(),
+        'onUpdate:modelValue': value => row.toggleSelected(!!value),
+        'ariaLabel': 'Select row',
+        'class': 'translate-y-0.5',
+        // prevent row click when clicking checkbox
+        'onClick': (e: Event) => e.stopPropagation(),
+      }),
     enableSorting: false,
     enableHiding: false,
   },
+
+  // Task ID column
   {
     accessorKey: 'id',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Task' }),
@@ -28,60 +42,51 @@ export const columns: ColumnDef<Task>[] = [
     enableSorting: false,
     enableHiding: false,
   },
+
+  // Title column
   {
     accessorKey: 'title',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Title' }),
-
     cell: ({ row }) => {
       const label = labels.find(label => label.value === row.original.label)
-
       return h('div', { class: 'flex space-x-2' }, [
         label ? h(Badge, { variant: 'outline' }, () => label.label) : null,
         h('span', { class: 'max-w-[500px] truncate font-medium' }, row.getValue('title')),
       ])
     },
   },
+
+  // Status column
   {
     accessorKey: 'status',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Status' }),
-
     cell: ({ row }) => {
-      const status = statuses.find(
-        status => status.value === row.getValue('status'),
-      )
-
-      if (!status)
-        return null
-
+      const status = statuses.find(status => status.value === row.getValue('status'))
+      if (!status) return null
       return h('div', { class: 'flex w-[100px] items-center' }, [
         status.icon && h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
         h('span', status.label),
       ])
     },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
+
+  // Priority column
   {
     accessorKey: 'priority',
     header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Priority' }),
     cell: ({ row }) => {
-      const priority = priorities.find(
-        priority => priority.value === row.getValue('priority'),
-      )
-
-      if (!priority)
-        return null
-
+      const priority = priorities.find(priority => priority.value === row.getValue('priority'))
+      if (!priority) return null
       return h('div', { class: 'flex items-center' }, [
         priority.icon && h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
         h('span', {}, priority.label),
       ])
     },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
+    filterFn: (row, id, value) => value.includes(row.getValue(id)),
   },
+
+  // Actions column
   {
     id: 'actions',
     cell: ({ row }) => h(DataTableRowActions, { row }),
