@@ -23,8 +23,65 @@ async def get_favicon():
 
 #Get All tasks
 @app.get("/tasks", summary="Get all tasks")
-async def get_all_tasks():
+async def get_all_tasks(sortBy: str = None, filter: str = None):
+    """
+    Fetch all tasks, with optional filtering and sorting.
+    Query params:
+      - sortBy: priority | deadline | status
+      - filter: comma-separated key:value, e.g. "deadline:upcoming,status:incomplete"
+    """
     tasks = supabase.get_all_tasks()
+    
+    # ---- Apply filtering ----
+    if filter:
+        filters = dict(item.split(":") for item in filter.split(",") if ":" in item)
+        filtered_tasks = []
+        for task in tasks:
+            include = True
+
+            # Filter by deadline
+            if "deadline" in filters:
+                now = datetime.now(timezone.utc)
+                deadline_str = task.get("deadline")  # assume string in ISO format
+                if deadline_str:
+                    try:
+                        deadline_dt = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+                        if filters["deadline"] == "upcoming" and not (0 <= (deadline_dt - now).days <= 3):
+                            include = False
+                        elif filters["deadline"] == "overdue" and not (deadline_dt < now):
+                            include = False
+                    except Exception:
+                        include = False
+                else:
+                    include = False
+
+            # Filter by status
+            if "status" in filters:
+                status = task.get("status", "").lower()
+                if filters["status"].lower() != status:
+                    include = False
+
+            if include:
+                filtered_tasks.append(task)
+        tasks = filtered_tasks
+
+    # ---- Apply sorting ----
+    if sortBy:
+        sort_key = sortBy.lower()
+        if sort_key == "priority":
+            tasks.sort(key=lambda x: x.get("priorityLevel", 0), reverse=True)
+        elif sort_key == "deadline":
+            def parse_deadline(t):
+                try:
+                    return datetime.fromisoformat(t.get("deadline","").replace("Z","+00:00"))
+                except Exception:
+                    return datetime.max
+            tasks.sort(key=parse_deadline)
+        elif sort_key == "status":
+            # Example: incomplete < complete
+            status_order = {"incomplete": 0, "complete": 1}
+            tasks.sort(key=lambda x: status_order.get(x.get("status","incomplete").lower(), 0))
+
     return {"message": f"{len(tasks)} task(s) retrieved", "tasks": tasks}
 
 # Get task by task ID
