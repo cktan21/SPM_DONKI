@@ -160,13 +160,34 @@ async def get_tasks_by_user_composite(
                         project_data = {"message": "Project information unavailable"}
 
                 # ✅ 4) Dual-mode flattening: keep schedule object + expose key fields top-level
+                # Extract key schedule fields safely
+                deadline_str = schedule_data.get("deadline") if schedule_data else None
+                status = schedule_data.get("status") if schedule_data else None
+
+                deadline_flag = None  # default: no special flag
+                if deadline_str:
+                    try:
+                        # Convert to datetime and compute time difference
+                        deadline_dt = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+                        now = datetime.now(timezone.utc)
+
+                        if status != "complete":  # Only check active tasks
+                            if now > deadline_dt:
+                                deadline_flag = "Overdue"
+                            elif 0 <= (deadline_dt - now).days <= 3:
+                                deadline_flag = "Upcoming"
+                    except Exception:
+                        deadline_flag = None  # Gracefully handle bad date format
+
+                # ✅ Dual-mode flattening + flag
                 enriched_task = {
                     "task": task,
                     "schedule": schedule_data,
                     "project": project_data,
                     "progress": schedule_data.get("progress") if schedule_data else None,
-                    "deadline": schedule_data.get("deadline") if schedule_data else None,
-                    "priority": schedule_data.get("priority") if schedule_data else None
+                    "deadline": deadline_str,
+                    "priority": schedule_data.get("priority") if schedule_data else None,
+                    "deadline_flag": deadline_flag  # <-- new field for Upcoming / Overdue
                 }
 
                 enriched_tasks.append(enriched_task)
