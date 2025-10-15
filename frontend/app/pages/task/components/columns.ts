@@ -14,21 +14,21 @@ export const columns: ColumnDef<Task>[] = [
     id: 'select',
     header: ({ table }) =>
       h(Checkbox, {
-        'modelValue':
+        modelValue:
           table.getIsAllPageRowsSelected() ||
           (table.getIsSomePageRowsSelected() && 'indeterminate'),
         'onUpdate:modelValue': (value) => { return table.toggleAllPageRowsSelected(!!value) },
-        'ariaLabel': 'Select all',
-        'class': 'translate-y-0.5',
+        ariaLabel: 'Select all',
+        class: 'translate-y-0.5',
       }),
     cell: ({ row }) =>
       h(Checkbox, {
-        'modelValue': row.getIsSelected(),
+        modelValue: row.getIsSelected(),
         'onUpdate:modelValue': (value) => { return row.toggleSelected(!!value) },
-        'ariaLabel': 'Select row',
-        'class': 'translate-y-0.5',
+        ariaLabel: 'Select row',
+        class: 'translate-y-0.5',
         // prevent row click when clicking checkbox
-        'onClick': (e: Event) => { e.stopPropagation(); return undefined },
+        onClick: (e: Event) => { e.stopPropagation(); return undefined },
       }),
     enableSorting: false,
     enableHiding: false,
@@ -50,9 +50,7 @@ export const columns: ColumnDef<Task>[] = [
     cell: ({ row }) => {
       const label = labels.find((label) => label.value === row.original.label)
       return h('div', { class: 'flex space-x-2' }, [
-        label
-          ? h(Badge, { variant: 'outline' }, () => { return label.label })
-          : null,
+        label ? h(Badge, { variant: 'outline' }, () => { return label.label }) : null,
         h('span', { class: 'max-w-[500px] truncate font-medium' }, row.getValue('title')),
       ])
     },
@@ -66,7 +64,7 @@ export const columns: ColumnDef<Task>[] = [
       const status = statuses.find((status) => status.value === row.getValue('status'))
       if (!status) return null
       return h('div', { class: 'flex w-[100px] items-center' }, [
-        status.icon ? h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }) : null,
+        h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
         h('span', status.label),
       ])
     },
@@ -81,7 +79,7 @@ export const columns: ColumnDef<Task>[] = [
       const priority = priorities.find((priority) => priority.value === row.getValue('priority'))
       if (!priority) return null
       return h('div', { class: 'flex items-center' }, [
-        priority.icon ? h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }) : null,
+        h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
         h('span', {}, priority.label),
       ])
     },
