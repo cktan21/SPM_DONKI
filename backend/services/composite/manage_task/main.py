@@ -43,7 +43,7 @@ app.add_middleware(
 
 # Configuration for external services
 TASK_SERVICE_URL = "http://tasks:5500"
-USERS_SERVICE_URL = "http://users:5100" 
+USERS_SERVICE_URL = "http://user:5100" 
 PROJECTS_SERVICE_URL = "http://project:5200"
 SCHEDULE_SERVICE_URL = "http://schedule:5300"
 
@@ -320,7 +320,8 @@ async def get_task_composite(
                         }
                     else:
                         created_by = {"id": task_data["created_by_uid"], "name": "Unknown User"}
-                except Exception:
+                except Exception as e:
+                    print(f"[ERROR] User fetch failed for {task_data['created_by_uid']}: {e}")
                     created_by = {"id": task_data["created_by_uid"], "name": "Unavailable"}
 
             # === 5. Get Collaborators (list of {id, name}) ===
@@ -336,7 +337,8 @@ async def get_task_composite(
                         })
                     else:
                         collaborators_info.append({"id": cid, "name": "Unknown User"})
-                except Exception:
+                except Exception as e:
+                    print(f"[ERROR] Collaborator fetch failed for {cid}: {e}")
                     collaborators_info.append({"id": cid, "name": "Unavailable"})
 
             # === 6. Get Parent Task (id + name only) ===

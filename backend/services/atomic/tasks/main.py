@@ -7,11 +7,43 @@ from postgrest.exceptions import APIError
 
 from datetime import datetime, timezone
 from typing import Any, Dict
+import os
+from fastapi.middleware.cors import CORSMiddleware
+
 
 load_dotenv()
 
 app = FastAPI(title="Atomic Microservice: Task Service")
 supabase = SupabaseClient()
+
+# CORS
+DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_env_origins = os.getenv("CORS_ORIGINS")
+allowed_origins = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins else DEFAULT_ORIGINS
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,  # set False if you don't use cookies/auth
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-Internal-API-Key",  # custom header used by /internal calls
+        "*",
+    ],
+    expose_headers=["*"],
+    max_age=600,
+)
 
 @app.get("/")
 def read_root():
