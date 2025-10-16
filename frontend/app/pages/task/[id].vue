@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import SubtaskItem from './components/SubtaskItem.vue'
+
 
 // --- Setup ---
 const route = useRoute()
@@ -99,11 +101,11 @@ onMounted(fetchTask)
         <!-- Subtasks -->
         <div v-if="task.subtasks?.length" class="mt-6">
           <h3 class="text-lg font-semibold mb-2">Subtasks</h3>
-          <div v-for="sub in task.subtasks" :key="sub.id" class="border rounded p-4 mb-2">
-            <p><strong>{{ sub.name }}</strong> (ID: {{ sub.id }})</p>
-            <p>Status: {{ sub.status ?? 'N/A' }}</p>
-            <p>Deadline: {{ sub.deadline ? new Date(sub.deadline).toLocaleString() : 'N/A' }}</p>
-          </div>
+          <SubtaskItem
+            v-for="sub in task.subtasks"
+            :key="sub.id"
+            :subtask="sub"
+          />
         </div>
       </div>
     </div>
