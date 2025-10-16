@@ -197,7 +197,7 @@ const cancelEditTask = () => {
 const saveTask = async () => {
   try {
     // Writes go to API_BASE_URL (composite)
-    const response = await fetch(`${API_BASE_URL}/tasks/${taskId.value}`, {
+    const response = await fetch(`${API_BASE_URL}/${taskId.value}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(taskEditForm.value)
@@ -229,7 +229,7 @@ const cancelEditSubtask = () => {
 const saveSubtask = async (subtaskId: string) => {
   try {
     // Writes go to API_BASE_URL (composite)
-    const response = await fetch(`${API_BASE_URL}/tasks/${subtaskId}`, {
+    const response = await fetch(`${API_BASE_URL}/${subtaskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(subtaskEditForm.value)
@@ -246,7 +246,7 @@ const deleteSubtask = async (subtaskId: string) => {
   if (!confirm('Are you sure you want to delete this subtask?')) return
   try {
     // Writes go to API_BASE_URL (composite)
-    const response = await fetch(`${API_BASE_URL}/tasks/${subtaskId}`, {
+    const response = await fetch(`${API_BASE_URL}/${subtaskId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' }
     })
@@ -389,6 +389,21 @@ onMounted(fetchTask)
             />
             <span v-else class="ml-2 text-gray-700">{{ task.priorityLabel || 'N/A' }}</span>
           </div>
+
+           <!-- Collaborators -->
+          <div>
+            <span class="font-medium block mb-1">Collaborators:</span>
+            <div v-if="Array.isArray(task.collaborators) && task.collaborators.length" class="flex flex-wrap gap-2">
+              <template v-for="(c, idx) in task.collaborators" :key="idx">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                  <!-- supports either UUID strings or { id, name } objects -->
+                  {{ typeof c === 'string' ? c : (c?.name || c?.id || 'Unknown') }}
+                </span>
+              </template>
+            </div>
+            <span v-else class="text-gray-700">None</span>
+          </div>
+          
         </div>
       </div>
 
