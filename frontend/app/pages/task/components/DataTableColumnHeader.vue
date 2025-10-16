@@ -23,7 +23,7 @@ defineProps<DataTableColumnHeaderProps>()
 
 const attrs = useAttrs()
 const className = typeof attrs.class === 'string' ? attrs.class : ''
-</script>
+</script>   
 
 <script lang="ts">
 export default {

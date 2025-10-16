@@ -448,7 +448,7 @@ def validate_user_internal(user_id: str):
     try:
         # Fetch user from user table by ID
         user_data = supabase.client.table("USER").select(
-            "id, auth_id, email, role, created_at"
+            "id, auth_id, email, role, name, created_at"
         ).eq("id", user_id).execute()
 
         if not user_data.data:
@@ -462,7 +462,7 @@ def validate_user_internal(user_id: str):
             "auth_id": user["auth_id"],
             "email": user["email"],
             "role": user["role"],
-            "name": user.get("name"),
+            "name": user["name"],
             "created_at": user["created_at"],
             "exists": True,
             "internal_api_key": INTERNAL_API_KEY,  # optional: expose for debug
