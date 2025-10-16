@@ -37,9 +37,20 @@ export const columns: ColumnDef<Task>[] = [
   // Task ID column
   {
     accessorKey: 'id',
-    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Task' }),
-    cell: ({ row }) => h('div', { class: 'w-20' }, row.getValue('id')),
-    enableSorting: false,
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: 'Task ID',
+      }),
+    cell: ({ row }) => {
+      const id = row.getValue('id') as string | number
+      return h(
+        'div',
+        { class: 'w-[80px] font-mono text-sm truncate' },
+        String(id)
+      )
+    },
+    enableSorting: true,
     enableHiding: false,
   },
 
