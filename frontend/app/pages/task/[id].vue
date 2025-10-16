@@ -32,7 +32,6 @@ const fetchTask = async () => {
     task.value = data.task
     task.value.schedule = data.schedule?.data || null
     task.value.project = data.task.project || null
-    task.value.subtasks = data.subtasks || [] // Optional subtask list
     task.value.metadata = data.metadata || {}
 
   } catch (err: any) {

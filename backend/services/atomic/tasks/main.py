@@ -92,7 +92,15 @@ async def get_task(
     rows = supabase.get_all_tasks(filter_by={"id": task_id})
     if not rows:
         return {"message": "Task not found", "task": None}
-    return {"message": "Task retrieved successfully", "task": rows[0]}
+    
+    task = rows[0]
+
+    # Fetch subtasks
+    subtasks = supabase.get_all_tasks(filter_by={"parentTaskId": task_id})
+    task["subtasks"] = subtasks or []
+
+    # ✅ Return the modified task object
+    return {"message": "Task retrieved successfully", "task": task}
 
 # Get task by project ID
 @app.get("/pid/{project_id}", summary="Get all tasks by project ID")
