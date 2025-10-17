@@ -6,8 +6,6 @@ export const containerClass = "w-full h-full"
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from "vue"
-import { useRouter } from "vue-router"
-
 import AppSidebar from "./components/AppSidebar.vue"
 import DashboardCards from "./components/ProjectsCard.vue"
 
@@ -27,7 +25,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-// 🧩 Interfaces
+// Interfaces
 interface User {
   id: string
   name?: string
@@ -44,25 +42,18 @@ interface Project {
   tasks: any[]
 }
 
-// 🧩 Router & Global user state
-const router = useRouter()
+// User data
 const userData = useState<{ user: User }>("userData")
 const user = computed(() => userData.value.user)
 
-// 🧩 Reactive data
+// Projects
 const projects = ref<Project[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// 🧩 Global project state to pass between pages
-const selectedProject = useState<Project | null>("selectedProject")
-
-// 🧩 Fetch user projects
+// Fetch projects
 const fetchProjects = async () => {
-  if (!user.value?.id) {
-    console.warn("⚠️ No user ID found — skipping project fetch.")
-    return
-  }
+  if (!user.value?.id) return
 
   loading.value = true
   error.value = null
@@ -74,26 +65,18 @@ const fetchProjects = async () => {
     })
 
     if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`)
-
     const data = await res.json()
     projects.value = data.projects || []
   } catch (err: any) {
-    console.error("❌ Error fetching projects:", err)
+    console.error("Error fetching projects:", err)
     error.value = err.message || "Failed to fetch projects"
   } finally {
     loading.value = false
   }
 }
 
-// 🧩 Handle navigation — store project globally before redirect
-const goToTaskPage = (project: Project) => {
-  selectedProject.value = project
-  router.push("/task")
-}
-
-// 🧩 Fetch on mount
+// Fetch on mount
 onMounted(() => {
-  console.log("Fetching projects for user:", user.value)
   fetchProjects()
 })
 </script>
@@ -101,39 +84,30 @@ onMounted(() => {
 <template>
   <SidebarProvider>
     <AppSidebar />
-
     <SidebarInset>
-      <!-- 🧭 Header -->
-      <header
-        class="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear
-        group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12"
-      >
-        <div class="flex items-center gap-2 px-4">
-          <SidebarTrigger class="-ml-1" />
-          <Separator orientation="vertical" class="mr-2 h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem class="hidden md:block">
-                <BreadcrumbLink href="#">Dashboard</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator class="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Projects</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+      <header class="flex h-16 shrink-0 items-center gap-2 px-4">
+        <SidebarTrigger class="-ml-1" />
+        <Separator orientation="vertical" class="mr-2 h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem class="hidden md:block">
+              <BreadcrumbLink href="#">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator class="hidden md:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Projects</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </header>
 
-      <!-- 🧩 Main Content -->
       <div class="flex flex-1 flex-col gap-4 p-4 pt-0">
+        <!-- DashboardCards now handles navigation internally -->
         <DashboardCards
           :projects="projects"
           :loading="loading"
           :error="error"
-          @project-clicked="goToTaskPage"
         />
-
         <div class="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
       </div>
     </SidebarInset>
