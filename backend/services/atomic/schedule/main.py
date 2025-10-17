@@ -36,14 +36,14 @@ def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
         data = supabase.insert_schedule(tid, deadline, status)
         return {"message":f"Task {tid} Schedule Inserted Successfully" ,"data": data}
     except Exception as e:
-        # Check if it's the duplicate task message
-        if str(e) == "Task with this ID already exists.":
-            raise HTTPException(
-                status_code=400,
-                detail="Task with this ID already exists."
-            )
-        else:
-            # For any other unexpected errors
+        # # Check if it's the duplicate task message
+        # if str(e) == "Task with this ID already exists.":
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail="Task with this ID already exists."
+        #     )
+        # else:
+        #     # For any other unexpected errors
             raise HTTPException(status_code=400, detail=str(e))
 
 # Update the row
