@@ -83,7 +83,7 @@ const handleCreateTask = () => {
           </p>
         </div>
         <div class="hidden sm:block">
-          <Button @click="handleCreateTask">Create Task</Button>
+          <Button @click="handleCreateTask">Create New Task</Button>
         </div>
       </div>
 
