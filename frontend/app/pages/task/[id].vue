@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import SubtaskItem from './components/SubtaskItem.vue'
-
 
 // --- Setup ---
 const route = useRoute()
@@ -21,6 +19,7 @@ const editingSubtask = ref<string | null>(null)
 // Edit forms
 const taskEditForm = ref<any>({})
 const subtaskEditForm = ref<any>({})
+const newCollaboratorInput = ref('')
 
 const statusOptions = ['not started', 'ongoing', 'completed']
 
@@ -63,24 +62,26 @@ const normalizeTask = (x: any) => {
 //   "priorityLevel": 5,
 //   "priorityLabel": "Medium"
 // }
-const normalizeSubtask = (x: any) => ({
-  id: x?.id ?? '',
-  name: x?.name ?? 'Untitled',
-  desc: x?.desc ?? '',
-  notes: x?.notes ?? '',
-  priorityLevel: x?.priorityLevel ?? undefined,
-  priorityLabel: x?.priorityLabel ?? '',
-  // The /ptid payload does not include schedule;
-  // keep UI happy with sensible defaults:
-  status: x?.status ?? 'not started',
-  deadline: x?.deadline ?? '',
-  // Keep extra fields (may be useful later)
-  parentTaskId: x?.parentTaskId ?? null,
-  pid: x?.pid ?? null,
-  collaborators: Array.isArray(x?.collaborators) ? x.collaborators : [],
-  created_by_uid: x?.created_by_uid ?? null,
-  updated_timestamp: x?.updated_timestamp ?? null,
-})
+const normalizeSubtask = (x: any) => {
+  const schedule = normalizeSchedule(x?.schedule ?? {})
+  return {
+    id: x?.id ?? '',
+    name: x?.name ?? 'Untitled',
+    desc: x?.desc ?? '',
+    notes: x?.notes ?? '',
+    priorityLevel: x?.priorityLevel ?? undefined,
+    priorityLabel: x?.priorityLabel ?? '',
+    // Extract status and deadline from schedule object if present
+    status: schedule?.status ?? x?.status ?? 'not started',
+    deadline: schedule?.deadline ?? x?.deadline ?? '',
+    // Keep extra fields (may be useful later)
+    parentTaskId: x?.parentTaskId ?? null,
+    pid: x?.pid ?? null,
+    collaborators: Array.isArray(x?.collaborators) ? x.collaborators : [],
+    created_by_uid: x?.created_by_uid ?? null,
+    updated_timestamp: x?.updated_timestamp ?? null,
+  }
+}
 
 // ---------- Fetchers ----------
 const fetchMainTask = async (id: string) => {
@@ -146,7 +147,8 @@ const fetchTask = async () => {
       notes: task.value?.notes || '',
       priorityLabel: task.value?.priorityLabel || '',
       status: task.value?.schedule?.status || 'not started',
-      deadline: task.value?.schedule?.deadline || ''
+      deadline: task.value?.schedule?.deadline || '',
+      collaborators: []
     }
   } catch (e: any) {
     console.error(e)
@@ -188,15 +190,17 @@ const startEditTask = () => {
     notes: task.value?.notes || '',
     priorityLabel: task.value?.priorityLabel || '',
     status: task.value?.schedule?.status || 'not started',
-    deadline: task.value?.schedule?.deadline || ''
+    deadline: task.value?.schedule?.deadline || '',
+    collaborators: Array.isArray(task.value?.collaborators) 
+      ? task.value.collaborators.map((c: any) => typeof c === 'string' ? c : (c?.id || ''))
+      : []
   }
+  newCollaboratorInput.value = ''
 }
 
-    // Normalize single task response
-    task.value = data.task
-    task.value.schedule = data.schedule?.data || null
-    task.value.project = data.task.project || null
-    task.value.metadata = data.metadata || {}
+const cancelEditTask = () => {
+  editingTask.value = false
+}
 
 const saveTask = async () => {
   try {
@@ -258,6 +262,31 @@ const deleteSubtask = async (subtaskId: string) => {
     await fetchTask()
   } catch (err: any) {
     alert('Error deleting subtask: ' + err.message)
+  }
+}
+
+const removeCollaborator = (index: number) => {
+  taskEditForm.value.collaborators.splice(index, 1)
+}
+
+const addCollaborator = () => {
+  const input = newCollaboratorInput.value.trim()
+  if (!input) return
+  
+  // Check if already exists
+  if (taskEditForm.value.collaborators.includes(input)) {
+    alert('This collaborator is already added')
+    return
+  }
+  
+  taskEditForm.value.collaborators.push(input)
+  newCollaboratorInput.value = ''
+}
+
+const handleCollaboratorKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    addCollaborator()
   }
 }
 
@@ -397,15 +426,63 @@ onMounted(fetchTask)
            <!-- Collaborators -->
           <div>
             <span class="font-medium block mb-1">Collaborators:</span>
-            <div v-if="Array.isArray(task.collaborators) && task.collaborators.length" class="flex flex-wrap gap-2">
-              <template v-for="(c, idx) in task.collaborators" :key="idx">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
-                  <!-- supports either UUID strings or { id, name } objects -->
-                  {{ typeof c === 'string' ? c : (c?.name || c?.id || 'Unknown') }}
+            
+            <!-- Edit Mode -->
+            <div v-if="editingTask" class="space-y-2">
+              <!-- Collaborator Pills -->
+              <div class="flex flex-wrap gap-2 p-3 border border-gray-300 rounded-lg min-h-[48px] bg-white">
+                <span 
+                  v-for="(collab, idx) in taskEditForm.collaborators" 
+                  :key="idx"
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 hover:bg-blue-200 transition"
+                >
+                  {{ collab }}
+                  <button 
+                    @click="removeCollaborator(idx)"
+                    class="ml-1 hover:bg-blue-300 rounded-full p-0.5 transition"
+                    type="button"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" x2="6" y1="6" y2="18" />
+                      <line x1="6" x2="18" y1="6" y2="18" />
+                    </svg>
+                  </button>
                 </span>
-              </template>
+                
+                <!-- Input for new collaborator -->
+                <input 
+                  v-model="newCollaboratorInput"
+                  @keydown="handleCollaboratorKeydown"
+                  type="text"
+                  placeholder="Add collaborator (UUID or email)"
+                  class="flex-1 min-w-[200px] px-2 py-1 focus:outline-none text-sm"
+                />
+              </div>
+              
+              <!-- Add Button -->
+              <button 
+                @click="addCollaborator"
+                type="button"
+                class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              >
+                Add Collaborator
+              </button>
             </div>
-            <span v-else class="text-gray-700">None</span>
+            
+            <!-- View Mode -->
+            <div v-else>
+              <div v-if="Array.isArray(task.collaborators) && task.collaborators.length" class="flex flex-wrap gap-2">
+                <template v-for="(c, idx) in task.collaborators" :key="idx">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                    <!-- supports either UUID strings or { id, name } objects -->
+                    {{ typeof c === 'string' ? c : (c?.name || c?.id || 'Unknown') }}
+                  </span>
+                </template>
+              </div>
+              <span v-else class="text-gray-700">None</span>
+            </div>
           </div>
           
         </div>
@@ -475,14 +552,103 @@ onMounted(fetchTask)
                   </div>
                 </div>
 
-        <!-- Subtasks -->
-        <div v-if="task.subtasks?.length" class="mt-6">
-          <h3 class="text-lg font-semibold mb-2">Subtasks</h3>
-          <SubtaskItem
-            v-for="sub in task.subtasks"
-            :key="sub.id"
-            :subtask="sub"
-          />
+                <!-- Action Buttons -->
+                <div class="flex gap-2 ml-4">
+                  <template v-if="editingSubtask === sub.id">
+                    <button 
+                      @click="saveSubtask(sub.id)"
+                      class="p-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+                      title="Save"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+                    <button 
+                      @click="cancelEditSubtask"
+                      class="p-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition"
+                      title="Cancel"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" x2="6" y1="6" y2="18" />
+                        <line x1="6" x2="18" y1="6" y2="18" />
+                      </svg>
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button 
+                      @click="startEditSubtask(sub)"
+                      class="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                      title="Edit"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </button>
+                    <button 
+                      @click="deleteSubtask(sub.id)"
+                      class="p-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
+                      title="Delete"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                           viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Expanded Details -->
+            <div v-if="expandedSubtasks.has(sub.id)" class="px-4 pb-4 pt-2 bg-gray-50 border-t border-gray-200">
+              <div class="ml-8 space-y-3 text-sm">
+                <div v-if="editingSubtask === sub.id || sub.desc">
+                  <span class="font-medium block mb-1">Description:</span>
+                  <textarea 
+                    v-if="editingSubtask === sub.id"
+                    v-model="subtaskEditForm.desc"
+                    rows="2"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Description"
+                  ></textarea>
+                  <p v-else class="text-gray-700">{{ sub.desc || 'N/A' }}</p>
+                </div>
+                
+                <div v-if="editingSubtask === sub.id || sub.notes">
+                  <span class="font-medium block mb-1">Notes:</span>
+                  <textarea 
+                    v-if="editingSubtask === sub.id"
+                    v-model="subtaskEditForm.notes"
+                    rows="2"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Notes"
+                  ></textarea>
+                  <p v-else class="text-gray-700">{{ sub.notes || 'N/A' }}</p>
+                </div>
+                
+                <div v-if="sub.priorityLabel">
+                  <span class="font-medium">Priority:</span>
+                  <input 
+                    v-if="editingSubtask === sub.id"
+                    v-model="subtaskEditForm.priorityLabel"
+                    class="ml-2 px-2 py-1 border border-gray-300 rounded"
+                    placeholder="Priority"
+                  />
+                  <span v-else class="ml-2 text-gray-700">{{ sub.priorityLabel }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
