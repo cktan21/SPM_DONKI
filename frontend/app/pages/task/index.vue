@@ -31,34 +31,19 @@ const normalizeRow = (item: any): any => {
     // Core task fields (lifted)
     id: t.id ?? null,
     title: t.name ?? '',
-    // pid: t.pid ?? null,
-    // created_by_uid: t.created_by_uid ?? null,
-    // updated_timestamp: t.updated_timestamp ?? null,
-    // parentTaskId: t.parentTaskId ?? null,
-    // collaborators: Array.isArray(t.collaborators) ? t.collaborators : [],
-    // desc: t.desc ?? '',
-    // notes: t.notes ?? '',
-    // priorityLevel: t.priorityLevel ?? null,
+    parentTaskId: t.parentTaskId ?? null,
     priority: t.priorityLabel ?? null,
 
     // Joined/derived
     schedule: s,
     status: s?.status ?? null,
-    // deadline: s?.deadline ?? null,
 
-    // project: item?.project ?? null,
-    // progress: item?.progress ?? 0,
-    // deadline_flag: item?.deadline_flag ?? null,
-
-    // Flatten subtasks recursively in a field (we’ll decide whether to expand them)
+    // Flatten subtasks recursively in a field (we'll decide whether to expand them)
     subtasks: Array.isArray(item?.subtasks)
       ? item.subtasks.map(normalizeRow)
       : []
   }
 }
-
-const flattenTree = (rows: any[]): any[] =>
-  rows.flatMap(r => [r, ...flattenTree(r.subtasks ?? [])])
 
 // ===== Methods =====
 const loadTasks = async () => {
@@ -100,14 +85,18 @@ const loadTasks = async () => {
       taskList = [response].filter(Boolean)
     }
 
-    // Normalize + (optionally) flatten
+    console.log('📋 Raw taskList:', taskList)
+
+    // Normalize the tasks
     const normalized = taskList.map(normalizeRow)
 
-    // If you want a flat table including subtasks as rows, use flattenTree:
-    const flattened = flattenTree(normalized)
+    console.log('📊 Normalized tasks sample:', normalized.slice(0, 2))
+    console.log('📊 ParentTaskId values:', normalized.map(t => ({ id: t.id, title: t.title, parentTaskId: t.parentTaskId })))
 
-    tasks.value = flattened
-    console.log('✅ Final rows:', tasks.value)
+    // Filter to only show top-level tasks (without parentTaskId)
+    tasks.value = normalized.filter(task => !task.parentTaskId)
+    
+    console.log('✅ Final filtered rows (top-level only):', tasks.value)
   } catch (e: any) {
     console.error('❌ Error loading tasks:', e)
     error.value = e?.data?.message || e?.message || 'Failed to load tasks'
