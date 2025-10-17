@@ -19,6 +19,7 @@ const editingSubtask = ref<string | null>(null)
 // Edit forms
 const taskEditForm = ref<any>({})
 const subtaskEditForm = ref<any>({})
+const newCollaboratorInput = ref('')
 
 const statusOptions = ['not started', 'ongoing', 'completed']
 
@@ -61,24 +62,26 @@ const normalizeTask = (x: any) => {
 //   "priorityLevel": 5,
 //   "priorityLabel": "Medium"
 // }
-const normalizeSubtask = (x: any) => ({
-  id: x?.id ?? '',
-  name: x?.name ?? 'Untitled',
-  desc: x?.desc ?? '',
-  notes: x?.notes ?? '',
-  priorityLevel: x?.priorityLevel ?? undefined,
-  priorityLabel: x?.priorityLabel ?? '',
-  // The /ptid payload does not include schedule;
-  // keep UI happy with sensible defaults:
-  status: x?.status ?? 'not started',
-  deadline: x?.deadline ?? '',
-  // Keep extra fields (may be useful later)
-  parentTaskId: x?.parentTaskId ?? null,
-  pid: x?.pid ?? null,
-  collaborators: Array.isArray(x?.collaborators) ? x.collaborators : [],
-  created_by_uid: x?.created_by_uid ?? null,
-  updated_timestamp: x?.updated_timestamp ?? null,
-})
+const normalizeSubtask = (x: any) => {
+  const schedule = normalizeSchedule(x?.schedule ?? {})
+  return {
+    id: x?.id ?? '',
+    name: x?.name ?? 'Untitled',
+    desc: x?.desc ?? '',
+    notes: x?.notes ?? '',
+    priorityLevel: x?.priorityLevel ?? undefined,
+    priorityLabel: x?.priorityLabel ?? '',
+    // Extract status and deadline from schedule object if present
+    status: schedule?.status ?? x?.status ?? 'not started',
+    deadline: schedule?.deadline ?? x?.deadline ?? '',
+    // Keep extra fields (may be useful later)
+    parentTaskId: x?.parentTaskId ?? null,
+    pid: x?.pid ?? null,
+    collaborators: Array.isArray(x?.collaborators) ? x.collaborators : [],
+    created_by_uid: x?.created_by_uid ?? null,
+    updated_timestamp: x?.updated_timestamp ?? null,
+  }
+}
 
 // ---------- Fetchers ----------
 const fetchMainTask = async (id: string) => {
@@ -144,7 +147,8 @@ const fetchTask = async () => {
       notes: task.value?.notes || '',
       priorityLabel: task.value?.priorityLabel || '',
       status: task.value?.schedule?.status || 'not started',
-      deadline: task.value?.schedule?.deadline || ''
+      deadline: task.value?.schedule?.deadline || '',
+      collaborators: []
     }
   } catch (e: any) {
     console.error(e)
@@ -186,8 +190,12 @@ const startEditTask = () => {
     notes: task.value?.notes || '',
     priorityLabel: task.value?.priorityLabel || '',
     status: task.value?.schedule?.status || 'not started',
-    deadline: task.value?.schedule?.deadline || ''
+    deadline: task.value?.schedule?.deadline || '',
+    collaborators: Array.isArray(task.value?.collaborators) 
+      ? task.value.collaborators.map((c: any) => typeof c === 'string' ? c : (c?.id || ''))
+      : []
   }
+  newCollaboratorInput.value = ''
 }
 
 const cancelEditTask = () => {
@@ -254,6 +262,31 @@ const deleteSubtask = async (subtaskId: string) => {
     await fetchTask()
   } catch (err: any) {
     alert('Error deleting subtask: ' + err.message)
+  }
+}
+
+const removeCollaborator = (index: number) => {
+  taskEditForm.value.collaborators.splice(index, 1)
+}
+
+const addCollaborator = () => {
+  const input = newCollaboratorInput.value.trim()
+  if (!input) return
+  
+  // Check if already exists
+  if (taskEditForm.value.collaborators.includes(input)) {
+    alert('This collaborator is already added')
+    return
+  }
+  
+  taskEditForm.value.collaborators.push(input)
+  newCollaboratorInput.value = ''
+}
+
+const handleCollaboratorKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    addCollaborator()
   }
 }
 
@@ -393,15 +426,63 @@ onMounted(fetchTask)
            <!-- Collaborators -->
           <div>
             <span class="font-medium block mb-1">Collaborators:</span>
-            <div v-if="Array.isArray(task.collaborators) && task.collaborators.length" class="flex flex-wrap gap-2">
-              <template v-for="(c, idx) in task.collaborators" :key="idx">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
-                  <!-- supports either UUID strings or { id, name } objects -->
-                  {{ typeof c === 'string' ? c : (c?.name || c?.id || 'Unknown') }}
+            
+            <!-- Edit Mode -->
+            <div v-if="editingTask" class="space-y-2">
+              <!-- Collaborator Pills -->
+              <div class="flex flex-wrap gap-2 p-3 border border-gray-300 rounded-lg min-h-[48px] bg-white">
+                <span 
+                  v-for="(collab, idx) in taskEditForm.collaborators" 
+                  :key="idx"
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 hover:bg-blue-200 transition"
+                >
+                  {{ collab }}
+                  <button 
+                    @click="removeCollaborator(idx)"
+                    class="ml-1 hover:bg-blue-300 rounded-full p-0.5 transition"
+                    type="button"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" x2="6" y1="6" y2="18" />
+                      <line x1="6" x2="18" y1="6" y2="18" />
+                    </svg>
+                  </button>
                 </span>
-              </template>
+                
+                <!-- Input for new collaborator -->
+                <input 
+                  v-model="newCollaboratorInput"
+                  @keydown="handleCollaboratorKeydown"
+                  type="text"
+                  placeholder="Add collaborator (UUID or email)"
+                  class="flex-1 min-w-[200px] px-2 py-1 focus:outline-none text-sm"
+                />
+              </div>
+              
+              <!-- Add Button -->
+              <button 
+                @click="addCollaborator"
+                type="button"
+                class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+              >
+                Add Collaborator
+              </button>
             </div>
-            <span v-else class="text-gray-700">None</span>
+            
+            <!-- View Mode -->
+            <div v-else>
+              <div v-if="Array.isArray(task.collaborators) && task.collaborators.length" class="flex flex-wrap gap-2">
+                <template v-for="(c, idx) in task.collaborators" :key="idx">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                    <!-- supports either UUID strings or { id, name } objects -->
+                    {{ typeof c === 'string' ? c : (c?.name || c?.id || 'Unknown') }}
+                  </span>
+                </template>
+              </div>
+              <span v-else class="text-gray-700">None</span>
+            </div>
           </div>
           
         </div>

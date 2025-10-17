@@ -1,67 +1,105 @@
 import type { ColumnDef } from '@tanstack/vue-table'
+import type { Task } from '../data/schema'
+
 import { h } from 'vue'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { labels, priorities, statuses } from '../data/data'
+import DataTableColumnHeader from './DataTableColumnHeader.vue'
+import DataTableRowActions from './DataTableRowActions.vue'
 
-export const columns: ColumnDef<any>[] = [
+export const columns: ColumnDef<Task>[] = [
+  // ✅ Select checkbox column (first column)
+  {
+    id: 'select',
+    header: ({ table }) =>
+      h(Checkbox, {
+        modelValue:
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && 'indeterminate'),
+        'onUpdate:modelValue': (value) => { return table.toggleAllPageRowsSelected(!!value) },
+        ariaLabel: 'Select all',
+        class: 'translate-y-0.5',
+      }),
+    cell: ({ row }) =>
+      h(Checkbox, {
+        modelValue: row.getIsSelected(),
+        'onUpdate:modelValue': (value) => { return row.toggleSelected(!!value) },
+        ariaLabel: 'Select row',
+        class: 'translate-y-0.5',
+        // prevent row click when clicking checkbox
+        onClick: (e: Event) => { e.stopPropagation(); return undefined },
+      }),
+    enableSorting: false,
+    enableHiding: false,
+  },
+
+  // Task ID column
   {
     accessorKey: 'id',
-    header: 'ID',
-    cell: ({ row }) => h('div', { class: 'font-mono text-sm text-muted-foreground' }, row.getValue('id')),
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: 'Task ID',
+      }),
+    cell: ({ row }) => {
+      const id = row.getValue('id') as string | number
+      return h(
+        'div',
+        { class: 'w-[80px] font-mono text-sm truncate' },
+        String(id)
+      )
+    },
+    enableSorting: true,
+    enableHiding: false,
   },
+
+  // Title column
   {
     accessorKey: 'title',
-    header: 'Title',
-    cell: ({ row }) => h('div', { class: 'font-medium' }, row.getValue('title')),
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Title' }),
+    cell: ({ row }) => {
+      const label = labels.find((label) => label.value === row.original.label)
+      return h('div', { class: 'flex space-x-2' }, [
+        label ? h(Badge, { variant: 'outline' }, () => { return label.label }) : null,
+        h('span', { class: 'max-w-[500px] truncate font-medium' }, row.getValue('title')),
+      ])
+    },
   },
+
+  // Status column
   {
     accessorKey: 'status',
-    header: 'Status',
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Status' }),
     cell: ({ row }) => {
-      const status = row.getValue('status') as string | null
-      if (!status) return h('span', { class: 'text-muted-foreground text-sm' }, '—')
-      
-      // Status badge styling
-      const statusStyles: Record<string, string> = {
-        'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-        'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-        'in_progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-        'completed': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        'blocked': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        'cancelled': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-      }
-      
-      const statusKey = status.toLowerCase().replace(/\s+/g, '_')
-      const badgeClass = statusStyles[statusKey] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-      
-      return h(Badge, { 
-        variant: 'outline',
-        class: `${badgeClass} border-0 capitalize`
-      }, () => status.replace(/_/g, ' '))
+      const status = statuses.find((status) => status.value === row.getValue('status'))
+      if (!status) return null
+      return h('div', { class: 'flex w-[100px] items-center' }, [
+        h(status.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
+        h('span', status.label),
+      ])
     },
+    filterFn: (row, id, value) => { return value.includes(row.getValue(id)) },
   },
+
+  // Priority column
   {
     accessorKey: 'priority',
-    header: 'Priority',
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: 'Priority' }),
     cell: ({ row }) => {
-      const priority = row.getValue('priority') as string | null
-      if (!priority) return h('span', { class: 'text-muted-foreground text-sm' }, '—')
-      
-      // Priority badge styling
-      const priorityStyles: Record<string, string> = {
-        'critical': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-semibold',
-        'high': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-        'medium': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-        'low': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        'none': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-      }
-      
-      const priorityKey = priority.toLowerCase()
-      const badgeClass = priorityStyles[priorityKey] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-      
-      return h(Badge, { 
-        variant: 'outline',
-        class: `${badgeClass} border-0 capitalize`
-      }, () => priority)
+      const priority = priorities.find((priority) => priority.value === row.getValue('priority'))
+      if (!priority) return null
+      return h('div', { class: 'flex items-center' }, [
+        h(priority.icon, { class: 'mr-2 h-4 w-4 text-muted-foreground' }),
+        h('span', {}, priority.label),
+      ])
     },
+    filterFn: (row, id, value) => { return value.includes(row.getValue(id)) },
+  },
+
+  // Actions column
+  {
+    id: 'actions',
+    cell: ({ row }) => h(DataTableRowActions, { row }),
   },
 ]

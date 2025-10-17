@@ -1,8 +1,25 @@
 [
   {
+    "id": "55",
+    "title": "Prepare report x",
+    "status": "in progress",
+    "progress": 70,
+    "due_date": "2025-10-30",
+    "subtasks": [
+      { "id": "s1", "title": "Collect data", "status": "Done", "deadline": "2025-10-20" },
+      { "id": "s2", "title": "Draft summary", "status": "In Progress", "deadline": "2025-10-25" }
+    ],
+    "label": "documentation",
+    "priority": 3
+  },
+  {
     "id": "33949f99-20d0-423d-9b26-f09292b2e40d",
     "title": "You can't compress the program without quantifying the open-source SSD pixel!",
     "status": "in progress",
+    "subtasks": [
+      { "id": "s3", "title": "Collect data", "status": "Done", "deadline": "2025-10-20" },
+      { "id": "s4", "title": "Draft summary", "status": "In Progress", "deadline": "2025-10-25" }
+    ],
     "label": "documentation",
     "priority": 3
   },
@@ -19,5 +36,32 @@
     "status": "todo",
     "label": "bug",
     "priority": 2
+  },
+  {
+  "id": "TASK-7833",
+  "title": "We need to bypass the neural TCP card!",
+  "status": "todo",
+  "label": "bug",
+  "priority": 2,
+  "subtasks": [
+    { "id": "SUB-1", "title": "Review network layer", "done": false },
+    { "id": "SUB-2", "title": "Patch bug", "done": true }
+  ]
+},
+  {
+    "id": "1",
+    "title": "Prepare report y",
+    "progress": 70,
+    "due_date": "2025-10-30",
+    "subtasks": [
+      { "id": "s5", "title": "Collect data", "status": "Done", "deadline": "2025-10-20" },
+      { "id": "s6", "title": "Draft summary", "status": "In Progress", "deadline": "2025-10-25" }
+    ]
+  },
+  {
+    "id": 2,
+    "title": "Client presentation",
+    "progress": 40,
+    "due_date": "2025-11-01"
   }
 ]
