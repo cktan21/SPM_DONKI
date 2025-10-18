@@ -18,6 +18,16 @@ interface Task {
   notes: string
   priorityLevel: number
   priorityLabel: string
+  // Add these fields to your backend/API if not present
+  label?: string | null
+
+  // These fields come from SCHEDULE table but are flattened into task
+  status?: string | null
+  deadline?: string | null
+  is_recurring?: boolean | null
+  next_occurrence?: string | null
+  start?: string | null
+  sid?: string | null
 }
 
 interface Project {
@@ -67,8 +77,8 @@ const transformedTasks = computed(() => {
     // Map to table column fields
     title: task.name, // Map 'name' to 'title' for the table
     priority: task.priorityLevel, // Map 'priorityLevel' to 'priority' for the table
-    status: null, // Set to null if you don't have status in API yet
-    label: null, // Set to null if you don't have label in API yet
+    status: task.status || null, // Set to null if you don't have status in API yet
+    label: task.label || null, // Set to null if you don't have label in API yet
   }))
 })
 

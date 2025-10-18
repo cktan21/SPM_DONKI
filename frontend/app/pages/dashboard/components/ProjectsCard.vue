@@ -2,7 +2,20 @@
 import { useRouter } from "vue-router"
 import { useState } from "#imports" // Nuxt 3 composable for global state
 
-// Define Task & Project interfaces
+// Define Schedule interface
+interface Schedule {
+  tid: string
+  sid: string
+  deadline: string | null
+  status: string | null
+  created_at: string
+  is_recurring: boolean
+  next_occurrence: string | null
+  start: string | null
+  frequency: string | null
+}
+
+// Define Task & Project interfaces with schedule
 interface Task {
   id: string
   name: string
@@ -15,6 +28,14 @@ interface Task {
   notes: string
   priorityLevel: number
   priorityLabel: string
+
+  // These come from SCHEDULE table but are flattened into the task object
+  status?: string | null
+  deadline?: string | null
+  is_recurring?: boolean | null
+  next_occurrence?: string | null
+  start?: string | null
+  sid?: string | null
 }
 
 interface Project {
@@ -41,6 +62,7 @@ const selectedProject = useState<Project | null>("selectedProject")
 
 // Navigate to /task page and store project globally
 function openProject(project: Project) {
+  // The project already has tasks with schedules from the backend
   selectedProject.value = project
   router.push("/task")
 }
