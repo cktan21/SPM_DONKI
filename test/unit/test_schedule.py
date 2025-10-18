@@ -73,6 +73,7 @@ def test_insert_schedule_recurring_success(mock_client, supabase_client):
     is_recurring = True
     status = "ongoing"
     next_occurrence = "2025-09-27T15:42:21+00:00"
+    frequency = "Weekly"
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.return_value.data = [
@@ -82,11 +83,12 @@ def test_insert_schedule_recurring_success(mock_client, supabase_client):
             "deadline": deadline, 
             "status": status,
             "is_recurring": is_recurring,
-            "next_occurrence": next_occurrence
+            "next_occurrence": next_occurrence,
+            "frequency": frequency
         }
     ]
 
-    result = supabase_client.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence)
+    result = supabase_client.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
 
     mock_client.table.assert_called_once_with("SCHEDULE")
     mock_table.insert.assert_called_once_with({
@@ -95,11 +97,13 @@ def test_insert_schedule_recurring_success(mock_client, supabase_client):
         "deadline": deadline,
         "status": status,
         "is_recurring": is_recurring,
-        "next_occurrence": next_occurrence
+        "next_occurrence": next_occurrence,
+        "frequency": frequency
     })
     assert result["tid"] == tid
     assert result["is_recurring"] == is_recurring
     assert result["next_occurrence"] == next_occurrence
+    assert result["frequency"] == frequency
 
 
 # def test_insert_schedule_duplicate_tid(mock_client, supabase_client):
