@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { columns } from './components/columns'
-import tasks from './data/tasks.json'
 import DataTable from './components/DataTable.vue'
 import { Button } from '@/components/ui/button'
-import { computed } from 'vue'
 
 // Task and Project interfaces
 interface Task {
@@ -46,17 +44,33 @@ onMounted(() => {
   }
 })
 
-// Transform tasks for table
-const transformedTasks = tasks.map(task => ({
-  id: String(task.id),
-  status: task.status || '',
-  title: task.title || '',
-  label: task.label || '',
-  priority: task.priority || 0,
-  subtasks: task.subtasks,
-  progress: task.progress,
-  due_date: task.due_date
-}))
+// Transform tasks from selectedProject for the table
+const transformedTasks = computed(() => {
+  if (!selectedProject.value?.tasks) {
+    return []
+  }
+
+  return selectedProject.value.tasks.map(task => ({
+    // Keep all original fields
+    id: task.id,
+    name: task.name,
+    desc: task.desc,
+    notes: task.notes,
+    priorityLevel: task.priorityLevel,
+    priorityLabel: task.priorityLabel,
+    created_by_uid: task.created_by_uid,
+    updated_timestamp: task.updated_timestamp,
+    parentTaskId: task.parentTaskId,
+    collaborators: task.collaborators,
+    pid: task.pid,
+    
+    // Map to table column fields
+    title: task.name, // Map 'name' to 'title' for the table
+    priority: task.priorityLevel, // Map 'priorityLevel' to 'priority' for the table
+    status: null, // Set to null if you don't have status in API yet
+    label: null, // Set to null if you don't have label in API yet
+  }))
+})
 
 const projectTitle = computed(() =>
   selectedProject.value
@@ -75,20 +89,19 @@ const handleCreateTask = () => {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div class="w-full sm:w-auto">
           <h1 class="text-3xl font-bold tracking-tight">
-  {{ projectTitle }}
-</h1>
-
+            {{ projectTitle }}
+          </h1>
           <p class="text-muted-foreground w-full sm:w-auto">
             Manage your tasks and view their details
           </p>
         </div>
         <div class="hidden sm:block">
-          <Button @click="handleCreateTask">Create Task</Button>
+          <Button @click="handleCreateTask">Create New Task</Button>
         </div>
       </div>
-
+      
       <DataTable :data="transformedTasks" :columns="columns" />
-
+      
       <div class="block sm:hidden mt-4">
         <Button class="w-full" @click="handleCreateTask">Create Task</Button>
       </div>
