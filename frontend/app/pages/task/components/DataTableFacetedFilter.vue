@@ -24,17 +24,28 @@ interface DataTableFacetedFilter {
     value: string
     icon?: Component
   }[]
-  optionsnumber: {
-    label: number
-    value: number
-    icon?: Component
-  }[]
+  optionsnumber: number[]
 }
 
 const props = defineProps<DataTableFacetedFilter>()
 
 const facets = computed(() => props.column?.getFacetedUniqueValues())
-const selectedValues = computed(() => new Set(props.column?.getFilterValue() as string[]))
+const selectedValues = computed(() => new Set(props.column?.getFilterValue() as (string | number)[]))
+
+// Determine if we're dealing with numbers (priority) or strings (status/label)
+const isNumberFilter = computed(() => props.optionsnumber.length > 0)
+
+// Convert number options to the format needed for display
+const displayOptions = computed(() => {
+  if (isNumberFilter.value) {
+    return props.optionsnumber.map(num => ({
+      label: String(num),
+      value: num, // Keep as number
+      icon: undefined, // No icon for numbers
+    }))
+  }
+  return props.options
+})
 
 const attrs = useAttrs()
 const className = typeof attrs.class === 'string' ? attrs.class : ''
@@ -64,7 +75,7 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
             </Badge>
             <template v-else>
               <Badge
-                v-for="option in options
+                v-for="option in displayOptions
                   .filter((option) => selectedValues.has(option.value))"
                 :key="option.value"
                 variant="secondary"
@@ -84,21 +95,21 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup>
             <CommandItem
-              v-for="option in options"
+              v-for="option in displayOptions"
               :key="option.value"
               :value="option"
               @select="(e) => {
-                const isSelected = selectedValues.has(option.value)
+                const optionValue = option.value
+                const isSelected = selectedValues.has(optionValue)
+                
                 if (isSelected) {
-                  selectedValues.delete(option.value)
+                  selectedValues.delete(optionValue)
+                } else {
+                  selectedValues.add(optionValue)
                 }
-                else {
-                  selectedValues.add(option.value)
-                }
+                
                 const filterValues = Array.from(selectedValues)
-                column?.setFilterValue(
-                  filterValues.length ? filterValues : undefined,
-                )
+                column?.setFilterValue(filterValues.length ? filterValues : undefined)
               }"
             >
               <div
@@ -111,6 +122,7 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
               >
                 <Icon icon="radix-icons:check" :class="cn('h-4 w-4')" />
               </div>
+
               <component :is="option.icon" v-if="option.icon" class="mr-2 h-4 w-4 text-muted-foreground" />
               <span>{{ option.label }}</span>
               <span v-if="facets?.get(option.value)" class="ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs">

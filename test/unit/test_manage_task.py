@@ -126,20 +126,17 @@ async def test_create_task_composite_success(monkeypatch):
 # -------------------------------
 async def test_delete_task_composite_success():
     task_id = "33949f99-20d0-423d-9b26-f09292b2e40d"
-    fake_schedule_delete = {"deleted": True}
     fake_task_delete = {"deleted": True}
 
     with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
-        mock_client.delete.side_effect = [
-            AsyncMock(status_code=204, json=Mock(return_value=fake_schedule_delete)),
-            AsyncMock(status_code=204, json=Mock(return_value=fake_task_delete)),
-        ]
+        mock_client.delete.return_value = AsyncMock(status_code=204, json=Mock(return_value=fake_task_delete))
         mock_client_cls.return_value.__aenter__.return_value = mock_client
 
         result = await main.delete_task_composite(task_id)
 
         assert result["task_id"] == task_id
         assert result["message"] == "Delete workflow completed"
-        assert "schedule_delete" in result
         assert "task_delete" in result
+        # Verify that only task_delete is present, not schedule_delete
+        assert "schedule_delete" not in result

@@ -143,7 +143,7 @@ async def get_tasks_by_user_composite(
                 # schedule
                 schedule_data = None
                 try:
-                    schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                    schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                     if schedule_response.status_code == 200:
                         schedule_data = schedule_response.json()
                 except Exception:
@@ -281,7 +281,7 @@ async def get_task_composite(
             # === 2. Get Schedule ===
             schedule_data = None
             try:
-                s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                 if s_resp.status_code == 200:
                     schedule_data = s_resp.json()
                 else:
@@ -860,15 +860,15 @@ async def update_task_service(task_id: str, updates: Dict[str, Any]):
             raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
 
 # Schedule Service
-async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]):
+async def update_schedule_service(schedule_id: str, schedule_updates: Dict[str, Any]):
     """Send schedule updates to the schedule service matching the PUT /{tid} endpoint"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.put(f"{SCHEDULE_SERVICE_URL}/{task_id}", json=schedule_updates)
+            response = await client.put(f"{SCHEDULE_SERVICE_URL}/{schedule_id}", json=schedule_updates)
             
             if response.status_code == 404:
-                print(f"Warning: Task {task_id} not found in schedule service")
-                return {"status": "not_found", "message": f"Task {task_id} not found in schedule service"}
+                print(f"Warning: Task {schedule_id} not found in schedule service")
+                return {"status": "not_found", "message": f"Task {schedule_id} not found in schedule service"}
             elif response.status_code == 400:
                 print(f"Warning: Bad request to schedule service: {response.text}")
                 return {"status": "bad_request", "message": "Invalid schedule data"}
@@ -878,7 +878,7 @@ async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]
             
             return {
                 "status": "success",
-                "message": f"Task {task_id} schedule updated successfully",
+                "message": f"Task {schedule_id} schedule updated successfully",
                 "data": response.json()
             }
             
@@ -926,20 +926,6 @@ async def delete_task_composite(
     """
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            # 1) Delete related schedules first (safe to ignore 404s)
-            sched_url = f"{SCHEDULE_SERVICE_URL}/{task_id}"
-            sched_resp = await client.delete(sched_url)
-            if sched_resp.status_code not in (200, 204, 404):
-                raise HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "Schedule service delete failed",
-                        "status_code": sched_resp.status_code,
-                        "body": _safe_json(sched_resp),
-                        "url": sched_url,
-                    },
-                )
-
             # 2) Delete the task itself (also treat 404 as already deleted)
             task_url = f"{TASK_SERVICE_URL}/{task_id}"
             task_resp = await client.delete(task_url)
@@ -957,11 +943,6 @@ async def delete_task_composite(
         return {
             "message": "Delete workflow completed",
             "task_id": task_id,
-            "schedule_delete": {
-                "url": sched_url,
-                "status_code": sched_resp.status_code,
-                "result": _safe_json(sched_resp),
-            },
             "task_delete": {
                 "url": task_url,
                 "status_code": task_resp.status_code,

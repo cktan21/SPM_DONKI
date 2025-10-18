@@ -148,11 +148,11 @@ GET http://localhost:5500/ptid/{parent_task_id}
 
 Sample Output:
 
-+```json
-+{
-+    "message": "2 child task(s) retrieved",
-+    "tasks": [
-+        {
+```json
+{
+    "message": "2 child task(s) retrieved",
+    "tasks": [
+        {
             "id": "d695f875-a0c9-42b3-baf9-a367a437367d",
             "name": "New Task Title",
             "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",

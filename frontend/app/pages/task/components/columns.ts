@@ -1,67 +1,174 @@
-import type { ColumnDef } from '@tanstack/vue-table'
-import { h } from 'vue'
-import { Badge } from '@/components/ui/badge'
+import type { ColumnDef } from "@tanstack/vue-table"
+import type { Task } from "../data/schema"
+import type { Component } from "vue"
+import { h } from "vue"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import DataTableColumnHeader from "./DataTableColumnHeader.vue"
+import DataTableRowActions from "./DataTableRowActions.vue"
 
-export const columns: ColumnDef<any>[] = [
+// Import icons
+import { Check, Loader, AlertTriangle } from "lucide-vue-next"
+
+// --- Status type ---
+interface StatusOption {
+  value: string
+  label: string
+  icon: Component
+}
+
+// --- Example static data ---
+export const labels = [
+  { value: "bug", label: "Bug" },
+  { value: "feature", label: "Feature" },
+  { value: "documentation", label: "Documentation" },
+]
+
+export const statuses: StatusOption[] = [
+  { value: "todo", label: "To Do", icon: Loader },
+  { value: "in_progress", label: "In Progress", icon: AlertTriangle },
+  { value: "done", label: "Done", icon: Check },
+]
+
+// Priority numbers 1–10
+export const priorities: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Helper function to truncate ID in the middle
+const truncateId = (id: string | number, maxLength: number = 12): string => {
+  const idStr = String(id)
+  if (idStr.length <= maxLength) return idStr
+  
+  const charsToShow = Math.floor(maxLength / 2) - 1
+  const start = idStr.slice(0, charsToShow)
+  const end = idStr.slice(-charsToShow)
+  return `${start}...${end}`
+}
+
+// --- Columns definition ---
+export const columns: ColumnDef<Task>[] = [
   {
-    accessorKey: 'id',
-    header: 'ID',
-    cell: ({ row }) => h('div', { class: 'font-mono text-sm text-muted-foreground' }, row.getValue('id')),
+    id: "select",
+    header: ({ table }) =>
+      h(Checkbox, {
+        modelValue:
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate"),
+        "onUpdate:modelValue": (value) =>
+          table.toggleAllPageRowsSelected(!!value),
+        ariaLabel: "Select all",
+        class: "translate-y-0.5",
+      }),
+    cell: ({ row }) =>
+      h(Checkbox, {
+        modelValue: row.getIsSelected(),
+        "onUpdate:modelValue": (value) => row.toggleSelected(!!value),
+        ariaLabel: "Select row",
+        class: "translate-y-0.5",
+        onClick: (e: Event) => { e.stopPropagation(); return undefined },
+      }),
+    enableSorting: false,
+    enableHiding: false,
   },
+
+  // Task ID column
   {
-    accessorKey: 'title',
-    header: 'Title',
-    cell: ({ row }) => h('div', { class: 'font-medium' }, row.getValue('title')),
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
+    accessorKey: "id",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Task ID" }),
     cell: ({ row }) => {
-      const status = row.getValue('status') as string | null
-      if (!status) return h('span', { class: 'text-muted-foreground text-sm' }, '—')
+      const id = row.getValue("id") as string | number
+      const fullId = id ? String(id) : "-"
+      const displayId = truncateId(fullId, 16)
       
-      // Status badge styling
-      const statusStyles: Record<string, string> = {
-        'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-        'in-progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-        'in_progress': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-        'completed': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        'blocked': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        'cancelled': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-      }
-      
-      const statusKey = status.toLowerCase().replace(/\s+/g, '_')
-      const badgeClass = statusStyles[statusKey] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-      
-      return h(Badge, { 
-        variant: 'outline',
-        class: `${badgeClass} border-0 capitalize`
-      }, () => status.replace(/_/g, ' '))
+      return h(
+        "div",
+        { 
+          class: "text-center font-mono text-sm",
+          title: fullId
+        },
+        displayId
+      )
+    },
+    enableSorting: true,
+    enableHiding: false,
+  },
+
+  // Name column with label badge
+  {
+    accessorKey: "title",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Name" }),
+    cell: ({ row }) => {
+      const title = row.getValue("title") as string | null
+      return h("div", { class: "flex items-center gap-2 min-w-0" }, [
+        h("span", { class: "truncate font-medium", title: title || undefined }, title || "-"),
+      ])
     },
   },
+
+  // Label column (hidden but used for filtering)
   {
-    accessorKey: 'priority',
-    header: 'Priority',
+    accessorKey: "label",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Label" }),
     cell: ({ row }) => {
-      const priority = row.getValue('priority') as string | null
-      if (!priority) return h('span', { class: 'text-muted-foreground text-sm' }, '—')
+      const labelValue = row.getValue("label") as string | null
+      if (!labelValue) return null
       
-      // Priority badge styling
-      const priorityStyles: Record<string, string> = {
-        'critical': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-semibold',
-        'high': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-        'medium': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-        'low': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        'none': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-      }
-      
-      const priorityKey = priority.toLowerCase()
-      const badgeClass = priorityStyles[priorityKey] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-      
-      return h(Badge, { 
-        variant: 'outline',
-        class: `${badgeClass} border-0 capitalize`
-      }, () => priority)
+      const label = labels.find((l) => l.value === labelValue)
+      return label ? h(Badge, { variant: "outline" }, () => label.label) : null
     },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
+    enableSorting: false,
+    enableHiding: true, // Can be hidden in view options
+  },
+
+  // Status column
+  {
+    accessorKey: "status",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Status" }),
+    cell: ({ row }) => {
+      const statusValue = row.getValue("status") as string | null
+      if (!statusValue)
+        return h("div", { class: "flex justify-center text-muted-foreground" }, "-")
+
+      const status = statuses.find((s) => s.value === statusValue)
+      if (!status) return h("div", { class: "flex justify-center" }, statusValue)
+
+      return h("div", { class: "flex items-center justify-center gap-1" }, [
+        h(status.icon, { class: "h-4 w-4 text-muted-foreground shrink-0" }),
+        h("span", { class: "text-sm" }, status.label),
+      ])
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
+  },
+
+  // Priority column
+  {
+    accessorKey: "priority",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Priority" }),
+    cell: ({ row }) => {
+      const priorityValue = row.getValue("priority") as number | null
+      return h(
+        "div",
+        { class: "flex justify-center items-center text-sm font-medium" },
+        priorityValue !== null && priorityValue !== undefined ? String(priorityValue) : "-"
+      )
+    },
+    filterFn: (row, id, value) => {
+    // Support single number or array of numbers
+    const rowValue = row.getValue(id)
+    if (Array.isArray(value)) {
+      return value.includes(rowValue)
+    }
+    return rowValue === value
+   },
+  },
+
+  // Actions column
+  {
+    id: "actions",
+    cell: ({ row }) => h(DataTableRowActions, { row }),
   },
 ]

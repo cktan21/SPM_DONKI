@@ -32,6 +32,9 @@ Install dependencies:
 ```bash
 # bun
 bun install
+npm install @iconify/vue
+npm install lucide-vue-next
+npx shadcn-vue@latest add badge
 ```
 
 ## shadcn-vue Components
