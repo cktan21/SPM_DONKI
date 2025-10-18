@@ -97,12 +97,8 @@ export const columns: ColumnDef<Task>[] = [
     accessorKey: "title",
     header: ({ column }) => h(DataTableColumnHeader, { column, title: "Name" }),
     cell: ({ row }) => {
-      const label = row.original.label
-        ? labels.find((l) => l.value === row.original.label)
-        : null
       const title = row.getValue("title") as string | null
       return h("div", { class: "flex items-center gap-2 min-w-0" }, [
-        label ? h(Badge, { variant: "outline", class: "shrink-0" }, () => label.label) : null,
         h("span", { class: "truncate font-medium", title: title || undefined }, title || "-"),
       ])
     },
