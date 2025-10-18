@@ -84,33 +84,31 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup>
             <CommandItem
-              v-for="option in options"
+              v-for="option in options.length ? options : optionsnumber"
               :key="option.value"
               :value="option"
               @select="(e) => {
-                const isSelected = selectedValues.has(option.value)
+                const isSelected = selectedValues.has(String(option.value))
                 if (isSelected) {
-                  selectedValues.delete(option.value)
-                }
-                else {
-                  selectedValues.add(option.value)
+                  selectedValues.delete(String(option.value))
+                } else {
+                  selectedValues.add(String(option.value))
                 }
                 const filterValues = Array.from(selectedValues)
-                column?.setFilterValue(
-                  filterValues.length ? filterValues : undefined,
-                )
+                column?.setFilterValue(filterValues.length ? filterValues : undefined)
               }"
             >
               <div
                 :class="cn(
                   'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                  selectedValues.has(option.value)
+                  selectedValues.has(String(option.value))
                     ? 'bg-primary text-primary-foreground'
                     : 'opacity-50 [&_svg]:invisible',
                 )"
               >
                 <Icon icon="radix-icons:check" :class="cn('h-4 w-4')" />
               </div>
+
               <component :is="option.icon" v-if="option.icon" class="mr-2 h-4 w-4 text-muted-foreground" />
               <span>{{ option.label }}</span>
               <span v-if="facets?.get(option.value)" class="ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs">

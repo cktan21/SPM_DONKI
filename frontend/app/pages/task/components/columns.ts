@@ -1,7 +1,6 @@
 import type { ColumnDef } from "@tanstack/vue-table"
 import type { Task } from "../data/schema"
 import type { Component } from "vue"
-
 import { h } from "vue"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -93,7 +92,7 @@ export const columns: ColumnDef<Task>[] = [
     enableHiding: false,
   },
 
-  // Name column
+  // Name column with label badge
   {
     accessorKey: "title",
     header: ({ column }) => h(DataTableColumnHeader, { column, title: "Name" }),
@@ -107,6 +106,24 @@ export const columns: ColumnDef<Task>[] = [
         h("span", { class: "truncate font-medium", title: title || undefined }, title || "-"),
       ])
     },
+  },
+
+  // Label column (hidden but used for filtering)
+  {
+    accessorKey: "label",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Label" }),
+    cell: ({ row }) => {
+      const labelValue = row.getValue("label") as string | null
+      if (!labelValue) return null
+      
+      const label = labels.find((l) => l.value === labelValue)
+      return label ? h(Badge, { variant: "outline" }, () => label.label) : null
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
+    enableSorting: false,
+    enableHiding: true, // Can be hidden in view options
   },
 
   // Status column
@@ -126,6 +143,9 @@ export const columns: ColumnDef<Task>[] = [
         h("span", { class: "text-sm" }, status.label),
       ])
     },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
+    },
   },
 
   // Priority column
@@ -140,6 +160,14 @@ export const columns: ColumnDef<Task>[] = [
         priorityValue !== null && priorityValue !== undefined ? String(priorityValue) : "-"
       )
     },
+    filterFn: (row, id, value) => {
+    // Support single number or array of numbers
+    const rowValue = row.getValue(id)
+    if (Array.isArray(value)) {
+      return value.includes(rowValue)
+    }
+    return rowValue === value
+   },
   },
 
   // Actions column

@@ -5,7 +5,7 @@ import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { priorities, statuses } from '../data/data'
+import { priorities, statuses, labels } from '../data/data'
 import DataTableFacetedFilter from './DataTableFacetedFilter.vue'
 import DataTableViewOptions from './DataTableViewOptions.vue'
 
@@ -32,15 +32,15 @@ const isFiltered = computed(() => props.table.getState().columnFilters.length > 
 
     <!-- Second row: Filters and view options -->
     <div class="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-      <!-- Left side: Status, Priority filters and Reset button -->
-      <div class="flex gap-2 flex-1">
+      <!-- Left side: Status, Priority, Label filters and Reset button -->
+      <div class="flex gap-2 flex-1 flex-wrap">
         <DataTableFacetedFilter
           v-if="table.getColumn('status')"
           :column="table.getColumn('status')"
           title="Status"
           :options="statuses"
           :optionsnumber="[]"
-          class="flex-1 sm:flex-none"
+          class="flex-1 sm:flex-none min-w-[120px]"
         />
         <DataTableFacetedFilter
           v-if="table.getColumn('priority')"
@@ -48,7 +48,15 @@ const isFiltered = computed(() => props.table.getState().columnFilters.length > 
           title="Priority"
           :options="[]"
           :optionsnumber="priorities"
-          class="flex-1 sm:flex-none"
+          class="flex-1 sm:flex-none min-w-[120px]"
+        />
+        <DataTableFacetedFilter
+          v-if="table.getColumn('label')"
+          :column="table.getColumn('label')"
+          title="Label"
+          :options="labels"
+          :optionsnumber="[]"
+          class="flex-1 sm:flex-none min-w-[120px]"
         />
         <Button
           v-if="isFiltered"

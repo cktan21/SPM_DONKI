@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { Component } from "vue"
+import { Check, Loader, AlertTriangle } from "lucide-vue-next"
 
 // Schema matching your API structure with all fields
 export const taskSchema = z.object({
@@ -23,6 +25,7 @@ export const taskSchema = z.object({
 export type Task = z.infer<typeof taskSchema>
 
 
+
 export const labels = [
   { value: "bug", label: "Bug" },
   { value: "feature", label: "Feature" },
@@ -35,7 +38,7 @@ export const priorities = Array.from({ length: 10 }, (_, i) => ({
 }))
 
 export const statuses = [
-  { value: "todo", label: "To Do" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "done", label: "Done" },
+  { value: "todo", label: "To Do", icon: Loader },
+  { value: "ongoing", label: "Ongoing", icon: AlertTriangle },
+  { value: "done", label: "Done", icon: Check },
 ]
