@@ -24,17 +24,28 @@ interface DataTableFacetedFilter {
     value: string
     icon?: Component
   }[]
-  optionsnumber: {
-    label: number
-    value: number
-    icon?: Component
-  }[]
+  optionsnumber: number[]
 }
 
 const props = defineProps<DataTableFacetedFilter>()
 
 const facets = computed(() => props.column?.getFacetedUniqueValues())
-const selectedValues = computed(() => new Set(props.column?.getFilterValue() as string[]))
+const selectedValues = computed(() => new Set(props.column?.getFilterValue() as (string | number)[]))
+
+// Determine if we're dealing with numbers (priority) or strings (status/label)
+const isNumberFilter = computed(() => props.optionsnumber.length > 0)
+
+// Convert number options to the format needed for display
+const displayOptions = computed(() => {
+  if (isNumberFilter.value) {
+    return props.optionsnumber.map(num => ({
+      label: String(num),
+      value: num, // Keep as number
+      icon: undefined, // No icon for numbers
+    }))
+  }
+  return props.options
+})
 
 const attrs = useAttrs()
 const className = typeof attrs.class === 'string' ? attrs.class : ''
@@ -64,7 +75,7 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
             </Badge>
             <template v-else>
               <Badge
-                v-for="option in options
+                v-for="option in displayOptions
                   .filter((option) => selectedValues.has(option.value))"
                 :key="option.value"
                 variant="secondary"
@@ -84,16 +95,19 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup>
             <CommandItem
-              v-for="option in options.length ? options : optionsnumber"
+              v-for="option in displayOptions"
               :key="option.value"
               :value="option"
               @select="(e) => {
-                const isSelected = selectedValues.has(String(option.value))
+                const optionValue = option.value
+                const isSelected = selectedValues.has(optionValue)
+                
                 if (isSelected) {
-                  selectedValues.delete(String(option.value))
+                  selectedValues.delete(optionValue)
                 } else {
-                  selectedValues.add(String(option.value))
+                  selectedValues.add(optionValue)
                 }
+                
                 const filterValues = Array.from(selectedValues)
                 column?.setFilterValue(filterValues.length ? filterValues : undefined)
               }"
@@ -101,7 +115,7 @@ const className = typeof attrs.class === 'string' ? attrs.class : ''
               <div
                 :class="cn(
                   'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                  selectedValues.has(String(option.value))
+                  selectedValues.has(option.value)
                     ? 'bg-primary text-primary-foreground'
                     : 'opacity-50 [&_svg]:invisible',
                 )"

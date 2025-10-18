@@ -32,10 +32,7 @@ export const labels = [
   { value: "documentation", label: "Documentation" },
 ]
 
-export const priorities = Array.from({ length: 10 }, (_, i) => ({
-  value: i + 1,
-  label: i + 1,
-}))
+export const priorities: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export const statuses = [
   { value: "todo", label: "To Do", icon: Loader },
