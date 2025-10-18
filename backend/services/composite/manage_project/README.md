@@ -48,28 +48,35 @@ Sample Output:
             "desc": null,
             "tasks": [
                 {
-                    "id": "d695f875-a0c9-42b3-baf9-a367a437367d",
-                    "name": "New Task Title",
+                    "id": "04213807-bc3a-4f62-ae6d-e81ab3d458ab",
+                    "name": "wfwejfoiewjfow",
                     "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-                    "updated_timestamp": "2025-10-05T22:26:16.650616+00:00",
+                    "updated_timestamp": "2025-10-17T05:08:40.110212+00:00",
                     "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
                     "collaborators": [
-                        "fb892a63-2401-46fc-b660-bf3fe1196d4e",
-                        "655a9260-f871-480f-abea-ded735b2170a"
+                        "655a9260-f871-480f-abea-ded735b2170a",
+                        "fb892a63-2401-46fc-b660-bf3fe1196d4e"
                     ],
                     "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
                     "desc": "Optional description",
                     "notes": "Optional notes",
                     "priorityLevel": 5,
-                    "priorityLabel": "Medium"
+                    "priorityLabel": "Medium",
+                    "deadline": "2025-12-31T23:59:59+00:00",
+                    "status": "ongoing",
+                    "is_recurring": false,
+                    "next_occurrence": null,
+                    "start": "2025-10-18T06:43:45.397511+00:00",
+                    "sid": "264ad005-c0cc-48ae-8315-1d15c5a5af18"
                 },
                 {
                     "id": "be238e36-2506-432a-a267-e2a1308ff22b",
                     "name": "New Task Title2",
                     "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-                    "updated_timestamp": "2025-10-06T08:39:43.761577+00:00",
+                    "updated_timestamp": "2025-10-17T07:41:56.373682+00:00",
                     "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
                     "collaborators": [
+                        "655a9260-f871-480f-abea-ded735b2170a",
                         "d568296e-3644-4ac0-9714-dcaa0aaa5fb0",
                         "fb892a63-2401-46fc-b660-bf3fe1196d4e"
                     ],
@@ -77,7 +84,13 @@ Sample Output:
                     "desc": "Optional description",
                     "notes": "Optional notes",
                     "priorityLevel": 5,
-                    "priorityLabel": "Medium"
+                    "priorityLabel": "Medium",
+                    "deadline": "2025-10-31T18:40:00+00:00",
+                    "status": "ongoing",
+                    "is_recurring": false,
+                    "next_occurrence": null,
+                    "start": "2025-10-18T06:43:45.397511+00:00",
+                    "sid": "0e476bff-bee6-4cab-b734-841832ebbd64"
                 }
             ]
         },
@@ -112,28 +125,35 @@ Sample Output:
         "desc": null,
         "tasks": [
             {
-                "id": "d695f875-a0c9-42b3-baf9-a367a437367d",
-                "name": "New Task Title",
+                "id": "04213807-bc3a-4f62-ae6d-e81ab3d458ab",
+                "name": "wfwejfoiewjfow",
                 "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-                "updated_timestamp": "2025-10-05T22:26:16.650616+00:00",
+                "updated_timestamp": "2025-10-17T05:08:40.110212+00:00",
                 "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
                 "collaborators": [
-                    "fb892a63-2401-46fc-b660-bf3fe1196d4e",
-                    "655a9260-f871-480f-abea-ded735b2170a"
+                    "655a9260-f871-480f-abea-ded735b2170a",
+                    "fb892a63-2401-46fc-b660-bf3fe1196d4e"
                 ],
                 "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
                 "desc": "Optional description",
                 "notes": "Optional notes",
                 "priorityLevel": 5,
-                "priorityLabel": "Medium"
+                "priorityLabel": "Medium",
+                "deadline": "2025-12-31T23:59:59+00:00",
+                "status": "ongoing",
+                "is_recurring": false,
+                "next_occurrence": null,
+                "start": "2025-10-18T06:43:45.397511+00:00",
+                "sid": "264ad005-c0cc-48ae-8315-1d15c5a5af18"
             },
             {
                 "id": "be238e36-2506-432a-a267-e2a1308ff22b",
                 "name": "New Task Title2",
                 "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-                "updated_timestamp": "2025-10-06T08:39:43.761577+00:00",
+                "updated_timestamp": "2025-10-17T07:41:56.373682+00:00",
                 "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
                 "collaborators": [
+                    "655a9260-f871-480f-abea-ded735b2170a",
                     "d568296e-3644-4ac0-9714-dcaa0aaa5fb0",
                     "fb892a63-2401-46fc-b660-bf3fe1196d4e"
                 ],
@@ -141,20 +161,13 @@ Sample Output:
                 "desc": "Optional description",
                 "notes": "Optional notes",
                 "priorityLevel": 5,
-                "priorityLabel": "Medium"
-            },
-            {
-                "id": "33949f99-20d0-423d-9b26-f09292b2e40d",
-                "name": "get coffee2",
-                "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-                "updated_timestamp": "2025-10-05T22:06:06.665826+00:00",
-                "parentTaskId": null,
-                "collaborators": null,
-                "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-                "desc": "Optional description",
-                "notes": "Optional notes",
-                "priorityLevel": 5,
-                "priorityLabel": "Medium"
+                "priorityLabel": "Medium",
+                "deadline": "2025-10-31T18:40:00+00:00",
+                "status": "ongoing",
+                "is_recurring": false,
+                "next_occurrence": null,
+                "start": "2025-10-18T06:43:45.397511+00:00",
+                "sid": "0e476bff-bee6-4cab-b734-841832ebbd64"
             }
         ]
     }

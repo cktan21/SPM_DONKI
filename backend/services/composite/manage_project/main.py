@@ -107,7 +107,8 @@ async def get_project_with_tasks(uid: str):
                 # Execute all requests concurrently
                 task_responses = await asyncio.gather(*task_requests, return_exceptions=True)
                 
-                # Process responses
+                # Process responses and collect all task IDs for schedule fetching
+                all_task_ids = []
                 for i, response in enumerate(task_responses):
                     pid = project_ids[i]
                     
@@ -116,15 +117,64 @@ async def get_project_with_tasks(uid: str):
                         projects_data[pid]["tasks"] = []
                     elif response.status_code == 200:
                         task_data = response.json()
-                        projects_data[pid]["tasks"] = task_data.get("tasks", [])
+                        tasks = task_data.get("tasks", [])
+                        projects_data[pid]["tasks"] = tasks
+                        
+                        # Collect task IDs for schedule fetching
+                        for task in tasks:
+                            if task.get("id"):
+                                all_task_ids.append(task["id"])
                     else:
                         print(f"Failed to fetch tasks for project {pid}: {response.status_code}")
                         projects_data[pid]["tasks"] = []
+                
+                # === 4. Fetch schedules for all tasks concurrently ===
+                if all_task_ids:
+                    schedule_requests = []
+                    for task_id in all_task_ids:
+                        schedule_requests.append(
+                            client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
+                        )
+                    
+                    # Execute all schedule requests concurrently
+                    schedule_responses = await asyncio.gather(*schedule_requests, return_exceptions=True)
+                    
+                    # Process schedule responses and attach to tasks
+                    schedule_map = {}
+                    for i, response in enumerate(schedule_responses):
+                        task_id = all_task_ids[i]
+                        
+                        if isinstance(response, Exception):
+                            print(f"Error fetching schedule for task {task_id}: {response}")
+                            schedule_map[task_id] = None
+                        elif response.status_code == 200:
+                            schedule_data = response.json()
+                            schedule_map[task_id] = schedule_data.get("data")
+                        else:
+                            print(f"Failed to fetch schedule for task {task_id}: {response.status_code}")
+                            schedule_map[task_id] = None
+                    
+                    # Attach schedules to tasks (flatten schedule data into task)
+                    for pid in project_ids:
+                        for task in projects_data[pid]["tasks"]:
+                            task_id = task.get("id")
+                            if task_id and task_id in schedule_map:
+                                schedule_data = schedule_map[task_id]
+                                if schedule_data:
+                                    # Flatten schedule fields directly into task
+                                    task.update({
+                                        "deadline": schedule_data.get("deadline"),
+                                        "status": schedule_data.get("status"),
+                                        "is_recurring": schedule_data.get("is_recurring"),
+                                        "next_occurrence": schedule_data.get("next_occurrence"),
+                                        "start": schedule_data.get("start"),
+                                        "sid": schedule_data.get("sid")
+                                    })
 
-            # === 4. Convert to list format ===
+            # === 5. Convert to list format ===
             projects_list = list(projects_data.values())
             
-            # === 5. Return structured response ===
+            # === 6. Return structured response ===
             return {
                 "message": "Projects retrieved successfully",
                 "user_id": uid,
@@ -167,7 +217,49 @@ async def get_project(
             res = await client.get(f"{TASK_SERVICE_URL}/pid/{project_id}")
             res.raise_for_status()
             task_data = res.json()
-            project["tasks"] = task_data.get("tasks", [])
+            tasks = task_data.get("tasks", [])
+            project["tasks"] = tasks
+            
+            # === 2. Fetch schedules for all tasks ===
+            if tasks:
+                # Collect task IDs
+                task_ids = [task.get("id") for task in tasks if task.get("id")]
+                
+                if task_ids:
+                    # Fetch schedules concurrently
+                    schedule_requests = []
+                    for task_id in task_ids:
+                        schedule_requests.append(
+                            client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
+                        )
+                    
+                    # Execute all schedule requests concurrently
+                    schedule_responses = await asyncio.gather(*schedule_requests, return_exceptions=True)
+                    
+                    # Process schedule responses and attach to tasks (flatten schedule data)
+                    for i, response in enumerate(schedule_responses):
+                        task_id = task_ids[i]
+                        
+                        if isinstance(response, Exception):
+                            print(f"Error fetching schedule for task {task_id}: {response}")
+                        elif response.status_code == 200:
+                            schedule_data = response.json().get("data")
+                            # Find the task and flatten schedule data into it
+                            for task in project["tasks"]:
+                                if task.get("id") == task_id and schedule_data:
+                                    # Flatten schedule fields directly into task
+                                    task.update({
+                                        "deadline": schedule_data.get("deadline"),
+                                        "status": schedule_data.get("status"),
+                                        "is_recurring": schedule_data.get("is_recurring"),
+                                        "next_occurrence": schedule_data.get("next_occurrence"),
+                                        "start": schedule_data.get("start"),
+                                        "sid": schedule_data.get("sid")
+                                    })
+                                    break
+                        else:
+                            print(f"Failed to fetch schedule for task {task_id}: {response.status_code}")
+            
             return {
                 "message": "Project retrieved successfully",
                 "project_id": project_id,
