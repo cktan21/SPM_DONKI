@@ -9,7 +9,7 @@ class SupabaseClient:
         self.client: Client = create_client(self.url, self.key)
 
     # Insert Schedule
-    def insert_schedule(self, tid, start, deadline, is_recurring, status, next_occurrence):
+    def insert_schedule(self, tid, start, deadline, is_recurring, status, next_occurrence, frequency=None):
         db_data = {
             "tid": tid,
             "deadline": deadline,
@@ -21,6 +21,8 @@ class SupabaseClient:
             db_data["start"] = start
         if next_occurrence is not None:
             db_data["next_occurrence"] = next_occurrence
+        if frequency is not None:
+            db_data["frequency"] = frequency
             
         response = self.client.table("SCHEDULE").insert(db_data).execute()
         data = response.data
@@ -54,3 +56,13 @@ class SupabaseClient:
         response = self.client.table("SCHEDULE").update(updated_data).eq("sid", sid).execute()
         data = response.data
         return data[0] if data else None
+
+    # Get all recurring tasks that need to be scheduled
+    def fetch_recurring_tasks(self):
+        response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).not_.is_("next_occurrence", "null").execute()
+        return response.data if response.data else []
+
+    # Get all schedules
+    def fetch_all_recurring_schedules(self):
+        response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).execute()
+        return response.data if response.data else []

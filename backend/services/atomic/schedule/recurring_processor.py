@@ -1,0 +1,171 @@
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
+from supabaseClient import SupabaseClient
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class RecurringTaskProcessor:
+    def __init__(self):
+        self.scheduler = BackgroundScheduler()
+        self.supabase = SupabaseClient()
+        self.scheduler.start()
+        logger.info("RecurringTaskProcessor initialized and scheduler started")
+
+    def calculate_next_occurrence(self, frequency: str, current_start: datetime, current_deadline: datetime) -> datetime:
+        """
+        Calculate the next occurrence based on frequency and the gap between start and deadline
+        """
+        # Calculate the gap between start and deadline
+        gap = current_deadline - current_start
+        
+        if frequency == "Weekly":
+            # Add 1 week to the current start time
+            next_start = current_start + timedelta(weeks=1)
+            return next_start + gap
+            
+        elif frequency == "Monthly":
+            # Add 1 month to the current start time
+            if current_start.month == 12:
+                next_start = current_start.replace(year=current_start.year + 1, month=1)
+            else:
+                next_start = current_start.replace(month=current_start.month + 1)
+            return next_start + gap
+            
+        elif frequency == "Yearly":
+            # Add 1 year to the current start time
+            next_start = current_start.replace(year=current_start.year + 1)
+            return next_start + gap
+            
+        elif frequency == "Immediate":
+            # For immediate, create the next occurrence right after the current deadline
+            return current_deadline + timedelta(minutes=1)
+            
+        else:
+            raise ValueError(f"Unsupported frequency: {frequency}")
+
+    def create_recurring_entry(self, original_entry: Dict[str, Any], frequency: str) -> Optional[Dict[str, Any]]:
+        """
+        Create a new recurring entry based on the original entry and frequency
+        """
+        try:
+            # Parse the original entry data
+            tid = original_entry["tid"]
+            original_start = datetime.fromisoformat(original_entry["start"].replace('Z', '+00:00'))
+            original_deadline = datetime.fromisoformat(original_entry["deadline"].replace('Z', '+00:00'))
+            
+            # Calculate new start and deadline times
+            new_start = self.calculate_next_occurrence(frequency, original_start, original_deadline)
+            new_deadline = new_start + (original_deadline - original_start)
+            
+            # Calculate next occurrence for the new entry
+            next_occurrence = self.calculate_next_occurrence(frequency, new_start, new_deadline)
+            
+            # Create new schedule entry
+            new_entry = self.supabase.insert_schedule(
+                tid=tid,
+                start=new_start.isoformat(),
+                deadline=new_deadline.isoformat(),
+                is_recurring=True,
+                status="ongoing",
+                next_occurrence=next_occurrence.isoformat()
+            )
+            
+            logger.info(f"Created new recurring entry for task {tid} with frequency {frequency}")
+            return new_entry
+            
+        except Exception as e:
+            logger.error(f"Error creating recurring entry: {str(e)}")
+            return None
+
+    def schedule_recurring_task(self, sid: str, frequency: str, next_occurrence: datetime):
+        """
+        Schedule a recurring task to be processed at the next occurrence time
+        """
+        try:
+            # Get the current schedule entry
+            current_entry = self.supabase.fetch_schedule_by_sid(sid)
+            if not current_entry:
+                logger.error(f"Schedule entry {sid} not found")
+                return False
+            
+            # Schedule the job to run at the next occurrence time
+            job_id = f"recurring_{sid}"
+            self.scheduler.add_job(
+                func=self.process_recurring_task,
+                trigger=DateTrigger(run_date=next_occurrence),
+                args=[sid, frequency],
+                id=job_id,
+                replace_existing=True
+            )
+            
+            logger.info(f"Scheduled recurring task {sid} for {next_occurrence} with frequency {frequency}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error scheduling recurring task {sid}: {str(e)}")
+            return False
+
+    def process_recurring_task(self, sid: str, frequency: str):
+        """
+        Process a recurring task when its next occurrence time is reached
+        """
+        try:
+            logger.info(f"Processing recurring task {sid} with frequency {frequency}")
+            
+            # Get the current schedule entry
+            current_entry = self.supabase.fetch_schedule_by_sid(sid)
+            if not current_entry:
+                logger.error(f"Schedule entry {sid} not found")
+                return
+            
+            # Create new recurring entry
+            new_entry = self.create_recurring_entry(current_entry, frequency)
+            if new_entry:
+                logger.info(f"Successfully created new recurring entry for task {current_entry['tid']}")
+                
+                # Schedule the next occurrence for the new entry
+                new_sid = new_entry["sid"]
+                new_next_occurrence = datetime.fromisoformat(new_entry["next_occurrence"].replace('Z', '+00:00'))
+                self.schedule_recurring_task(new_sid, frequency, new_next_occurrence)
+            else:
+                logger.error(f"Failed to create new recurring entry for task {current_entry['tid']}")
+                
+        except Exception as e:
+            logger.error(f"Error processing recurring task {sid}: {str(e)}")
+
+    def cancel_recurring_task(self, sid: str):
+        """
+        Cancel a scheduled recurring task
+        """
+        try:
+            job_id = f"recurring_{sid}"
+            self.scheduler.remove_job(job_id)
+            logger.info(f"Cancelled recurring task {sid}")
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling recurring task {sid}: {str(e)}")
+            return False
+
+    def get_scheduled_jobs(self):
+        """
+        Get all currently scheduled jobs
+        """
+        jobs = self.scheduler.get_jobs()
+        return [{"id": job.id, "next_run_time": job.next_run_time} for job in jobs]
+
+    def shutdown(self):
+        """
+        Shutdown the scheduler
+        """
+        self.scheduler.shutdown()
+        logger.info("RecurringTaskProcessor shutdown")
+
+# Global instance
+recurring_processor = RecurringTaskProcessor()
