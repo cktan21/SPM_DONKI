@@ -32,6 +32,8 @@ def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
     tid = new_data.get("tid")
     deadline = new_data.get("deadline")
     status = "ongoing"
+    is_recurring = new_data.get("is_recurring", False)
+
     try:
         data = supabase.insert_schedule(tid, deadline, status)
         return {"message":f"Task {tid} Schedule Inserted Successfully" ,"data": data}
