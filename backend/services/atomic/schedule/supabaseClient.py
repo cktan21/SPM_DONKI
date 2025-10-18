@@ -27,10 +27,12 @@ class SupabaseClient:
         return data[0] if data else None
     
     # Get Schedule by Task ID
-    def fetch_schedule_by_tid(self, tid):
+    def fetch_schedule_by_tid(self, tid, latest=False):
+        if latest:
+            response = self.client.table("SCHEDULE").select("*").eq("tid", tid).order("created_at", desc=True).limit(1).execute()
+            return response.data[0] if response.data else None
         response = self.client.table("SCHEDULE").select("*").eq("tid", tid).execute()
-        data = response.data
-        return data if data else None
+        return response.data if response.data else None
     
     # Get Schedule by Schedule ID
     def fetch_schedule_by_sid(self, sid):

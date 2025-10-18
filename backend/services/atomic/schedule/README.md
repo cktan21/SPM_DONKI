@@ -32,26 +32,60 @@ Output:
 
 GET http://localhost:5300/{task_id}
 
-> http://localhost:5300/tid/04213807-bc3a-4f62-ae6d-e81ab3d458ab
+> http://localhost:5300/tid/1e5233e4-be0f-4f94-9c59-c6a72debe0aa
 
 Sample Output:
 ```json
 {
-    "message": "Task 04213807-bc3a-4f62-ae6d-e81ab3d458ab Schedule Retrieved Successfully",
+    "message": "Task 1e5233e4-be0f-4f94-9c59-c6a72debe0aa Schedule Retrieved Successfully",
     "data": [
         {
-            "tid": "04213807-bc3a-4f62-ae6d-e81ab3d458ab",
-            "deadline": "2025-12-31T23:59:59+00:00",
+            "tid": "1e5233e4-be0f-4f94-9c59-c6a72debe0aa",
+            "deadline": "2026-01-26T15:42:21+00:00",
+            "status": "overdue",
+            "created_at": "2025-10-18T07:35:10.706153+00:00",
+            "is_recurring": true,
+            "next_occurrence": "2026-09-26T15:42:21+00:00",
+            "start": "2025-11-26T15:42:21+00:00",
+            "sid": "053a4e96-cefd-4a8e-9941-5b621ff8ca52"
+        },
+        {
+            "tid": "1e5233e4-be0f-4f94-9c59-c6a72debe0aa",
+            "deadline": "2025-03-20T08:06:06+00:00",
             "status": "ongoing",
-            "created_at": "2025-10-17T05:11:02.736518+00:00",
-            "is_recurring": false,
-            "next_occurrence": null,
-            "start": "2025-10-18T06:43:45.397511+00:00",
-            "sid": "264ad005-c0cc-48ae-8315-1d15c5a5af18"
+            "created_at": "2025-10-18T08:34:34.969657+00:00",
+            "is_recurring": true,
+            "next_occurrence": "2025-10-18T08:34:20+00:00",
+            "start": "2025-01-08T08:33:28+00:00",
+            "sid": "9f7c031a-41b7-4fbd-813b-b3b4e66bb11a"
         }
     ]
 }
 ```
+
+### Get Schedule w Task ID Latest
+
+GET http://localhost:5300/tid/{task_id}/latest
+
+> http://localhost:5300/tid/1e5233e4-be0f-4f94-9c59-c6a72debe0aa/latest
+
+Sample Output:
+```json
+{
+    "message": "Task 1e5233e4-be0f-4f94-9c59-c6a72debe0aa Schedule Retrieved Successfully",
+    "data": {
+        "tid": "1e5233e4-be0f-4f94-9c59-c6a72debe0aa",
+        "deadline": "2025-03-20T08:06:06+00:00",
+        "status": "ongoing",
+        "created_at": "2025-10-18T08:34:34.969657+00:00",
+        "is_recurring": true,
+        "next_occurrence": "2025-10-18T08:34:20+00:00",
+        "start": "2025-01-08T08:33:28+00:00",
+        "sid": "9f7c031a-41b7-4fbd-813b-b3b4e66bb11a"
+    }
+}
+```
+
 
 ### Get Schedule w Schedule ID
 

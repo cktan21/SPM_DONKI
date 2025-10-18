@@ -26,7 +26,15 @@ def get_schedule_by_tid(tid: str):
         raise HTTPException(status_code=404, detail=f"Task {tid} not found")
     return {"message":f"Task {tid} Schedule Retrieved Successfully" ,"data": data}
 
+# Retrieve TID Latest
+@app.get("/tid/{tid}/latest")
+def get_schedule_by_tid(tid: str):
+    data = supabase.fetch_schedule_by_tid(tid, latest=True)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Task {tid} not found")
+    return {"message":f"Task {tid} Schedule Retrieved Successfully" ,"data": data}
 
+# Retrieve with Schedule ID
 @app.get("/sid/{sid}")
 def get_schedule_by_sid(sid: str):
     data = supabase.fetch_schedule_by_sid(sid)

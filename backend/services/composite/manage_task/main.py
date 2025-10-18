@@ -143,7 +143,7 @@ async def get_tasks_by_user_composite(
                 # schedule
                 schedule_data = None
                 try:
-                    schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                    schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                     if schedule_response.status_code == 200:
                         schedule_data = schedule_response.json()
                 except Exception:
@@ -281,7 +281,7 @@ async def get_task_composite(
             # === 2. Get Schedule ===
             schedule_data = None
             try:
-                s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/{task_id}")
+                s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                 if s_resp.status_code == 200:
                     schedule_data = s_resp.json()
                 else:
@@ -764,7 +764,7 @@ async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]
     """Send schedule updates to the schedule service matching the PUT /{tid} endpoint"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.put(f"{SCHEDULE_SERVICE_URL}/{task_id}", json=schedule_updates)
+            response = await client.put(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest", json=schedule_updates)
             
             if response.status_code == 404:
                 print(f"Warning: Task {task_id} not found in schedule service")
@@ -827,7 +827,7 @@ async def delete_task_composite(
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             # 1) Delete related schedules first (safe to ignore 404s)
-            sched_url = f"{SCHEDULE_SERVICE_URL}/{task_id}"
+            sched_url = f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest"
             sched_resp = await client.delete(sched_url)
             if sched_resp.status_code not in (200, 204, 404):
                 raise HTTPException(
