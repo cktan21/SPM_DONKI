@@ -10,8 +10,8 @@ class SupabaseClient:
    
     # Insert Schedule
     def insert_schedule(self, tid, deadline, status):
-        if self.fetch_schedule(tid) is not None: #Assumption is that one task cannot have MULTIPLE DEADLINES
-            raise Exception("Task with this ID already exists.")
+        # if self.fetch_schedule(tid) is not None: #Assumption is that one task cannot have MULTIPLE DEADLINES
+        #     raise Exception("Task with this ID already exists.")
         response = self.client.table("SCHEDULE").insert({
             "tid": tid,
             "deadline": deadline,

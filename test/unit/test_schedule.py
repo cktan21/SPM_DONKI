@@ -55,13 +55,13 @@ def test_insert_schedule_success(mock_client, supabase_client):
     assert result["status"] == status
 
 
-def test_insert_schedule_duplicate_tid(mock_client, supabase_client):
-    tid = "duplicate-task"
-    supabase_client.fetch_schedule = MagicMock(return_value={"tid": tid})
+# def test_insert_schedule_duplicate_tid(mock_client, supabase_client):
+#     tid = "duplicate-task"
+#     supabase_client.fetch_schedule = MagicMock(return_value={"tid": tid})
 
-    with pytest.raises(Exception) as excinfo:
-        supabase_client.insert_schedule(tid, "2025-10-11T03:58:20+00:00", "ongoing")
-    assert "Task with this ID already exists." in str(excinfo.value)
+#     with pytest.raises(Exception) as excinfo:
+#         supabase_client.insert_schedule(tid, "2025-10-11T03:58:20+00:00", "ongoing")
+#     assert "Task with this ID already exists." in str(excinfo.value)
 
 
 def test_insert_schedule_no_data_returned(mock_client, supabase_client):
