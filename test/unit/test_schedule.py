@@ -126,6 +126,35 @@ def test_insert_schedule_no_data_returned(mock_client, supabase_client):
     assert result is None
 
 
+def test_insert_schedule_recurring_missing_next_occurrence(mock_client, supabase_client):
+    """Test that creating a recurring schedule without next_occurrence raises validation error."""
+    tid = "recurring-task"
+    start = "2025-09-25T15:42:21+00:00"
+    deadline = "2025-09-26T15:42:21+00:00"
+    is_recurring = True
+    status = "ongoing"
+    next_occurrence = None  # Missing required field for recurring schedule
+
+    with pytest.raises(ValueError) as excinfo:
+        supabase_client.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence)
+    assert "next_occurrence is required when is_recurring is True" in str(excinfo.value)
+
+
+def test_insert_schedule_recurring_missing_frequency(mock_client, supabase_client):
+    """Test that creating a recurring schedule without frequency raises validation error."""
+    tid = "recurring-task"
+    start = "2025-09-25T15:42:21+00:00"
+    deadline = "2025-09-26T15:42:21+00:00"
+    is_recurring = True
+    status = "ongoing"
+    next_occurrence = "2025-09-27T15:42:21+00:00"
+    frequency = None  # Missing required field for recurring schedule
+
+    with pytest.raises(ValueError) as excinfo:
+        supabase_client.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
+    assert "frequency is required when is_recurring is True" in str(excinfo.value)
+
+
 # -------------------------------
 # Fetch tests
 # -------------------------------

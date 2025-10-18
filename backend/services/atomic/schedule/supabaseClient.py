@@ -10,6 +10,13 @@ class SupabaseClient:
 
     # Insert Schedule
     def insert_schedule(self, tid, start, deadline, is_recurring, status, next_occurrence, frequency=None):
+        # Validation for recurring schedules
+        if is_recurring is True:
+            if next_occurrence is None:
+                raise ValueError("next_occurrence is required when is_recurring is True")
+            if frequency is None:
+                raise ValueError("frequency is required when is_recurring is True")
+        
         db_data = {
             "tid": tid,
             "deadline": deadline,

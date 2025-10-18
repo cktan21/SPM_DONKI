@@ -4,6 +4,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
+from dateutil.relativedelta import relativedelta
 from supabaseClient import SupabaseClient
 import logging
 
@@ -31,16 +32,13 @@ class RecurringTaskProcessor:
             return next_start + gap
             
         elif frequency == "Monthly":
-            # Add 1 month to the current start time
-            if current_start.month == 12:
-                next_start = current_start.replace(year=current_start.year + 1, month=1)
-            else:
-                next_start = current_start.replace(month=current_start.month + 1)
+            # Add 1 month to the current start time using relativedelta to handle day overflow
+            next_start = current_start + relativedelta(months=1)
             return next_start + gap
             
         elif frequency == "Yearly":
-            # Add 1 year to the current start time
-            next_start = current_start.replace(year=current_start.year + 1)
+            # Add 1 year to the current start time using relativedelta
+            next_start = current_start + relativedelta(years=1)
             return next_start + gap
             
         elif frequency == "Immediate":
@@ -74,7 +72,8 @@ class RecurringTaskProcessor:
                 deadline=new_deadline.isoformat(),
                 is_recurring=True,
                 status="ongoing",
-                next_occurrence=next_occurrence.isoformat()
+                next_occurrence=next_occurrence.isoformat(),
+                frequency=frequency
             )
             
             logger.info(f"Created new recurring entry for task {tid} with frequency {frequency}")
