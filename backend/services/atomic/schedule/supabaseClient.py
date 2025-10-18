@@ -57,9 +57,9 @@ class SupabaseClient:
 
     # Update Schedule
     def update_schedule(self, sid, updated_data):
-        if "is_recurring" in updated_data and updated_data["is_recurring"] is True:
-            if "next_occurrence" not in updated_data:
-                raise ValueError("next_occurrence is required when is_recurring is True")
+        if "is_recurring" in updated_data and updated_data["is_recurring"] is True and "next_occurrence" not in updated_data:
+            raise ValueError("next_occurrence is required when is_recurring is True")
+
         response = self.client.table("SCHEDULE").update(updated_data).eq("sid", sid).execute()
         data = response.data
         return data[0] if data else None
