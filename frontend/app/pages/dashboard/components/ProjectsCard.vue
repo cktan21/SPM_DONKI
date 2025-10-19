@@ -64,7 +64,7 @@ const selectedProject = useState<Project | null>("selectedProject")
 function openProject(project: Project) {
   // The project already has tasks with schedules from the backend
   selectedProject.value = project
-  router.push("/task")
+  router.push(`/project/${project.id}`)
 }
 </script>
 

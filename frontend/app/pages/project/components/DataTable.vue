@@ -1,3 +1,4 @@
+<!-- task/components/DataTable.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -75,6 +76,11 @@ const handleRowClick = (rowId: string, event: Event) => {
     router.push(`/task/${rowId}`)
   }
 }
+
+// Check if a task has subtasks
+const hasSubtasks = (row: any) => {
+  return row.original.subtasks && row.original.subtasks.length > 0
+}
 </script>
 
 <template>
@@ -117,10 +123,12 @@ const handleRowClick = (rowId: string, event: Event) => {
                 class="hover:bg-muted/50 transition-colors cursor-pointer"
                 @click="handleRowClick(row.original.id, $event)"
               >
-                <TableCell class="text-center" @click.stop="toggleExpand(row.original.id)">
+                <!-- Chevron cell - only show if task has subtasks -->
+                <TableCell class="text-center" @click.stop="hasSubtasks(row) ? toggleExpand(row.original.id) : null">
                   <ChevronRight
+                    v-if="hasSubtasks(row)"
                     :size="16"
-                    class="mx-auto text-muted-foreground transition-transform duration-200"
+                    class="mx-auto text-muted-foreground transition-transform duration-200 cursor-pointer"
                     :class="expandedRows[row.original.id] ? 'rotate-90 text-foreground' : ''"
                   />
                 </TableCell>
@@ -135,13 +143,15 @@ const handleRowClick = (rowId: string, event: Event) => {
                 </TableCell>
               </TableRow>
 
-              <tr v-if="expandedRows[row.original.id] && row.original.subtasks?.length">
+              <!-- Expanded subtasks row -->
+              <tr v-if="expandedRows[row.original.id] && hasSubtasks(row)">
                 <td :colspan="row.getVisibleCells().length + 1" class="bg-muted/30 p-4">
                   <div class="space-y-2">
                     <SubtaskItem
                       v-for="sub in row.original.subtasks"
                       :key="sub.id"
                       :subtask="sub"
+                      @click="router.push(`/task/${sub.id}`)"
                     />
                   </div>
                 </td>

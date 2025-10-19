@@ -5,7 +5,6 @@ import { h } from "vue"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import DataTableColumnHeader from "./DataTableColumnHeader.vue"
-import DataTableRowActions from "./DataTableRowActions.vue"
 
 // Import icons
 import { Check, Loader, AlertTriangle } from "lucide-vue-next"
@@ -37,7 +36,7 @@ export const priorities: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 const truncateId = (id: string | number, maxLength: number = 12): string => {
   const idStr = String(id)
   if (idStr.length <= maxLength) return idStr
-  
+
   const charsToShow = Math.floor(maxLength / 2) - 1
   const start = idStr.slice(0, charsToShow)
   const end = idStr.slice(-charsToShow)
@@ -78,10 +77,10 @@ export const columns: ColumnDef<Task>[] = [
       const id = row.getValue("id") as string | number
       const fullId = id ? String(id) : "-"
       const displayId = truncateId(fullId, 16)
-      
+
       return h(
         "div",
-        { 
+        {
           class: "text-center font-mono text-sm",
           title: fullId
         },
@@ -92,7 +91,7 @@ export const columns: ColumnDef<Task>[] = [
     enableHiding: false,
   },
 
-  // Name column with label badge
+  // Name column - will take remaining space
   {
     accessorKey: "title",
     header: ({ column }) => h(DataTableColumnHeader, { column, title: "Name" }),
@@ -111,7 +110,7 @@ export const columns: ColumnDef<Task>[] = [
     cell: ({ row }) => {
       const labelValue = row.getValue("label") as string | null
       if (!labelValue) return null
-      
+
       const label = labels.find((l) => l.value === labelValue)
       return label ? h(Badge, { variant: "outline" }, () => label.label) : null
     },
@@ -119,7 +118,7 @@ export const columns: ColumnDef<Task>[] = [
       return value.includes(row.getValue(id))
     },
     enableSorting: false,
-    enableHiding: true, // Can be hidden in view options
+    enableHiding: true,
   },
 
   // Status column
@@ -157,18 +156,11 @@ export const columns: ColumnDef<Task>[] = [
       )
     },
     filterFn: (row, id, value) => {
-    // Support single number or array of numbers
-    const rowValue = row.getValue(id)
-    if (Array.isArray(value)) {
-      return value.includes(rowValue)
-    }
-    return rowValue === value
-   },
-  },
-
-  // Actions column
-  {
-    id: "actions",
-    cell: ({ row }) => h(DataTableRowActions, { row }),
+      const rowValue = row.getValue(id)
+      if (Array.isArray(value)) {
+        return value.includes(rowValue)
+      }
+      return rowValue === value
+    },
   },
 ]

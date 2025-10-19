@@ -1,6 +1,7 @@
+<!-- task/components/SubtaskItem.vue -->
 <template>
   <div
-    class="flex flex-col sm:flex-row sm:items-center justify-between border rounded-lg p-3 mb-2 bg-card hover:bg-muted/50 transition"
+    class="flex flex-col sm:flex-row sm:items-center justify-between border rounded-lg p-3 mb-2 bg-card hover:bg-muted/50 transition cursor-pointer"
   >
     <div>
       <p class="font-medium">{{ subtask.title }}</p>
