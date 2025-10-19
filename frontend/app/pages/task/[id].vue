@@ -290,7 +290,18 @@ const handleCollaboratorKeydown = (e: KeyboardEvent) => {
   }
 }
 
-onMounted(fetchTask)
+const userData = useState<any>("userData")
+const role = userData.value?.user?.role
+const email = userData.value?.user?.email
+const name = userData.value?.user?.name
+const uid = userData.value?.user?.id
+
+onMounted(async () => {
+  await fetchTask()
+  console.log("Current UID:", uid)
+  console.log("Task object:", task.value)
+  console.log("Task created_by_uid:", task.value?.created_by_uid)
+})
 </script>
 
 <template>
@@ -329,13 +340,13 @@ onMounted(fetchTask)
           />
           
           <button 
-            v-if="!editingTask"
+            v-if="!editingTask && (role === 'manager' || uid == task.created_by_uid)"
             @click="startEditTask"
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
           >
             Edit Task
           </button>
-          <div v-else class="flex gap-2">
+          <div v-else-if="editingTask" class="flex gap-2">
             <button 
               @click="saveTask"
               class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium"
@@ -553,7 +564,7 @@ onMounted(fetchTask)
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="flex gap-2 ml-4">
+                <div v-if="role === 'manager' || uid == sub.created_by_uid" class="flex gap-2 ml-4">
                   <template v-if="editingSubtask === sub.id">
                     <button 
                       @click="saveSubtask(sub.id)"
