@@ -153,7 +153,7 @@ async def get_tasks_by_user_composite(
                 project_data = None
                 if task.get("pid"):
                     try:
-                        project_response = await client.get(f"{PROJECTS_SERVICE_URL}/{task['pid']}")
+                        project_response = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{task['pid']}")
                         if project_response.status_code == 200:
                             project_data = project_response.json()
                     except Exception:
@@ -293,7 +293,7 @@ async def get_task_composite(
             project_obj = None
             if task_data.get("pid"):
                 try:
-                    pr_resp = await client.get(f"{PROJECTS_SERVICE_URL}/{task_data['pid']}")
+                    pr_resp = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{task_data['pid']}")
                     if pr_resp.status_code == 200:
                         pr_json = pr_resp.json()
                         # print(pr_json["project"].get("name") , "project value")
@@ -386,29 +386,30 @@ async def get_task_composite(
             raise HTTPException(status_code=e.response.status_code, detail=f"Upstream error: {e.response.text}")
 
     
-
 @app.post("/createTask", summary="Create task via composite service with full workflow", response_description="Created task with schedule and notifications")
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
         ...,
-        examples={
-            "example1": {
-                "summary": "Create a new task",
-                "description": "A complete example of creating a task with all optional fields",
+          examples={
+            "create_task": {
+                "summary": "Create a new task with schedule",
+                "description": "Example of creating a task with all optional fields including schedule",
                 "value": {
                     "name": "New Task Title",
                     "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-                    "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+                    "parentTaskId": "16e2b6cc-fb44-4873-9292-b8c697832a2e",
                     "collaborators": [
-                        "0ec8a99d-3aab-4ec6-b692-fda88656844f",
-                        "17a40371-66fe-411a-963b-a977cc7cb475"
+                        "655a9260-f871-480f-abea-ded735b2170a",
+                        "b5c38ec0-fc79-4ef9-ae13-f641b5318c03"
                     ],
                     "desc": "Optional description",
                     "notes": "Optional notes",
+                    "priorityLevel": 5,
+                    "label": "High Priority",
                     "schedule": {
-                        "status": "todo",
-                        "deadline": "2024-12-31T23:59:59Z",
-                        "priority": "medium"
+                        "status": "not started",
+                        "start": "2024-10-20T09:00:00Z",
+                        "deadline": "2025-12-31T23:59:59Z"
                     }
                 }
             }
@@ -417,10 +418,12 @@ async def create_task_composite(
 ):
     """
     Composite function to create a task with full workflow:
-    1) Validate parentTaskId, collaborators, project ID (same helpers as PUT)
-    2) Create the task in Task MS
-    3) Create schedule entry in Schedule MS (if provided)
-    4) Return enriched response (project & collaborators info)
+    1) Validate ALL inputs (parentTaskId, collaborators, project ID)
+    2) Validate schedule data requirements BEFORE creating task
+    3) Create the task in Task MS (only after ALL validations pass)
+    4) Create schedule entry in Schedule MS (if provided)
+    5) ROLLBACK task if schedule creation fails
+    6) Return enriched response (project & collaborators info)
     """
 
     def _extract_task_id_from_json(obj: Any) -> Optional[str]:
@@ -449,17 +452,51 @@ async def create_task_composite(
         # 0) Peel off schedule if present
         schedule_data = task_json.pop("schedule", None)
 
-        # 1) VALIDATIONS
+        # ===================================================================
+        # STEP 1: COMPLETE ALL VALIDATIONS BEFORE ANY CREATION OPERATIONS
+        # ===================================================================
+        validation_results = {
+            "parentTaskId": False,
+            "collaborators": False,
+            "project": False,
+            "schedule_data": False,
+        }
+
+        # Validate parent task ID
         if task_json.get("parentTaskId"):
             await validate_parent_task_id(task_json["parentTaskId"])
+            validation_results["parentTaskId"] = True
 
+        # Validate collaborators
         if task_json.get("collaborators"):
             await validate_collaborators(task_json["collaborators"])
+            validation_results["collaborators"] = True
 
+        # Validate project ID
         if task_json.get("pid"):
             await validate_project_id(task_json["pid"])
+            validation_results["project"] = True
 
-        # 2) CREATE TASK
+        # Validate schedule data (if provided)
+        if schedule_data:
+            # Check required fields for schedule
+            if not schedule_data.get("deadline"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Schedule requires 'deadline' field"
+                )
+            
+            # Add required fields that might be missing
+            if "is_recurring" not in schedule_data:
+                schedule_data["is_recurring"] = False
+            
+            validation_results["schedule_data"] = True
+
+        # ===================================================================
+        # STEP 2: CREATE TASK (only after all validations pass)
+        # ===================================================================
+        task_id = None  # Initialize for potential rollback
+        
         try:
             task_response = await create_task_service(task_json)
         except HTTPException as e:
@@ -491,30 +528,70 @@ async def create_task_composite(
                 },
             )
 
-        # 3) CREATE SCHEDULE (optional)
+        # ===================================================================
+        # STEP 3: CREATE SCHEDULE (CRITICAL - ROLLBACK ON FAILURE)
+        # ===================================================================
         schedule_response = None
         if schedule_data:
             try:
                 schedule_response = await create_schedule_service(task_id, schedule_data)
+                
+                # Check if schedule creation actually failed
+                if isinstance(schedule_response, dict) and schedule_response.get("status") == "failed":
+                    # ROLLBACK: Delete the task that was just created
+                    try:
+                        await delete_task_service(task_id)
+                    except Exception as rollback_error:
+                        print(f"CRITICAL: Failed to rollback task {task_id}: {rollback_error}")
+                    
+                    # Raise error with schedule failure details
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "service": "schedule",
+                            "message": "Schedule creation failed. Task creation rolled back.",
+                            "error": schedule_response.get("error"),
+                            "task_id_rolled_back": task_id
+                        }
+                    )
+                    
+            except HTTPException:
+                # Re-raise HTTPException (including rollback errors from above)
+                raise
             except Exception as e:
+                # ROLLBACK: Delete the task that was just created
+                try:
+                    await delete_task_service(task_id)
+                except Exception as rollback_error:
+                    print(f"CRITICAL: Failed to rollback task {task_id}: {rollback_error}")
+                
                 raise HTTPException(
                     status_code=502,
-                    detail={"service": "schedule", "message": f"Schedule service failed: {str(e)}"}
+                    detail={
+                        "service": "schedule",
+                        "message": f"Schedule service failed. Task creation rolled back.",
+                        "error": str(e),
+                        "task_id_rolled_back": task_id
+                    }
                 )
 
-        # 4) ENRICH: project info (optional)
+        # ===================================================================
+        # STEP 4: ENRICH RESPONSE WITH ADDITIONAL DATA
+        # ===================================================================
+        
+        # Enrich: project info (optional)
         project_info = None
         if task_json.get("pid"):
             try:
                 async with httpx.AsyncClient() as client:
-                    proj_resp = await client.get(f"{PROJECTS_SERVICE_URL}/{task_json['pid']}")
+                    proj_resp = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{task_json['pid']}")
                     project_info = proj_resp.json() if proj_resp.status_code == 200 else {
                         "message": f"Project details unavailable (status {proj_resp.status_code})"
                     }
             except Exception as ex:
                 project_info = {"message": f"Project details unavailable: {str(ex)}"}
 
-        # 5) ENRICH: collaborator info (optional)
+        # Enrich: collaborator info (optional)
         collaborator_info = []
         if task_json.get("collaborators"):
             async with httpx.AsyncClient() as client:
@@ -533,7 +610,9 @@ async def create_task_composite(
                     except Exception as ex:
                         collaborator_info.append({"id": collab_id, "message": f"Details unavailable: {str(ex)}"})
 
-        # 6) Compose final response
+        # ===================================================================
+        # STEP 5: COMPOSE FINAL RESPONSE
+        # ===================================================================
         return {
             "message": "Task created successfully via composite service",
             "task_id": task_id,
@@ -541,11 +620,7 @@ async def create_task_composite(
             "schedule": schedule_response,
             "project_info": project_info,
             "collaborator_info": collaborator_info,
-            "validations_passed": {
-                "parentTaskId": bool(task_json.get("parentTaskId")),
-                "collaborators": bool(task_json.get("collaborators")),
-                "project": bool(task_json.get("pid")),
-            },
+            "validations_passed": validation_results,
             "services_used": {
                 "task_service": True,
                 "schedule_service": schedule_response is not None,
@@ -563,19 +638,20 @@ async def create_task_composite(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-
 # Helper function to create schedule entries
 async def create_schedule_service(task_id: str, schedule_data: Dict[str, Any]):
     """Create a schedule entry for the newly created task"""
     async with httpx.AsyncClient() as client:
         try:
-            # Add task_id to schedule data
+            # Add task_id to schedule data - USE "tid" to match schedule service
             schedule_payload = {
-                "task_id": task_id,
-                **schedule_data
+                "tid": task_id,
+                "deadline": schedule_data.get("deadline"),
+                "is_recurring": schedule_data.get("is_recurring", False),  # Default to False
+                "status": schedule_data.get("status", "ongoing")  # Default to "ongoing"
             }
             
-            response = await client.post(f"{SCHEDULE_SERVICE_URL}/schedules", json=schedule_payload)
+            response = await client.post(f"{SCHEDULE_SERVICE_URL}/", json=schedule_payload)
             if response.status_code in [200, 201]:
                 return {
                     "status": "success",
@@ -583,18 +659,27 @@ async def create_schedule_service(task_id: str, schedule_data: Dict[str, Any]):
                     "data": response.json()
                 }
             else:
+                # Return error dict (will be caught by main function for rollback)
                 print(f"Warning: Schedule creation failed with status {response.status_code}: {response.text}")
                 return {
                     "status": "failed",
                     "message": f"Schedule service returned {response.status_code}",
-                    "error": response.text[:200]  # Truncate error message
+                    "error": response.text
                 }
         except httpx.RequestError as e:
             print(f"Warning: Failed to connect to schedule service: {str(e)}")
-            return {
-                "status": "service_unavailable",
-                "message": "Schedule service unavailable"
-            }
+            raise Exception(f"Schedule service unavailable: {str(e)}")
+        
+# Helper function to delete a task (for rollback)
+async def delete_task_service(task_id: str):
+    """Delete a task - used for rollback when schedule creation fails"""
+    async with httpx.AsyncClient() as client:
+        response = await client.delete(f"{TASK_SERVICE_URL}/{task_id}")
+        if response.status_code not in [200, 204]:
+            raise Exception(f"Failed to delete task {task_id}: {response.text}")
+        return response.json() if response.status_code == 200 else None
+        
+
     
 @app.put("/{task_id}", summary="Update task via composite service", response_description="Updated task with validation")
 async def update_task_composite(
@@ -602,18 +687,20 @@ async def update_task_composite(
     updates: Dict[str, Any] = Body(
         ...,
         examples={
-            "example1": {
+            "update_task": {
                 "summary": "Update task with all fields",
-                "description": "A complete example of updating a task with all possible fields",
+                "description": "Example of updating a task with task fields and schedule fields",
                 "value": {
                     "name": "Update task from composite service",
-                    "parentTaskId": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
-                    "collaborators": ["0ec8a99d-3aab-4ec6-b692-fda88656844f", "17a40371-66fe-411a-963b-a977cc7cb475"],
+                    "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+                    "collaborators": ["655a9260-f871-480f-abea-ded735b2170a", "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"],
                     "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
                     "desc": "Set up the initial project structure and dependencies",
                     "notes": "Remember to update the README file",
                     "status": "in_progress",
-                    "deadline": "2024-12-31T23:59:59Z"
+                    "deadline": "2024-12-31T23:59:59Z",
+                    "priorityLevel": 2,
+                    "label": "SetupUpdated"
                 }
             }
         }
@@ -621,16 +708,16 @@ async def update_task_composite(
 ):
     """
     Composite function to update a task with comprehensive validation:
-    1. Validates payload fields
-    2. Checks parentTaskId validity
-    3. Verifies collaborators exist in Users DB
-    4. Validates project ID exists
-    5. Updates task via task service
-    6. Updates schedule service (status, deadline)
+    1. Validates and filters payload fields
+    2. Validates ALL inputs (parentTaskId, collaborators, project ID)
+    3. Updates task via task service (only after all validations pass)
+    4. Updates schedule service (status, deadline)
     """
     
-    # Step 1: Validate and filter payload
-    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes"}
+    # ===================================================================
+    # STEP 1: VALIDATE AND FILTER PAYLOAD
+    # ===================================================================
+    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes", "priorityLevel", "label"}
     schedule_fields = {"status", "deadline"}
     
     # Filter task updates
@@ -644,51 +731,75 @@ async def update_task_composite(
             schedule_updates[key] = value
     
     try:
-        # Step 2: Check parentTaskId is valid (if provided)
+        # ===================================================================
+        # STEP 2: COMPLETE ALL VALIDATIONS BEFORE ANY UPDATE OPERATIONS
+        # ===================================================================
+        validation_results = {
+            "parentTaskId": False,
+            "collaborators": False,
+            "project": False
+        }
+        
+        # Validate parent task ID
         if "parentTaskId" in filtered_updates and filtered_updates["parentTaskId"]:
             await validate_parent_task_id(filtered_updates["parentTaskId"])
+            validation_results["parentTaskId"] = True
         
-        # Step 3: Check collaborators exist in Users DB (if provided)
+        # Validate collaborators exist in Users DB
         if "collaborators" in filtered_updates and filtered_updates["collaborators"]:
             await validate_collaborators(filtered_updates["collaborators"])
+            validation_results["collaborators"] = True
         
-        # Step 4: Check project ID exists (if provided)
+        # Validate project ID exists
         if "pid" in filtered_updates and filtered_updates["pid"]:
             await validate_project_id(filtered_updates["pid"])
+            validation_results["project"] = True
         
-        # Step 5: Send payload to task service (only if there are task updates)
+        # ===================================================================
+        # STEP 3: UPDATE TASK (only after all validations pass)
+        # ===================================================================
         task_response = None
         if filtered_updates:
             task_response = await update_task_service(task_id, filtered_updates)
         
-        # Step 6: Send schedule updates to schedule service (if any)
+        # ===================================================================
+        # STEP 4: UPDATE SCHEDULE (only after task update succeeds)
+        # ===================================================================
         schedule_response = None
         if schedule_updates:
             schedule_response = await update_schedule_service(task_id, schedule_updates)
         
-        # Prepare response
+        # ===================================================================
+        # STEP 5: COMPOSE RESPONSE
+        # ===================================================================
         response_data = {
             "message": "Task updated successfully via composite service",
             "task_id": task_id,
-            "validations_passed": {
-                "parentTaskId": "parentTaskId" in filtered_updates,
-                "collaborators": "collaborators" in filtered_updates,
-                "project": "pid" in filtered_updates
-            },
+            "validations_passed": validation_results,
             "updates_applied": {
                 "task_fields": list(filtered_updates.keys()),
                 "schedule_fields": list(schedule_updates.keys())
-            }
+            },
+            "updated_data": {}
         }
-        
+
+        # Merge task fields into updated_data
         if task_response:
-            response_data["task"] = task_response
-        
+            response_data["updated_data"].update(task_response)
+
+        # Merge schedule fields (status, deadline) into updated_data
         if schedule_response:
-            response_data["schedule_updated"] = True
-            response_data["schedule_info"] = schedule_response
-        
-        return response_data
+            if isinstance(schedule_response, dict):
+                # Extract just status and deadline
+                if "status" in schedule_response:
+                    response_data["updated_data"]["status"] = schedule_response["status"]
+                if "deadline" in schedule_response:
+                    response_data["updated_data"]["deadline"] = schedule_response["deadline"]
+            else:
+                response_data["updated_data"]["schedule"] = schedule_response
+
+        return response_data   
+
         
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
@@ -696,7 +807,8 @@ async def update_task_composite(
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
+    
+    
 # Helper functions for validations -- for update
 async def validate_parent_task_id(parent_task_id: str):
     """Validate that parentTaskId exists and is valid"""
@@ -738,7 +850,7 @@ async def validate_project_id(project_id: str):
     """Validate that project ID exists"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"{PROJECTS_SERVICE_URL}/{project_id}")
+            response = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{project_id}")
             if response.status_code == 404:
                 raise ValidationError(f"Project with ID {project_id} not found")
             elif response.status_code != 200:

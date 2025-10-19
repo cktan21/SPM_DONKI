@@ -112,13 +112,40 @@ async def test_create_task_composite_success(monkeypatch):
             "name": "Test Task",
             "pid": "p1",
             "collaborators": ["u1"],
-            "schedule": {"status": "todo"}
+            "schedule": {"status": "todo", "deadline": "2024-12-31T23:59:59Z"}
         }
         result = await main.create_task_composite(payload)
 
         assert result["message"] == "Task created successfully via composite service"
         assert result["task_id"] == "33949f99-20d0-423d-9b26-f09292b2e40d"
         assert result["schedule"]["status"] == "success"
+
+
+async def test_create_task_composite_schedule_validation_error(monkeypatch):
+    """Test that schedule validation fails when deadline is missing"""
+    
+    # Mock the validation functions to avoid network calls
+    async def fake_validate_collaborators(collaborators):
+        pass
+    
+    async def fake_validate_project_id(project_id):
+        pass
+    
+    monkeypatch.setattr(main, "validate_collaborators", fake_validate_collaborators)
+    monkeypatch.setattr(main, "validate_project_id", fake_validate_project_id)
+    
+    payload = {
+        "name": "Test Task",
+        "pid": "p1",
+        "collaborators": ["u1"],
+        "schedule": {"status": "todo"}  # Missing deadline
+    }
+    
+    with pytest.raises(Exception) as exc_info:
+        await main.create_task_composite(payload)
+    
+    # Check that the error message contains the expected validation error
+    assert "Schedule requires 'deadline' field" in str(exc_info.value)
 
 
 # -------------------------------

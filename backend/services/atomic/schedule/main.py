@@ -54,6 +54,8 @@ def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
     next_occurrence = new_data.get("next_occurrence") if is_recurring else None
     frequency = new_data.get("frequency") if is_recurring else None
     status = "ongoing"
+    is_recurring = new_data.get("is_recurring", False)
+
     try:
         data = supabase.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
         

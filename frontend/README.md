@@ -34,7 +34,7 @@ Install dependencies:
 bun install
 npm install @iconify/vue
 npm install lucide-vue-next
-npx shadcn-vue@latest add badge
+bunx shadcn-vue@latest add badge
 ```
 
 ## shadcn-vue Components
@@ -46,20 +46,20 @@ All UI components live in `app/components/ui/` (*** For this specific project on
 If you need a component that is not inside [app/component/ui], you can add them by running the command below:
 
 ```bash
-npx shadcn-vue@latest add <component-name>
+bunx shadcn-vue@latest add <component-name>
 ```
 
 Example:
 
 ```bash
-npx shadcn-vue@latest add button
+bunx shadcn-vue@latest add button
 ```
 
 By default, after you run the code above, newly added components will appear under `[components/ui/<component-name>/]`. Note this is another component/ui folder that is created outside of the app directory. This is technically the default way.
 
 However, due to some importing problems which is not so simple to fix, i've added another component/ui inside the app directory, so its alot easier to import. You find them at `[app/components/ui]`
 
-So if you happen to add any component using `npx shadcn-vue@latest add <component-name>`, it will be in the `[component/ui]` folder outside the app directory. You should move the newly added component into the `[app/component/ui]`
+So if you happen to add any component using `bunx shadcn-vue@latest add <component-name>`, it will be in the `[component/ui]` folder outside the app directory. You should move the newly added component into the `[app/component/ui]`
 
 ## Required: Create lib/utils.ts inside app/
 
@@ -156,7 +156,7 @@ npm install tw-animate-css class-variance-authority lucide-vue-next clsx tailwin
 Re-run the add command if needed:
 
 ```bash
-npx shadcn-vue@latest add button
+bunx shadcn-vue@latest add button
 ```
 
 ### Issue: `component.json already exists`
@@ -192,7 +192,7 @@ However if you like to proceed and add all components at once, you can use the c
 No official `*` shortcut exists. To add multiple components:
 
 ```bash
-npx shadcn-vue@latest add accordion alert alert-dialog avatar badge button calendar card checkbox dialog drawer dropdown-menu form hover-card input label menubar navigation-menu popover progress radio-group scroll-area select separator sheet skeleton slider switch table tabs textarea toast toggle tooltip
+bunx shadcn-vue@latest add accordion alert alert-dialog avatar badge button calendar card checkbox dialog drawer dropdown-menu form hover-card input label menubar navigation-menu popover progress radio-group scroll-area select separator sheet skeleton slider switch table tabs textarea toast toggle tooltip
 ```
 
 > **Note:** This populates all standard components under `[components/ui/]`, which is outside of the app directory. After populating, you should move all the individual components into `[app/components/ui]`

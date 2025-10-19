@@ -216,44 +216,28 @@ async def update_task(
         ...,
         example={
             "name": "Complete Project Setup",
-            "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
+            "parentTaskId": "16e2b6cc-fb44-4873-9292-b8c697832a2e",
             "collaborators": ["3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001", "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002"],
             "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
             "desc": "Set up the initial project structure and dependencies",
-            "notes": "Remember to update the README file"
+            "notes": "Remember to update the README file",
+            "priorityLevel": 2,
+            "label": "Setup"
         }
     ),
 ):
-    # Filter to only allow specific fields
-    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes",
-                       "priorityLevel", "priorityLabel"}
-
-    # filtered_updates --> dictionary with only allowed fields
-    filtered_updates = {}
-    for key, value in updates.items():
-        if key in allowed_fields:
-            # Update the value for the key
-            filtered_updates[key] = value
-
-    # --- Priority logic ---
-    if "priorityLevel" in filtered_updates:
-        level = int(filtered_updates["priorityLevel"])
-        filtered_updates["priorityLevel"] = max(1, min(level, 10))
-        filtered_updates["priorityLabel"] = (
-            "High" if level >= 8 else "Medium" if level >= 4 else "Low"
-        )
-    
     # Add server-side timestamp
-    filtered_updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
     
     # Use supabaseClient's update_task method
-    resp = supabase.update_task(task_id, filtered_updates)
+    resp = supabase.update_task(task_id, updates)
     rows = getattr(resp, "data", None) or []
     
     if not rows:
         raise HTTPException(status_code=404, detail="Task not updated")
     
     return {"message": "Task updated successfully", "task": rows[0]}
+
 
 #Delete Task
 @app.delete("/{task_id}", summary="Delete a task")
