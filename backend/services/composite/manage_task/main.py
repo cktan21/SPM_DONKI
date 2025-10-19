@@ -390,22 +390,28 @@ async def get_task_composite(
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
         ...,
-          example={
-            "name": "New Task Title",
-            "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-            "parentTaskId": "16e2b6cc-fb44-4873-9292-b8c697832a2e",
-            "collaborators": [
-                "655a9260-f871-480f-abea-ded735b2170a",
-                "b5c38ec0-fc79-4ef9-ae13-f641b5318c03"
-            ],
-            "desc": "Optional description",
-            "notes": "Optional notes",
-            "priorityLevel": 5,
-            "label": "High Priority",
-            "schedule": {
-                "status": "not started",
-                "start": "2024-10-20T09:00:00Z",
-                "deadline": "2025-12-31T23:59:59Z"
+          examples={
+            "create_task": {
+                "summary": "Create a new task with schedule",
+                "description": "Example of creating a task with all optional fields including schedule",
+                "value": {
+                    "name": "New Task Title",
+                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                    "parentTaskId": "16e2b6cc-fb44-4873-9292-b8c697832a2e",
+                    "collaborators": [
+                        "655a9260-f871-480f-abea-ded735b2170a",
+                        "b5c38ec0-fc79-4ef9-ae13-f641b5318c03"
+                    ],
+                    "desc": "Optional description",
+                    "notes": "Optional notes",
+                    "priorityLevel": 5,
+                    "label": "High Priority",
+                    "schedule": {
+                        "status": "not started",
+                        "start": "2024-10-20T09:00:00Z",
+                        "deadline": "2025-12-31T23:59:59Z"
+                    }
+                }
             }
         }
     )
@@ -680,17 +686,23 @@ async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
     updates: Dict[str, Any] = Body(
         ...,
-        example={
-                "name": "Update task from composite service",
-                "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
-                "collaborators": ["655a9260-f871-480f-abea-ded735b2170a", "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"],
-                "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-                "desc": "Set up the initial project structure and dependencies",
-                "notes": "Remember to update the README file",
-                "status": "in_progress",
-                "deadline": "2024-12-31T23:59:59Z",
-                "priorityLevel": 2,
-                "label": "SetupUpdated"
+        examples={
+            "update_task": {
+                "summary": "Update task with all fields",
+                "description": "Example of updating a task with task fields and schedule fields",
+                "value": {
+                    "name": "Update task from composite service",
+                    "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+                    "collaborators": ["655a9260-f871-480f-abea-ded735b2170a", "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"],
+                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+                    "desc": "Set up the initial project structure and dependencies",
+                    "notes": "Remember to update the README file",
+                    "status": "in_progress",
+                    "deadline": "2024-12-31T23:59:59Z",
+                    "priorityLevel": 2,
+                    "label": "SetupUpdated"
+                }
+            }
         }
     ),
 ):
