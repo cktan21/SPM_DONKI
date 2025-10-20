@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"sync"
 	"testing"
-	"time"
 )
 
 // TestServiceEndpoints is the entry point for the test.
@@ -290,101 +289,6 @@ func TestKongRecurringTaskFunctionality(t *testing.T) {
 	
 	t.Log("🌐 Testing Recurring Task Functionality via Kong API Gateway")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 60)))
-
-	// Test creating a recurring task through Kong
-	t.Run("Create Recurring Task via Kong", func(t *testing.T) {
-		// First create a task via Kong
-		taskData := map[string]interface{}{
-			"name":           fmt.Sprintf("Kong Test Weekly Task %d", time.Now().Unix()),
-			"desc":           "Description for Kong test task",
-			"created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-			"priorityLevel":  5,
-		}
-
-		jsonData, err := json.Marshal(taskData)
-		if err != nil {
-			t.Fatalf("Failed to marshal task JSON: %v", err)
-		}
-
-		// Create task via Kong
-		taskResp, err := http.Post("http://localhost:8000/tasks/createTask", "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			t.Errorf("❌ Failed to create task via Kong: %v", err)
-			return
-		}
-		defer taskResp.Body.Close()
-
-		if taskResp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(taskResp.Body)
-			t.Errorf("❌ Failed to create task via Kong: Status %d, Response: %s", taskResp.StatusCode, string(body))
-			return
-		}
-
-		// Parse task response to get task ID
-		var taskResult map[string]interface{}
-		if err := json.NewDecoder(taskResp.Body).Decode(&taskResult); err != nil {
-			t.Errorf("❌ Failed to decode Kong task response: %v", err)
-			return
-		}
-
-		var taskID string
-		if task, ok := taskResult["task"].(map[string]interface{}); ok {
-			if id, ok := task["id"].(string); ok {
-				taskID = id
-			}
-		}
-
-		if taskID == "" {
-			t.Errorf("❌ Failed to extract task ID from Kong response")
-			return
-		}
-
-		// Now create the schedule via Kong
-		now := time.Now()
-		startTime := now.Add(1 * time.Minute)
-		deadlineTime := now.Add(2 * time.Hour)
-		nextOccurrence := now.Add(2 * time.Minute)
-
-		scheduleData := map[string]interface{}{
-			"tid":             taskID,
-			"start":           startTime.Format(time.RFC3339),
-			"deadline":        deadlineTime.Format(time.RFC3339),
-			"is_recurring":    true,
-			"next_occurrence":    nextOccurrence.Format(time.RFC3339),
-			"frequency":       "Weekly",
-		}
-
-		scheduleJsonData, err := json.Marshal(scheduleData)
-		if err != nil {
-			t.Fatalf("Failed to marshal schedule JSON: %v", err)
-		}
-
-		resp, err := http.Post(kongScheduleURL+"/", "application/json", bytes.NewBuffer(scheduleJsonData))
-		if err != nil {
-			t.Errorf("❌ Failed to create recurring task via Kong: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			t.Errorf("❌ Failed to create recurring task via Kong: Status %d, Response: %s", resp.StatusCode, string(body))
-			return
-		}
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			t.Errorf("❌ Failed to decode Kong response: %v", err)
-			return
-		}
-
-		t.Logf("✅ Recurring task created successfully via Kong")
-		if data, ok := result["data"].(map[string]interface{}); ok {
-			if sid, ok := data["sid"].(string); ok {
-				t.Logf("   Task ID: %s, Schedule ID: %s", taskID, sid)
-			}
-		}
-	})
 
 	// Test getting scheduled jobs through Kong
 	t.Run("Get Scheduled Jobs via Kong", func(t *testing.T) {

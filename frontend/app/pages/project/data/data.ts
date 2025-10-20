@@ -20,6 +20,7 @@ export const taskSchema = z.object({
   status: z.string().nullable().optional(), // Can be null if not provided
   label: z.string().nullable().optional(), // Can be null if not provided
   priority: z.number().optional(), // Mapped from 'priorityLevel'
+  deadline: z.string().nullable().optional(),
 })
 
 export type Task = z.infer<typeof taskSchema>

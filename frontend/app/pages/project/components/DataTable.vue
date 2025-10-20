@@ -90,13 +90,15 @@ const hasSubtasks = (row: any) => {
     <div class="rounded-md border border-border overflow-auto">
       <Table class="w-full min-w-[800px]">
         <colgroup>
-          <col style="width: 40px" />
-          <col style="width: 50px" />
-          <col style="width: 140px" />
-          <col style="width: auto" />
-          <col style="width: 120px" />
-          <col style="width: 80px" />
-          <col style="width: 80px" />
+          <col style="width: 50px" />   <!-- Chevron column -->
+          <col style="width: 50px" />   <!-- Select checkbox -->
+          <col style="width: 140px" />  <!-- Task ID -->
+          <col style="width: auto" />   <!-- Name/Title (flexible width) -->
+          <col style="width: 100px" />  <!-- Label (if visible) -->
+          <col style="width: 120px" />  <!-- Status -->
+          <col style="width: 80px" />   <!-- Priority -->
+          <col style="width: 120px" />  <!-- Deadline -->
+          <col style="width: 80px" />   <!-- Actions -->
         </colgroup>
 
         <TableHeader>
