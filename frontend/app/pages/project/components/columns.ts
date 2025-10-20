@@ -5,6 +5,7 @@ import { h } from "vue"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import DataTableColumnHeader from "./DataTableColumnHeader.vue"
+import DataTableRowActions from "./DataTableRowActions.vue"
 
 // Import icons
 import { Check, Loader, AlertTriangle } from "lucide-vue-next"
@@ -14,6 +15,20 @@ interface StatusOption {
   value: string
   label: string
   icon: Component
+}
+
+// Helper to format date
+const formatDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 'N/A'
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  } catch {
+    return 'N/A'
+  }
 }
 
 // --- Example static data ---
@@ -103,6 +118,8 @@ export const columns: ColumnDef<Task>[] = [
     },
   },
 
+  
+
   // Label column (hidden but used for filtering)
   {
     accessorKey: "label",
@@ -162,5 +179,27 @@ export const columns: ColumnDef<Task>[] = [
       }
       return rowValue === value
     },
+  },
+
+    // Deadline column (NEW)
+  {
+    accessorKey: "deadline",
+    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Deadline" }),
+    cell: ({ row }) => {
+      const deadlineValue = row.getValue("deadline") as string | null
+      return h(
+        "div",
+        { class: "text-center text-sm" },
+        formatDate(deadlineValue)
+      )
+    },
+    enableSorting: true,
+    enableHiding: true,
+  },
+
+  // Actions column
+  {
+    id: "actions",
+    cell: ({ row }) => h(DataTableRowActions, { row }),
   },
 ]

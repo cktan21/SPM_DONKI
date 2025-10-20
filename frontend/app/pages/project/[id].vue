@@ -137,6 +137,7 @@ const transformedTasks = computed(() => {
     title: task.name,
     priority: task.priorityLevel,
     status: task.status || null,
+    deadline: task.deadline || null,
     label: task.label || null,
     
     // Add subtasks for this task
@@ -241,7 +242,7 @@ const projectTitle = computed(() =>
 )
 
 const handleCreateTask = () => {
-  router.push('/task/create')
+  router.push('/project/create/')
 }
 </script>
 
