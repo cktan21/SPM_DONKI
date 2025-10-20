@@ -21,11 +21,15 @@ interface StatusOption {
 const formatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'N/A'
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const formatted = new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
     })
+    if (formatted === 'Invalid Date') {
+      return 'N/A'
+    }
+    return formatted
   } catch {
     return 'N/A'
   }
