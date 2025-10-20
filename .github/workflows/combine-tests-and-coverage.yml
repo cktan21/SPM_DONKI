@@ -100,7 +100,7 @@ jobs:
             - name: Upload Go coverage to Coveralls (parallel)
               uses: shogo82148/actions-goveralls@v1
               with:
-                  path-to-profile: test/integration/coverage.out
+                  path-to-profile: ../test/integration/coverage.out
                   parallel: true
                   flag-name: go
               env:
