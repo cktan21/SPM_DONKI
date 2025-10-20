@@ -43,7 +43,10 @@ jobs:
 
             - name: Run Unit Tests (pytest) with coverage
               run: |
-                  pytest -v --cov=./backend/services/ test/unit/
+                  pytest -v --cov=./backend/services/ \
+                    --cov-report=term-missing \
+                    --cov-report=xml:coverage-python.xml \
+                    test/unit/
 
             - name: Upload Python coverage to Coveralls (parallel)
               uses: coverallsapp/github-action@v2
@@ -51,6 +54,8 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   flag-name: python
                   parallel: true
+                  file: coverage-python.xml
+                  format: cobertura
               env:
                   COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
