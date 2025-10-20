@@ -44,7 +44,7 @@ export const labels = [
 
 export const statuses: StatusOption[] = [
   { value: "todo", label: "To Do", icon: Loader },
-  { value: "in_progress", label: "In Progress", icon: AlertTriangle },
+  { value: "ongoing", label: "Ongoing", icon: AlertTriangle },
   { value: "done", label: "Done", icon: Check },
 ]
 
@@ -145,18 +145,48 @@ export const columns: ColumnDef<Task>[] = [
   // Status column
   {
     accessorKey: "status",
-    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Status" }),
+    header: ({ column }) =>
+      h(DataTableColumnHeader, { column, title: "Status" }),
     cell: ({ row }) => {
       const statusValue = row.getValue("status") as string | null
-      if (!statusValue)
-        return h("div", { class: "flex justify-center text-muted-foreground" }, "-")
+      console.log("Status value:", statusValue)
 
+      if (!statusValue)
+        return h(
+          "div",
+          { class: "flex justify-center text-muted-foreground" },
+          "-"
+        )
+
+      console.log("raw statusValue:", JSON.stringify(statusValue))
+      console.log("statusValue chars:", Array.from(String(statusValue)).map(c => c.charCodeAt(0)))
+      console.log("available status values:", statuses.map(s => s.value))
       const status = statuses.find((s) => s.value === statusValue)
-      if (!status) return h("div", { class: "flex justify-center" }, statusValue)
+      if (!status)
+        return h("div", { class: "flex justify-center" }, statusValue)
+      console.log("Status value:", statusValue)
+
+
+      // 🎨 Color mapping based on status
+      let colorClass = ""
+      switch (statusValue.toLowerCase()) {
+        case "done":
+          colorClass = "text-green-500"
+          break
+        case "ongoing":
+        case "in_progress":
+          colorClass = "text-blue-500"
+          break
+        case "todo":
+          colorClass = "text-orange-500"
+          break
+        default:
+          colorClass = "text-muted-foreground"
+      }
 
       return h("div", { class: "flex items-center justify-center gap-1" }, [
-        h(status.icon, { class: "h-4 w-4 text-muted-foreground shrink-0" }),
-        h("span", { class: "text-sm" }, status.label),
+        h(status.icon, { class: `h-4 w-4 ${colorClass} shrink-0` }),
+        h("span", { class: `text-sm font-medium ${colorClass}` }, status.label),
       ])
     },
     filterFn: (row, id, value) => {
@@ -164,16 +194,31 @@ export const columns: ColumnDef<Task>[] = [
     },
   },
 
+
   // Priority column
   {
     accessorKey: "priority",
-    header: ({ column }) => h(DataTableColumnHeader, { column, title: "Priority" }),
+    header: ({ column }) =>
+      h(DataTableColumnHeader, { column, title: "Priority" }),
     cell: ({ row }) => {
       const priorityValue = row.getValue("priority") as number | null
+
+      // Determine color based on priority range
+      let colorClass = ""
+      if (priorityValue !== null && priorityValue !== undefined) {
+        if (priorityValue >= 7) colorClass = "text-red-600"
+        else if (priorityValue >= 4) colorClass = "text-black-500"
+        else colorClass = "text-stone-400"
+      }
+
       return h(
         "div",
-        { class: "flex justify-center items-center text-sm font-medium" },
-        priorityValue !== null && priorityValue !== undefined ? String(priorityValue) : "-"
+        {
+          class: `flex justify-center items-center text-sm font-medium ${colorClass}`,
+        },
+        priorityValue !== null && priorityValue !== undefined
+          ? String(priorityValue)
+          : "-"
       )
     },
     filterFn: (row, id, value) => {
@@ -184,6 +229,7 @@ export const columns: ColumnDef<Task>[] = [
       return rowValue === value
     },
   },
+
 
     // Deadline column (NEW)
   {
