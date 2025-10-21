@@ -1,4 +1,3 @@
-<!-- task/components/DataTable.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -71,7 +70,7 @@ const table = useVueTable({
 const handleRowClick = (rowId: string, event: Event) => {
   const target = event.target as HTMLElement
   const isActionsColumn = target.closest('[data-actions-cell]')
-  
+
   if (!isActionsColumn) {
     router.push(`/task/${rowId}`)
   }
@@ -90,30 +89,22 @@ const hasSubtasks = (row: any) => {
     <div class="rounded-md border border-border overflow-auto">
       <Table class="w-full min-w-[800px]">
         <colgroup>
-          <col style="width: 50px" />   <!-- Chevron column -->
-          <col style="width: 50px" />   <!-- Select checkbox -->
-          <col style="width: 140px" />  <!-- Task ID -->
-          <col style="width: auto" />   <!-- Name/Title (flexible width) -->
-          <col style="width: 100px" />  <!-- Label (if visible) -->
-          <col style="width: 120px" />  <!-- Status -->
-          <col style="width: 80px" />   <!-- Priority -->
-          <col style="width: 120px" />  <!-- Deadline -->
-          <col style="width: 80px" />   <!-- Actions -->
-        </colgroup>
+  <col style="width: 50px" />   <!-- Chevron column -->
+  <col style="width: 50px" />   <!-- Select checkbox -->
+  <col style="width: 140px" />  <!-- Task ID -->
+  <col style="width: auto" />   <!-- Name/Title (flexible width) -->
+  <col style="width: 120px" />  <!-- Label -->
+  <col style="width: 140px" />  <!-- Status -->
+  <col style="width: 90px" />   <!-- Priority -->
+  <col style="width: 130px" />  <!-- Deadline -->
+</colgroup>
 
         <TableHeader>
           <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
             <TableHead class="bg-muted/40"></TableHead>
-            <TableHead
-              v-for="header in headerGroup.headers"
-              :key="header.id"
-              class="bg-muted/40"
-            >
-              <FlexRender
-                v-if="!header.isPlaceholder"
-                :render="header.column.columnDef.header"
-                :props="header.getContext()"
-              />
+            <TableHead v-for="header in headerGroup.headers" :key="header.id" class="bg-muted/40">
+              <FlexRender v-if="!header.isPlaceholder" :render="header.column.columnDef.header"
+                :props="header.getContext()" />
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -121,26 +112,21 @@ const hasSubtasks = (row: any) => {
         <TableBody>
           <template v-if="table.getRowModel().rows.length">
             <template v-for="row in table.getRowModel().rows" :key="row.id">
-              <TableRow 
-                class="hover:bg-muted/50 transition-colors cursor-pointer"
-                @click="handleRowClick(row.original.id, $event)"
-              >
+              <TableRow class="hover:bg-muted/50 transition-colors cursor-pointer"
+                @click="handleRowClick(row.original.id, $event)">
                 <!-- Chevron cell - only show if task has subtasks -->
                 <TableCell class="text-center" @click.stop="hasSubtasks(row) ? toggleExpand(row.original.id) : null">
-                  <ChevronRight
-                    v-if="hasSubtasks(row)"
-                    :size="16"
+                  <ChevronRight v-if="hasSubtasks(row)" :size="16"
                     class="mx-auto text-muted-foreground transition-transform duration-200 cursor-pointer"
-                    :class="expandedRows[row.original.id] ? 'rotate-90 text-foreground' : ''"
-                  />
+                    :class="expandedRows[row.original.id] ? 'rotate-90 text-foreground' : ''" />
                 </TableCell>
 
-                <TableCell
-                  v-for="cell in row.getVisibleCells()"
-                  :key="cell.id"
-                  :data-actions-cell="cell.column.id === 'actions' ? true : undefined"
-                  :class="{ 'max-w-0': cell.column.id === 'title' }"
-                >
+                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id"
+                  :data-actions-cell="cell.column.id === 'actions' ? true : undefined" :class="{
+                    'max-w-0': cell.column.id === 'title',
+                    'min-w-[250px] lg:min-w-0': cell.column.id === 'title',
+                    'pl-2': cell.column.id === 'label'
+                  }">
                   <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
                 </TableCell>
               </TableRow>
@@ -149,12 +135,8 @@ const hasSubtasks = (row: any) => {
               <tr v-if="expandedRows[row.original.id] && hasSubtasks(row)">
                 <td :colspan="row.getVisibleCells().length + 1" class="bg-muted/30 p-4">
                   <div class="space-y-2">
-                    <SubtaskItem
-                      v-for="sub in row.original.subtasks"
-                      :key="sub.id"
-                      :subtask="sub"
-                      @click="router.push(`/task/${sub.id}`)"
-                    />
+                    <SubtaskItem v-for="sub in row.original.subtasks" :key="sub.id" :subtask="sub"
+                      @click="router.push(`/task/${sub.id}`)" />
                   </div>
                 </td>
               </tr>
