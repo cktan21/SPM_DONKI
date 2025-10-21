@@ -237,12 +237,13 @@ const getCircleProps = (percent: number, offset: number) => {
 
 const projectTitle = computed(() =>
   selectedProject.value
-    ? `${selectedProject.value.name}'s Tasks`
-    : 'Tasks'
+    ? `${selectedProject.value.name}'s Project Dashboard`
+    : 'Project Dashboard'
 )
 
 const handleCreateTask = () => {
-  router.push('/project/create/')
+  const projectId = route.params.id as string
+  router.push(`./createTask/${projectId}`)
 }
 </script>
 
@@ -259,9 +260,7 @@ const handleCreateTask = () => {
             Manage your tasks and view their details
           </p>
         </div>
-        <div class="hidden sm:block">
-          <Button @click="handleCreateTask">Create New Task</Button>
-        </div>
+        <!-- Desktop Create Button - Hidden, will be shown below with "Tasks" -->
       </div>
 
       <!-- Loading State -->
@@ -334,23 +333,23 @@ const handleCreateTask = () => {
                 />
               </svg>
               
-              <!-- Center text - Responsive font sizes -->
+              <!-- Center text - Changed to "Total Tasks" -->
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="text-center">
                   <div class="text-2xl sm:text-3xl font-bold">{{ progressData.total }}</div>
-                  <div class="text-xs sm:text-sm text-muted-foreground">Tasks</div>
+                  <div class="text-xs sm:text-sm text-muted-foreground">Total Tasks</div>
                 </div>
               </div>
             </div>
 
-            <!-- Legend - Responsive text sizes -->
+            <!-- Legend - No more fractions, just numbers -->
             <div class="w-full space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="w-3 h-3 rounded-full bg-green-500 shrink-0"></div>
                   <span class="text-xs sm:text-sm">Done</span>
                 </div>
-                <span class="text-xs sm:text-sm font-medium">{{ progressData.done }}/{{ progressData.total }}</span>
+                <span class="text-xs sm:text-sm font-medium">{{ progressData.done }}</span>
               </div>
               
               <div class="flex items-center justify-between">
@@ -358,7 +357,7 @@ const handleCreateTask = () => {
                   <div class="w-3 h-3 rounded-full bg-blue-500 shrink-0"></div>
                   <span class="text-xs sm:text-sm">Ongoing</span>
                 </div>
-                <span class="text-xs sm:text-sm font-medium">{{ progressData.ongoing }}/{{ progressData.total }}</span>
+                <span class="text-xs sm:text-sm font-medium">{{ progressData.ongoing }}</span>
               </div>
               
               <div class="flex items-center justify-between">
@@ -366,7 +365,7 @@ const handleCreateTask = () => {
                   <div class="w-3 h-3 rounded-full bg-orange-500 shrink-0"></div>
                   <span class="text-xs sm:text-sm">To Do</span>
                 </div>
-                <span class="text-xs sm:text-sm font-medium">{{ progressData.toDo }}/{{ progressData.total }}</span>
+                <span class="text-xs sm:text-sm font-medium">{{ progressData.toDo }}</span>
               </div>
             </div>
           </CardContent>
@@ -426,9 +425,18 @@ const handleCreateTask = () => {
           </CardContent>
         </Card>
       </div>
+
+      <!-- Tasks Title + Create Button (Desktop only) -->
+      <div v-if="!loading && !error" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h2 class="text-2xl font-bold tracking-tight">Tasks</h2>
+        <div class="hidden sm:block">
+          <Button @click="handleCreateTask">Create New Task</Button>
+        </div>
+      </div>
       
       <DataTable v-if="!loading && !error" :data="transformedTasks" :columns="columns" />
       
+      <!-- Mobile Create Button - Bottom of page -->
       <div class="block sm:hidden mt-4">
         <Button class="w-full" @click="handleCreateTask">Create Task</Button>
       </div>
