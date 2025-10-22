@@ -7,13 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Task and Project interfaces
+interface Collaborator {
+  id: string
+  name: string
+}
+
 interface Task {
   id: string
   name: string
   created_by_uid: string
   updated_timestamp: string
   parentTaskId: string | null
-  collaborators: string[] | null
+  collaborators: Collaborator[] | null
   pid: string
   desc: string
   notes: string
@@ -182,26 +187,36 @@ const chartSegments = computed(() => {
 const uniqueCollaborators = computed(() => {
   if (!selectedProject.value?.tasks) return []
 
-  const collabIds = new Set<string>()
+  const collabMap = new Map<string, { id: string; name: string }>()
   
   selectedProject.value.tasks.forEach(task => {
     if (task.collaborators && Array.isArray(task.collaborators)) {
-      task.collaborators.forEach(id => {
-        if (id) collabIds.add(id)
+      task.collaborators.forEach(collab => {
+        if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
+          const collaborator = collab as { id: string; name: string }
+          collabMap.set(collaborator.id, { id: collaborator.id, name: collaborator.name })
+        }
       })
     }
   })
 
-  return Array.from(collabIds).map((id, index) => ({
-    id,
-    initials: getInitialsFromId(id),
+  return Array.from(collabMap.values()).map((collab, index) => ({
+    id: collab.id,
+    name: collab.name,
+    initials: getInitialsFromName(collab.name),
     color: getColorForIndex(index)
   }))
 })
 
-// Helper function to generate initials from ID (first 2 chars uppercase)
-const getInitialsFromId = (id: string): string => {
-  return id.slice(0, 2).toUpperCase()
+// Helper function to generate initials from name
+const getInitialsFromName = (name: string): string => {
+  if (!name) return 'NA'
+  const words = name.trim().split(/\s+/).filter(w => w.length > 0)
+  if (words.length === 0) return 'NA'
+  if (words.length === 1) {
+    return (words[0]?.slice(0, 2) || 'NA').toUpperCase()
+  }
+  return ((words[0]?.[0] || '') + (words[words.length - 1]?.[0] || '')).toUpperCase() || 'NA'
 }
 
 // Helper function to get color based on index
@@ -386,7 +401,7 @@ const handleCreateTask = () => {
                     v-for="collab in uniqueCollaborators.slice(0, 5)"
                     :key="collab.id"
                     :class="`w-8 h-8 sm:w-10 sm:h-10 rounded-full ${collab.color} flex items-center justify-center text-white text-xs sm:text-sm font-medium border-2 border-white hover:z-10 transition-transform hover:scale-110 cursor-pointer`"
-                    :title="collab.id"
+                    :title="collab.name"
                   >
                     {{ collab.initials }}
                   </div>
@@ -411,8 +426,8 @@ const handleCreateTask = () => {
                     <div :class="`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${collab.color} flex items-center justify-center text-white text-xs font-medium shrink-0`">
                       {{ collab.initials }}
                     </div>
-                    <!-- FULL ID/NAME - no truncation, will wrap dynamically -->
-                    <span class="text-xs break-all" :title="collab.id">{{ collab.id }}</span>
+                    <!-- Display name instead of ID -->
+                    <span class="text-xs break-all" :title="`${collab.name} (${collab.id})`">{{ collab.name }}</span>
                   </div>
                 </div>
               </div>
