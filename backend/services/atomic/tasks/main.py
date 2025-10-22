@@ -181,9 +181,6 @@ async def create_task(
     # --- Priority logic ---
     level = int(task.get("priorityLevel", 5))  # Default 5
     task["priorityLevel"] = max(1, min(level, 10))  # Clamp 1–10
-    task["priorityLabel"] = (
-        "High" if level >= 8 else "Medium" if level >= 4 else "Low"
-    )
 
     try:
         resp = supabase.client.table("TASK").insert(task).execute()
