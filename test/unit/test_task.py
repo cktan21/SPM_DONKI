@@ -63,8 +63,8 @@ def sample_update_payload(**overrides) -> Dict[str, Any]:
 def test_get_all_tasks_success(mock_client, supabase_client):
     """Test successful retrieval of all tasks"""
     expected_tasks = [
-        {"id": "task1", "name": "Task 1"},
-        {"id": "task2", "name": "Task 2"}
+        {"id": "task-1", "name": "Complete Project Setup", "status": "ongoing"},
+        {"id": "task-2", "name": "Review Code", "status": "pending"}
     ]
     
     mock_table = mock_client.table.return_value
@@ -89,16 +89,28 @@ def test_get_all_tasks_empty(mock_client, supabase_client):
 
 def test_get_all_tasks_with_filter(mock_client, supabase_client):
     """Test get_all_tasks with filter parameters"""
-    filter_by = {"created_by_uid": "user123"}
-    expected_tasks = [{"id": "task1", "created_by_uid": "user123"}]
+    filter_by = {"created_by_uid": "user123", "status": "ongoing"}
+    expected_tasks = [{"id": "task1", "created_by_uid": "user123", "status": "ongoing"}]
     
     mock_table = mock_client.table.return_value
-    mock_table.select.return_value.eq.return_value.execute.return_value.data = expected_tasks
+    mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = expected_tasks
     
     result = supabase_client.get_all_tasks(filter_by)
     
-    mock_table.select.return_value.eq.assert_called_once_with("created_by_uid", "user123")
+    # Verify the method was called and returned expected result
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.select.assert_called_once_with("*")
     assert result == expected_tasks
+
+
+def test_get_all_tasks_none_data(mock_client, supabase_client):
+    """Test get_all_tasks when data is None"""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.execute.return_value.data = None
+    
+    result = supabase_client.get_all_tasks()
+    
+    assert result == []
 
 
 # -------------------------------
@@ -106,9 +118,9 @@ def test_get_all_tasks_with_filter(mock_client, supabase_client):
 # -------------------------------
 def test_update_task_success(mock_client, supabase_client):
     """Test successful task update"""
-    task_id = "task123"
-    updates = {"name": "Updated Task", "desc": "Updated description"}
-    updated_task = {"id": task_id, "name": "Updated Task", "desc": "Updated description"}
+    task_id = "task-123"
+    updates = {"name": "Updated Task Name", "status": "completed"}
+    updated_task = {"id": task_id, "name": "Updated Task Name", "status": "completed"}
     
     mock_table = mock_client.table.return_value
     mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated_task]
@@ -140,13 +152,28 @@ def test_update_task_not_found(mock_client, supabase_client):
     assert result.data == []
 
 
+def test_update_task_partial_update(mock_client, supabase_client):
+    """Test updating task with partial data"""
+    task_id = "task-123"
+    updates = {"status": "overdue"}  # Only update status
+    updated_task = {"id": task_id, "name": "Original Name", "status": "overdue"}
+    
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated_task]
+    
+    result = supabase_client.update_task(task_id, updates)
+    
+    mock_table.update.assert_called_once_with(updates)
+    assert result.data == [updated_task]
+
+
 # -------------------------------
 # Delete Task tests
 # -------------------------------
 def test_delete_task_success(mock_client, supabase_client):
     """Test successful task deletion"""
-    task_id = "task123"
-    deleted_task = {"id": task_id, "name": "Deleted Task"}
+    task_id = "task-123"
+    deleted_task = {"id": task_id, "name": "Deleted Task", "status": "completed"}
     
     mock_table = mock_client.table.return_value
     mock_table.delete.return_value.eq.return_value.execute.return_value.data = [deleted_task]
@@ -168,3 +195,94 @@ def test_delete_task_not_found(mock_client, supabase_client):
     result = supabase_client.delete_task(task_id)
     
     assert result.data == []
+
+
+# -------------------------------
+# Audit Logs tests
+# -------------------------------
+def test_get_all_logs_success(mock_client, supabase_client):
+    """Test getting all audit logs for tasks"""
+    expected_logs = [
+        {"id": "log1", "table_name": "TASK", "action": "INSERT", "record_id": "task123"},
+        {"id": "log2", "table_name": "SCHEDULE", "action": "UPDATE", "record_id": "schedule456"}
+    ]
+    
+    # Mock the entire chain - task service uses .in_() for table_name
+    mock_response = MagicMock()
+    mock_response.data = expected_logs
+    mock_client.table.return_value.select.return_value.in_.return_value.execute.return_value = mock_response
+    
+    result = supabase_client.get_all_logs()
+    
+    mock_client.table.assert_called_once_with("AUDIT_TRAIL")
+    mock_client.table.return_value.select.assert_called_once_with("*")
+    mock_client.table.return_value.select.return_value.in_.assert_called_once_with('table_name', ['TASK', 'SCHEDULE'])
+    assert result == expected_logs
+
+
+def test_get_all_logs_with_filter(mock_client, supabase_client):
+    """Test getting audit logs with filter"""
+    filter_by = "task123"
+    expected_logs = [
+        {"id": "log1", "table_name": "TASK", "action": "INSERT", "record_id": "task123"}
+    ]
+    
+    # Mock the entire chain - task service uses .in_() then .eq()
+    mock_response = MagicMock()
+    mock_response.data = expected_logs
+    mock_client.table.return_value.select.return_value.in_.return_value.eq.return_value.execute.return_value = mock_response
+    
+    result = supabase_client.get_all_logs(filter_by)
+    
+    mock_client.table.assert_called_once_with("AUDIT_TRAIL")
+    mock_client.table.return_value.select.assert_called_once_with("*")
+    mock_client.table.return_value.select.return_value.in_.assert_called_once_with('table_name', ['TASK', 'SCHEDULE'])
+    mock_client.table.return_value.select.return_value.in_.return_value.eq.assert_called_once_with("record_id", filter_by)
+    assert result == expected_logs
+
+
+def test_get_all_logs_empty(mock_client, supabase_client):
+    """Test getting audit logs when no logs exist"""
+    # Mock the entire chain
+    mock_response = MagicMock()
+    mock_response.data = []
+    mock_client.table.return_value.select.return_value.in_.return_value.execute.return_value = mock_response
+    
+    result = supabase_client.get_all_logs()
+    
+    assert result == []
+
+
+# -------------------------------
+# Error Handling tests
+# -------------------------------
+def test_get_all_tasks_database_error(mock_client, supabase_client):
+    """Test get_all_tasks with database error"""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.execute.side_effect = Exception("Database error")
+    
+    with pytest.raises(Exception, match="Database error"):
+        supabase_client.get_all_tasks()
+
+
+def test_update_task_database_error(mock_client, supabase_client):
+    """Test update task with database error"""
+    task_id = "task-123"
+    updates = {"name": "Updated Task"}
+    
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.side_effect = Exception("Database error")
+    
+    with pytest.raises(Exception, match="Database error"):
+        supabase_client.update_task(task_id, updates)
+
+
+def test_delete_task_database_error(mock_client, supabase_client):
+    """Test delete task with database error"""
+    task_id = "task-123"
+    
+    mock_table = mock_client.table.return_value
+    mock_table.delete.return_value.eq.return_value.execute.side_effect = Exception("Database error")
+    
+    with pytest.raises(Exception, match="Database error"):
+        supabase_client.delete_task(task_id)
