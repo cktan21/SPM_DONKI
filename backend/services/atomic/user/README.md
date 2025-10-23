@@ -343,6 +343,75 @@ HTTP Status: 201 Created
 }
 ```
 
+> ## Get all users
+
+GET http://localhost:5100/allUsers
+
+`Example: GET http://127.0.0.1:5100/allUsers`
+
+Sample Output:
+```json
+{
+    "message": "Users retrieved successfully",
+    "users": [
+        {
+            "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+            "email": "rc@example.com",
+            "role": "staff",
+            "created_at": "2025-09-22T05:11:59.671524+00:00",
+            "name": "Default Name",
+            "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
+            "department": "tech"
+        },
+        {
+            "id": "17a40371-66fe-411a-963b-a977cc7cb475",
+            "email": "ashley6@example.com",
+            "role": "user",
+            "created_at": "2025-09-18T13:15:12.958746+00:00",
+            "name": "Default Name",
+            "auth_id": "30397e3b-61c5-4836-98fb-987e85a8bd29",
+            "department": "sales"
+        },
+        {
+            "id": "655a9260-f871-480f-abea-ded735b2170a",
+            "email": "testmanager@example.com",
+            "role": "manager",
+            "created_at": "2025-10-01T12:58:24.548681+00:00",
+            "name": "testManager",
+            "auth_id": "0c696352-4f64-4745-9e66-b9af14894a97",
+            "department": "tech"
+        },
+        {
+            "id": "765bc84f-eba5-4d32-987b-d55adef7fe65",
+            "email": "ashley5@example.com",
+            "role": "Director",
+            "created_at": "2025-09-18T11:26:29.051576+00:00",
+            "name": "Default Name",
+            "auth_id": "e1b95925-0e56-443b-b999-66f3eabc8074",
+            "department": "admin"
+        },
+        {
+            "id": "944d73be-9625-4fd1-8c6a-00e161da0642",
+            "email": "testhr@example.com",
+            "role": "hr",
+            "created_at": "2025-10-01T12:58:40.299887+00:00",
+            "name": "test hr",
+            "auth_id": "5b0eb89c-7bac-4756-b63f-15d90be9bc19",
+            "department": "sales"
+        },
+        {
+            "id": "bba910a9-1685-4fa3-af21-ccb2e11cf751",
+            "email": "3amtest@example.com",
+            "role": "user",
+            "created_at": "2025-09-25T19:23:25.865356+00:00",
+            "name": "Default Name",
+            "auth_id": "6d52c7b4-ed03-4a13-9d53-eace42d3f0f6",
+            "department": "HR"
+        }
+    ]
+}
+```
+
 ### Cookie behaviours:
 
 > Same as login route

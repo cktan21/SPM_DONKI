@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from backend.services.atomic.project.supabaseClient import SupabaseClient
+from backend.services.atomic.project.services.supabaseClient import SupabaseClient
 
 
 # -------------------------------
@@ -13,7 +13,7 @@ from backend.services.atomic.project.supabaseClient import SupabaseClient
 # -------------------------------
 @pytest.fixture
 def mock_client():
-    with patch("backend.services.atomic.project.supabaseClient.create_client") as mock_create_client:
+    with patch("backend.services.atomic.project.services.supabaseClient.create_client") as mock_create_client:
         client = MagicMock()
         mock_create_client.return_value = client
         yield client
