@@ -164,31 +164,31 @@ class KafkaEventConsumer:
 
 # Event type constants
 class EventTypes:
-    # Task events
-    TASK_CREATED = "task_created"
-    TASK_UPDATED = "task_updated"
-    TASK_DELETED = "task_deleted"
-    TASK_ASSIGNED = "task_assigned"
-    TASK_STATUS_CHANGED = "task_status_changed"
+    # # Task events
+    # TASK_CREATED = "task_created"
+    # TASK_UPDATED = "task_updated"
+    # TASK_DELETED = "task_deleted"
+    # TASK_ASSIGNED = "task_assigned"
+    # TASK_STATUS_CHANGED = "task_status_changed"
     
-    # Project events
-    PROJECT_CREATED = "project_created"
-    PROJECT_UPDATED = "project_updated"
-    PROJECT_DELETED = "project_deleted"
-    PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
-    PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
+    # # Project events
+    # PROJECT_CREATED = "project_created"
+    # PROJECT_UPDATED = "project_updated"
+    # PROJECT_DELETED = "project_deleted"
+    # PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
+    # PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
     
-    # Schedule events
-    SCHEDULE_CREATED = "schedule_created"
-    SCHEDULE_UPDATED = "schedule_updated"
-    SCHEDULE_DELETED = "schedule_deleted"
-    DEADLINE_APPROACHING = "deadline_approaching"
-    DEADLINE_OVERDUE = "deadline_overdue"
+    # # Schedule events
+    # SCHEDULE_CREATED = "schedule_created"
+    # SCHEDULE_UPDATED = "schedule_updated"
+    # SCHEDULE_DELETED = "schedule_deleted"
+    # DEADLINE_APPROACHING = "deadline_approaching"
+    # DEADLINE_OVERDUE = "deadline_overdue"
     
-    # User events
-    USER_CREATED = "user_created"
-    USER_UPDATED = "user_updated"
-    USER_DELETED = "user_deleted"
+    # # User events
+    # USER_CREATED = "user_created"
+    # USER_UPDATED = "user_updated"
+    # USER_DELETED = "user_deleted"
     
     # Notification events
     NOTIFICATION_SENT = "notification_sent"
@@ -197,8 +197,8 @@ class EventTypes:
 
 # Topic constants
 class Topics:
-    TASK_EVENTS = "task-events"
-    PROJECT_EVENTS = "project-events"
-    SCHEDULE_EVENTS = "schedule-events"
-    USER_EVENTS = "user-events"
+    # TASK_EVENTS = "task-events"
+    # PROJECT_EVENTS = "project-events"
+    # SCHEDULE_EVENTS = "schedule-events"
+    # USER_EVENTS = "user-events"
     NOTIFICATION_EVENTS = "notification-events"
