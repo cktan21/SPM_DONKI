@@ -303,22 +303,24 @@ Security Features:
 
 ---
 
-> ## Signup
+## Signup
 
 POST http://localhost:5100/signup
 
 `Example: POST http://127.0.0.1:5100/signup`
 
-> **Important:** Signup page is not required in the first release as per customer clarification, hence this route is more for own usage to create a user account.
+> **Important:** This endpoint is intended for HR personnel to create new user accounts. It does NOT log in the newly created user or set any session cookies for them. The HR user remains logged in as themselves after creating a new account.
 
-> **Note:** This endpoint is nearly identical to `/login` but creates a new user account. If email confirmation is disabled in Supabase settings, the user is automatically logged in after signup. If email confirmation is required, the user must verify their email before they can log in.
+> **Note:** If email confirmation is disabled in Supabase settings, the user account is created immediately. If email confirmation is required, the user must verify their email before they can log in.
 
 Request Body:
-
 ```json
 {
     "email": "newuser@example.com",
-    "password": "securepassword123"
+    "password": "securepassword123",
+    "role": "staff",
+    "name": "John Doe",
+    "department": "Tech"
 }
 ```
 
@@ -327,21 +329,43 @@ Required Fields:
 |-----------|--------|----------|-----------------------------------|
 | `email` | string | ✅ | User's email address for registration. |
 | `password`| string | ✅ | User's desired password. |
+| `role` | string | ❌ | User's role (default: "user"). Options: "staff", "hr", "manager", "admin" |
+| `name` | string | ❌ | User's full name (default: "New User"). |
+| `department` | string | ❌ | User's department (default: "General"). Options: "Tech", "Sales", "Admin", "HR", "Quant", or custom value. |
 
 Sample Successful Response:
 HTTP Status: 201 Created
-
 ```json
 {
-    "message": "User signed up and logged in",
+    "message": "User account created successfully",
     "user": {
-        "id": "abcd1234-5678-90ef-ghij-klmnopqrstuv",
         "email": "newuser@example.com",
-        "role": "user",
-        "name": "Default Name"
+        "role": "staff",
+        "name": "John Doe",
+        "department": "Tech"
     }
 }
 ```
+
+Sample Response (Email Confirmation Required):
+HTTP Status: 201 Created
+```json
+{
+    "message": "User account created successfully. Email confirmation required.",
+    "user": {
+        "email": "newuser@example.com",
+        "role": "staff",
+        "name": "John Doe",
+        "department": "Tech"
+    }
+}
+```
+
+**Important Notes:**
+- This endpoint does NOT set cookies or create a session for the newly created user
+- The HR user making the request remains logged in as themselves
+- No sensitive information (user ID, tokens) is returned in the response
+- The newly created user must use the `/login` endpoint with their credentials to access the system
 
 > ## Get all users
 

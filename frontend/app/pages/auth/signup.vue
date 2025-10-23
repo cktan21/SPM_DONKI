@@ -13,6 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Check, ChevronsUpDown } from "lucide-vue-next"
+import { cn } from "@/lib/utils"
 
 const router = useRouter()
 
@@ -24,9 +39,20 @@ const coverImage = `/auth_images/background_image_${randomIndex}.jpg`
 const name = ref("")
 const email = ref("")
 const password = ref("")
-const role = ref("")  // Added role reactive variable
+const role = ref("")
+const department = ref("")
+const departmentOpen = ref(false)
 const loading = ref(false)
 const errorMessage = ref("")
+
+// Department options
+const departments = ref([
+  { value: "tech", label: "Tech" },
+  { value: "sales", label: "Sales" },
+  { value: "admin", label: "Admin" },
+  { value: "hr", label: "HR" },
+  { value: "quant", label: "Quant" },
+])
 
 const BASE_URL = "http://localhost:8000/user"
 
@@ -67,7 +93,8 @@ async function handleSignup() {
         name: name.value,
         email: email.value,
         password: password.value,
-        role: role.value
+        role: role.value,
+        department: department.value
       })
     })
 
@@ -134,6 +161,56 @@ async function handleSignup() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+
+          <div class="grid gap-2">
+            <Label for="department">Department</Label>
+            <Popover v-model:open="departmentOpen">
+              <PopoverTrigger as-child>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  :aria-expanded="departmentOpen"
+                  class="w-full justify-between"
+                >
+                  {{ department || "Select or type department..." }}
+                  <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent class="w-full p-0">
+                <Command>
+                  <CommandInput 
+                    placeholder="Search or type department..." 
+                    v-model="department"
+                    @keydown.enter="departmentOpen = false"
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      <span class="text-sm">Press Enter to add "{{ department }}"</span>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        v-for="dept in departments"
+                        :key="dept.value"
+                        :value="dept.label"
+                        @select="() => {
+                          department = dept.label
+                          departmentOpen = false
+                        }"
+                      >
+                        <Check
+                          :class="cn(
+                            'mr-2 h-4 w-4',
+                            department === dept.label ? 'opacity-100' : 'opacity-0'
+                          )"
+                        />
+                        {{ dept.label }}
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <Button :disabled="loading" @click="handleSignup" class="w-full mt-5">

@@ -44,6 +44,7 @@ class SignupRequest(BaseModel):
     password: str
     role: str = "user"  # default if not provided
     name: str = "New User"  # default if not provided
+    department: str = "General"  # default if not provided
 
 class LoginRequest(BaseModel):
     email: str
@@ -87,6 +88,7 @@ async def login(req: LoginRequest):
             "email": user["email"],
             "role": user["role"],
             "name": user["name"],
+            "department": user["department"],
         }
         
         user_data_jwt = jwt.encode(custom_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -324,80 +326,47 @@ def check_cookies(request: Request):
 @app.post("/signup")
 def signup(req: SignupRequest):
     """
-    Signup endpoint.
+    Signup endpoint for HR to create new user accounts.
 
-    Expects: JSON body with email and password.
-    Sets cookies for session (access_token, refresh_token, user_data) automatically.
-
-    Cookie expiry:
-    - access_token: 1 hour
-    - refresh_token: 24 hours
-    - user_data: 1 hour
+    Expects: JSON body with email, password, role, name, and department.
+    Does NOT set cookies or log in the new user.
+    Only creates the account and returns success message.
     """
     try:
         # Attempt signup
-        resp = supabase.sign_up(req.email, req.password, req.role, req.name)
+        resp = supabase.sign_up(req.email, req.password, req.role, req.name, req.department)
 
         if not resp.user:
             return JSONResponse(status_code=400, content={"detail": "Signup failed"})
 
         # If Supabase requires email confirmation, no session is returned
         if not resp.session:
-            return JSONResponse(status_code=400, content={"detail": "Email confirmation required"})
+            return JSONResponse(
+                status_code=201, 
+                content={
+                    "message": "User account created successfully. Email confirmation required.",
+                    "user": {
+                        "email": req.email,
+                        "role": req.role,
+                        "name": req.name,
+                        "department": req.department
+                    }
+                }
+            )
 
-        # Extract tokens from Supabase session
-        access_token = resp.session.access_token
-        refresh_token = resp.session.refresh_token
-        user = resp.user
-
-        # Custom user payload (same format as /login and /checkCookies)
-        custom_payload = {
-            "id": user.id,
-            "email": user.email,
-            "role": user.user_metadata.get("role"),
-            "name": user.user_metadata.get("name"),
-        }
-
-        # Encode custom payload into user_data cookie
-        user_data_token = jwt.encode(custom_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-        # Build response
-        response = JSONResponse(
+        # User created successfully
+        return JSONResponse(
             status_code=201,
             content={
-                "message": "User signed up and logged in",
-                "user": custom_payload,
-                "access_token": access_token
+                "message": "User account created successfully",
+                "user": {
+                    "email": req.email,
+                    "role": req.role,
+                    "name": req.name,
+                    "department": req.department
+                }
             }
         )
-
-        # Set cookies
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=False,  # Use True in production
-            samesite="lax",
-            max_age=3600
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=24 * 3600
-        )
-        response.set_cookie(
-            key="user_data",
-            value=user_data_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=3600
-        )
-
-        return response
 
     except Exception as e:
         return JSONResponse(
