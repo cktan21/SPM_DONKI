@@ -65,3 +65,11 @@ class SupabaseClient:
         """Get all users"""
         response = self.client.table("USER").select("*").execute()
         return response.data if response.data else []
+    
+    def get_all_logs(self, filter_by: str = None):
+        """Get all logs from LOG table."""
+        query = self.client.table("AUDIT_TRAIL").select("*").eq("table_name", "USER")
+        if filter_by:
+            query = query.eq("record_id", filter_by)
+        resp = query.execute()
+        return getattr(resp, "data", None) or []
