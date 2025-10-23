@@ -343,6 +343,61 @@ HTTP Status: 201 Created
 }
 ```
 
+> ## Get all users
+
+GET http://localhost:5100/allUsers
+
+`Example: GET http://127.0.0.1:5100/allUsers`
+
+Sample Output:
+```json
+{
+    "message": "Users retrieved successfully",
+    "users": [
+        {
+            "id": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
+            "email": "nswensg@gmail.com",
+            "role": "Test Dummy",
+            "created_at": "2025-09-15T20:47:01.121091+00:00",
+            "name": "Test User",
+            "auth_id": null
+        },
+        {
+            "id": "765bc84f-eba5-4d32-987b-d55adef7fe65",
+            "email": "ashley5@example.com",
+            "role": "Director",
+            "created_at": "2025-09-18T11:26:29.051576+00:00",
+            "name": "Default Name",
+            "auth_id": "e1b95925-0e56-443b-b999-66f3eabc8074"
+        },
+        {
+            "id": "17a40371-66fe-411a-963b-a977cc7cb475",
+            "email": "ashley6@example.com",
+            "role": "user",
+            "created_at": "2025-09-18T13:15:12.958746+00:00",
+            "name": "Default Name",
+            "auth_id": "30397e3b-61c5-4836-98fb-987e85a8bd29"
+        },
+        {
+            "id": "da283ea9-552d-48dd-be56-18c81364adf0",
+            "email": "ashley10@example.com",
+            "role": "user",
+            "created_at": "2025-09-22T05:09:35.365228+00:00",
+            "name": "Default Name",
+            "auth_id": "10ef22b0-e5a4-4f7a-b11d-700e4f4ba0a3"
+        },
+        {
+            "id": "bba910a9-1685-4fa3-af21-ccb2e11cf751",
+            "email": "3amtest@example.com",
+            "role": "user",
+            "created_at": "2025-09-25T19:23:25.865356+00:00",
+            "name": "Default Name",
+            "auth_id": "6d52c7b4-ed03-4a13-9d53-eace42d3f0f6"
+        }
+    ]
+}
+```
+
 ### Cookie behaviours:
 
 > Same as login route

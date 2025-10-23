@@ -65,10 +65,7 @@ async def login(req: LoginRequest):
     """
     try:
         # Authenticate with Supabase
-        resp = supabase.client.auth.sign_in_with_password({
-            "email": req.email,
-            "password": req.password
-        })
+        resp = supabase.sign_in_with_password(req.email, req.password)
         if not resp.session:
             return JSONResponse(status_code=401, content={"detail": "Invalid email or password"})
         
@@ -77,9 +74,7 @@ async def login(req: LoginRequest):
         
         # Fetch user data from USER database
         auth_id = resp.user.id ##id here is auth id
-        user_data = supabase.client.table("USER").select(
-            "id, email, role, name"
-        ).eq("auth_id", auth_id).execute()
+        user_data = supabase.get_user_by_auth_id(auth_id)
         
         if not user_data.data:
             return JSONResponse(status_code=404, content={"detail": "User not found"})
@@ -166,8 +161,8 @@ async def logout(request: Request, background_tasks: BackgroundTasks):
         if access_token and refresh_token:
             def supabase_signout():
                 try:
-                    supabase.client.auth.set_session(access_token, refresh_token)
-                    supabase.client.auth.sign_out(scope='local')
+                    supabase.set_session(access_token, refresh_token)
+                    supabase.sign_out(scope='local')
                 except Exception as supabase_error:
                     print(f"Supabase sign out error: {supabase_error}")
             
@@ -257,7 +252,7 @@ def check_cookies(request: Request):
     except ExpiredSignatureError:
         # Access token expired, try refresh token
         try:
-            new_session = supabase.client.auth.refresh_session(refresh_token)
+            new_session = supabase.refresh_session(refresh_token)
 
             if not new_session or not new_session.session:
                 raise HTTPException(status_code=401, detail="Invalid refresh token")
@@ -341,16 +336,7 @@ def signup(req: SignupRequest):
     """
     try:
         # Attempt signup
-        resp = supabase.client.auth.sign_up({
-            "email": req.email,
-            "password": req.password,
-            "options": {
-                "data": {
-                    "role": req.role,
-                    "name": req.name
-                }
-            }
-        })
+        resp = supabase.sign_up(req.email, req.password, req.role, req.name)
 
         if not resp.user:
             return JSONResponse(status_code=400, content={"detail": "Signup failed"})
@@ -419,6 +405,14 @@ def signup(req: SignupRequest):
             content={"detail": str(e) or "Internal server error"}
         )
 
+@app.get("/allUsers")
+def get_all_users():
+    """
+    Get all users
+    """
+    users = supabase.get_all_users()
+    return JSONResponse(status_code=200, content={"message": "Users retrieved successfully", "users": users})
+
 
 # ---------------------------------------- INTERNAL SERVICE --------------------------------------------
 
@@ -447,9 +441,7 @@ def validate_user_internal(user_id: str):
     """
     try:
         # Fetch user from user table by ID
-        user_data = supabase.client.table("USER").select(
-            "id, auth_id, email, role, name, created_at"
-        ).eq("id", user_id).execute()
+        user_data = supabase.get_user_by_id(user_id)
 
         if not user_data.data:
             raise HTTPException(status_code=404, detail="User not found")
