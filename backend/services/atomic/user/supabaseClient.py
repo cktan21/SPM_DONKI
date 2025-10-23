@@ -20,7 +20,7 @@ class SupabaseClient:
             "password": password
         })
     
-    def sign_up(self, email: str, password: str, role: str = "user", name: str = "New User"):
+    def sign_up(self, email: str, password: str, role: str = "user", name: str = "New User", department: str = "General"):
         """Create new user account"""
         return self.client.auth.sign_up({
             "email": email,
@@ -28,7 +28,8 @@ class SupabaseClient:
             "options": {
                 "data": {
                     "role": role,
-                    "name": name
+                    "name": name,
+                    "department": department,
                 }
             }
         })
@@ -49,14 +50,14 @@ class SupabaseClient:
     def get_user_by_auth_id(self, auth_id: str):
         """Get user data by auth_id"""
         response = self.client.table("USER").select(
-            "id, email, role, name"
+            "id, email, role, name", "department"
         ).eq("auth_id", auth_id).execute()
         return response
     
     def get_user_by_id(self, user_id: str):
         """Get user data by user ID"""
         response = self.client.table("USER").select(
-            "id, auth_id, email, role, name, created_at"
+            "id, auth_id, email, role, name, created_at", "department"
         ).eq("id", user_id).execute()
         return response
     
