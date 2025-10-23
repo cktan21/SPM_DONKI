@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue"
-import { useRouter } from "vue-router"
+import { ref, onMounted } from "vue"
+import { useRouter, useRoute } from "vue-router" // ✅ add useRoute
+
 import type { DateValue } from "@internationalized/date"
 import { getLocalTimeZone, CalendarDate } from "@internationalized/date"
 
@@ -32,6 +33,7 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 
 const router = useRouter()
+const route = useRoute() // ✅ define route here
 const { toast } = useToast()
 const API_BASE_URL = "http://localhost:4000"
 
@@ -54,6 +56,10 @@ const formCreate = ref({
     deadline: undefined as DateValue | undefined,
     frequency: "",
   },
+})
+
+onMounted(() => {
+  formCreate.value.pid = route.params.id as string // ✅ works now
 })
 
 const state = ref({ creating: false })
@@ -231,6 +237,7 @@ const createTask = async () => {
                       v-model="formCreate.pid" 
                       placeholder="Optional project identifier" 
                       class="w-full"
+                      readonly
                     />
                   </div>
                   <div class="space-y-2">
