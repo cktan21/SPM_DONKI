@@ -28,8 +28,11 @@ def supabase_client(mock_client):
 # insert_project tests
 # -------------------------------
 def test_insert_project_success(mock_client, supabase_client):
-    uid, name, desc = "user123", "My Project", "Description"
-    expected = {"id": 1, "uid": uid, "name": name, "desc": desc}
+    """Test successful project creation"""
+    uid = "user-123"
+    name = "New Project"
+    desc = "Project Description"
+    expected = {"id": "project-1", "uid": uid, "name": name, "desc": desc}
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.return_value.data = [expected]
@@ -37,11 +40,38 @@ def test_insert_project_success(mock_client, supabase_client):
     result = supabase_client.insert_project(uid, name, desc)
 
     mock_client.table.assert_called_once_with("PROJECT")
-    mock_table.insert.assert_called_once()
+    mock_table.insert.assert_called_once_with({
+        "uid": uid,
+        "name": name,
+        "desc": desc
+    })
     assert result == expected
 
 
+def test_insert_project_without_description(mock_client, supabase_client):
+    """Test project creation without description"""
+    uid = "user-123"
+    name = "Simple Project"
+    desc = None
+
+    mock_table = mock_client.table.return_value
+    mock_table.insert.return_value.execute.return_value.data = [
+        {"id": "project-1", "uid": uid, "name": name, "desc": None}
+    ]
+
+    result = supabase_client.insert_project(uid, name, desc)
+
+    mock_table.insert.assert_called_once_with({
+        "uid": uid,
+        "name": name,
+        "desc": desc
+    })
+    assert result["name"] == name
+    assert result["desc"] is None
+
+
 def test_insert_project_empty_result(mock_client, supabase_client):
+    """Test project creation when no data is returned"""
     uid, name, desc = "user123", "My Project", "Description"
 
     mock_table = mock_client.table.return_value
@@ -53,12 +83,13 @@ def test_insert_project_empty_result(mock_client, supabase_client):
 
 
 def test_insert_project_failure_raises(mock_client, supabase_client):
+    """Test project creation with database error"""
     uid, name, desc = "user123", "My Project", "Description"
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.side_effect = Exception("Insert failed")
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="Insert failed"):
         supabase_client.insert_project(uid, name, desc)
 
 
@@ -201,10 +232,69 @@ def test_update_project_not_found(mock_client, supabase_client):
 
 
 def test_update_project_failure_raises(mock_client, supabase_client):
+    """Test project update with database error"""
     pid = 5
     updated = {"name": "New Name"}
     mock_table = mock_client.table.return_value
     mock_table.update.return_value.eq.return_value.execute.side_effect = Exception("Update failed")
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="Update failed"):
         supabase_client.update_project(pid, updated)
+
+
+# -------------------------------
+# get_all_logs tests
+# -------------------------------
+def test_get_all_logs_success(mock_client, supabase_client):
+    """Test getting all audit logs for projects"""
+    expected_logs = [
+        {"id": "log1", "table_name": "PROJECT", "action": "INSERT", "record_id": "project123"},
+        {"id": "log2", "table_name": "PROJECT", "action": "UPDATE", "record_id": "project456"}
+    ]
+    
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = expected_logs
+    
+    result = supabase_client.get_all_logs()
+    
+    mock_client.table.assert_called_once_with("AUDIT_TRAIL")
+    mock_table.select.assert_called_once_with("*")
+    mock_table.select.return_value.eq.assert_called_once_with("table_name", "PROJECT")
+    assert result == expected_logs
+
+
+def test_get_all_logs_with_filter(mock_client, supabase_client):
+    """Test getting audit logs with filter"""
+    filter_by = "project123"
+    expected_logs = [
+        {"id": "log1", "table_name": "PROJECT", "action": "INSERT", "record_id": "project123"}
+    ]
+    
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = expected_logs
+    
+    result = supabase_client.get_all_logs(filter_by)
+    
+    mock_client.table.assert_called_once_with("AUDIT_TRAIL")
+    mock_table.select.assert_called_once_with("*")
+    assert result == expected_logs
+
+
+def test_get_all_logs_empty(mock_client, supabase_client):
+    """Test getting audit logs when no logs exist"""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = []
+    
+    result = supabase_client.get_all_logs()
+    
+    assert result == []
+
+
+def test_get_all_logs_none_data(mock_client, supabase_client):
+    """Test getting audit logs when data is None"""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = None
+    
+    result = supabase_client.get_all_logs()
+    
+    assert result == []
