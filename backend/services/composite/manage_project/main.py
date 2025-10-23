@@ -348,7 +348,19 @@ async def get_project(
                             if not task_obj and isinstance(payload, dict):
                                 # If Manage-Task returns the task fields at top-level
                                 task_obj = payload
+                            
                             if task_obj:
+                                # === NEW: Include schedule data in the task object ===
+                                schedule_data = payload.get("schedule")
+                                if schedule_data:
+                                    # Extract the actual schedule details
+                                    schedule_details = schedule_data.get("data", schedule_data)
+                                    # Add key schedule fields directly to the task for easy access
+                                    task_obj["status"] = schedule_details.get("status")
+                                    task_obj["deadline"] = schedule_details.get("deadline")
+                                    # Optionally, keep the full schedule object as well
+                                    task_obj["schedule"] = schedule_details
+                                
                                 enriched_tasks.append(task_obj)
                             else:
                                 # If shape unexpected, fall back
