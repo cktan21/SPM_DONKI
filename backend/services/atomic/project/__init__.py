@@ -1,1 +1,1 @@
-from .supabaseClient import SupabaseClient
+from .services.supabaseClient import SupabaseClient
