@@ -394,22 +394,23 @@ async def create_task_composite(
             "create_task": {
                 "summary": "Create a new task with schedule",
                 "description": "Example of creating a task with all optional fields including schedule",
-                "value": {
-                    "name": "New Task Title",
-                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-                    "parentTaskId": "16e2b6cc-fb44-4873-9292-b8c697832a2e",
-                    "collaborators": [
-                        "655a9260-f871-480f-abea-ded735b2170a",
-                        "b5c38ec0-fc79-4ef9-ae13-f641b5318c03"
-                    ],
+                "value":   {
+                    "name": "New Task Title 4.0",
+                    "pid": "695d5107-0229-481a-9301-7c0562ea52d1",
+                    "parentTaskId": "null",
+                    "collaborators": [],
                     "desc": "Optional description",
                     "notes": "Optional notes",
-                    "priorityLevel": 5,
-                    "label": "High Priority",
+                    "priorityLevel": 10,
+                    "label": "bug",
+                    "created_by_uid":"fb892a63-2401-46fc-b660-bf3fe1196d4e",
                     "schedule": {
-                        "status": "not started",
+                        "status": "done",
                         "start": "2024-10-20T09:00:00Z",
-                        "deadline": "2025-12-31T23:59:59Z"
+                        "deadline": "2025-12-31T23:59:59Z",
+                        "is_recurring": "true",
+                        "frequency": "weekly",
+                        "next_occurrence": "2025-12-31T23:59:59Z"
                     }
                 }
             }
@@ -643,13 +644,17 @@ async def create_schedule_service(task_id: str, schedule_data: Dict[str, Any]):
     """Create a schedule entry for the newly created task"""
     async with httpx.AsyncClient() as client:
         try:
-            # Add task_id to schedule data - USE "tid" to match schedule service
+            # Start with all schedule data fields
             schedule_payload = {
                 "tid": task_id,
-                "deadline": schedule_data.get("deadline"),
-                "is_recurring": schedule_data.get("is_recurring", False),  # Default to False
-                "status": schedule_data.get("status", "ongoing")  # Default to "ongoing"
+                **schedule_data  # Spread all fields from schedule_data
             }
+            
+            # Add defaults for required fields if missing
+            if "is_recurring" not in schedule_payload:
+                schedule_payload["is_recurring"] = False
+            if "status" not in schedule_payload:
+                schedule_payload["status"] = "ongoing"
             
             response = await client.post(f"{SCHEDULE_SERVICE_URL}/", json=schedule_payload)
             if response.status_code in [200, 201]:
@@ -659,7 +664,6 @@ async def create_schedule_service(task_id: str, schedule_data: Dict[str, Any]):
                     "data": response.json()
                 }
             else:
-                # Return error dict (will be caught by main function for rollback)
                 print(f"Warning: Schedule creation failed with status {response.status_code}: {response.text}")
                 return {
                     "status": "failed",
@@ -909,7 +913,7 @@ async def create_task_service(task_json: Dict[str, Any]):
     #append to task_json
 
     # UID for testing
-    task_json["created_by_uid"] = "7b055ff5-84f4-47bc-be7d-5905caec3ec6"
+    # task_json["created_by_uid"] = "fb892a63-2401-46fc-b660-bf3fe1196d4e"
 
     async with httpx.AsyncClient() as client:
         try:
