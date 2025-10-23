@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
-import { useRouter, useRoute } from "vue-router" // ✅ add useRoute
-
+import { ref, watch, computed, onMounted } from "vue"
+import { useRouter, useRoute } from "vue-router"
 import type { DateValue } from "@internationalized/date"
 import { getLocalTimeZone, CalendarDate } from "@internationalized/date"
 
@@ -12,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@/components/ui/checkbox"
+const route = useRoute() // ✅ define route here
 
 import {
   Select,
@@ -33,7 +32,6 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 
 const router = useRouter()
-const route = useRoute() // ✅ define route here
 const { toast } = useToast()
 const API_BASE_URL = "http://localhost:4000"
 
@@ -49,7 +47,7 @@ const formCreate = ref({
   notes: "",
   priorityLevel: "",
   label: "",
-  isRecurring: false, // Move to top level for better reactivity
+  isRecurring: "false", // String "true" or "false"
   schedule: {
     status: "",
     start: undefined as DateValue | undefined,
@@ -67,7 +65,7 @@ const handleBack = () => router.back()
 
 // Computed property to auto-calculate next_occurrence based on start date and frequency
 const nextOccurrence = computed(() => {
-  if (!formCreate.value.isRecurring || 
+  if (formCreate.value.isRecurring !== "true" || 
       !formCreate.value.schedule.start || 
       !formCreate.value.schedule.frequency) {
     return undefined
@@ -143,13 +141,13 @@ const createTask = async () => {
         .toDate(getLocalTimeZone())
         .toISOString()
     
-    schedule.is_recurring = formCreate.value.isRecurring ? "true" : "false"
+    schedule.is_recurring = formCreate.value.isRecurring // Already "true" or "false" string
     
     if (formCreate.value.schedule.frequency)
       schedule.frequency = formCreate.value.schedule.frequency
     
     // Auto-calculate next_occurrence if recurring is enabled
-    if (formCreate.value.isRecurring && nextOccurrence.value) {
+    if (formCreate.value.isRecurring === "true" && nextOccurrence.value) {
       schedule.next_occurrence = nextOccurrence.value
         .toDate(getLocalTimeZone())
         .toISOString()
@@ -353,8 +351,8 @@ const createTask = async () => {
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todo">To-do</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="to do">To-do</SelectItem>
+                      <SelectItem value="ongoing">Ongoing</SelectItem>
                       <SelectItem value="done">Done</SelectItem>
                     </SelectContent>
                   </Select>
@@ -430,20 +428,20 @@ const createTask = async () => {
 
                 <!-- Recurring Task Section -->
                 <div class="space-y-4 p-4 border rounded-lg">
-                  <div class="flex items-center space-x-2">
-                    <Checkbox 
-                      id="task-recurring"
-                      v-model:checked="formCreate.isRecurring"
-                    />
-                    <Label 
-                      for="task-recurring" 
-                      class="text-sm font-medium cursor-pointer"
-                    >
-                      This is a recurring task
-                    </Label>
+                  <div class="space-y-2">
+                    <Label for="task-recurring" class="text-sm font-medium">Is Recurring Task?</Label>
+                    <Select v-model="formCreate.isRecurring">
+                      <SelectTrigger id="task-recurring" class="w-full">
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Yes (Recurring)</SelectItem>
+                        <SelectItem value="false">No (One-time)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div v-if="formCreate.isRecurring" class="space-y-4 pt-2">
+                  <div v-if="formCreate.isRecurring === 'true'" class="space-y-4 pt-2">
                     <div class="space-y-2">
                       <Label for="task-frequency" class="text-sm font-medium">Frequency</Label>
                       <Select v-model="formCreate.schedule.frequency">
