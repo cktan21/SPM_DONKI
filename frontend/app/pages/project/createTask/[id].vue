@@ -335,6 +335,7 @@ const createTask = async () => {
       schedule: Object.keys(schedule).length > 0 ? schedule : undefined,
 
     }
+    console.log(payload)
 
     const response = await fetch(`${API_BASE_URL}/createTask`, {
 
@@ -350,7 +351,7 @@ const createTask = async () => {
 
     toast({ title: "Task created successfully!" })
 
-    router.push("/tasks") // Change this to your actual task list route
+    router.push("/Dashboard") // Change this to your actual task list route
 
   } catch (err: any) {
 
