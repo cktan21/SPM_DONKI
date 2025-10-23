@@ -281,11 +281,11 @@ async def get_all_logs():
     logs = supabase.get_all_logs()
     return {"message": f"{len(logs)} log(s) retrieved", "logs": logs}
 
-@app.get("/logs/{log_id}", summary="Get a log by its ID")
+@app.get("/logs/{tid}", summary="Get a log by its ID")
 async def get_log(
-    log_id: str = Path(..., description="ID of the log to get"),
+    tid: str = Path(..., description="ID of the log to get"),
 ):
-    log = supabase.get_all_logs(filter_by=log_id)
+    log = supabase.get_all_logs(filter_by=tid)
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return {"message": "Log retrieved successfully", "log": log}
