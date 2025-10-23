@@ -53,6 +53,13 @@ services:
         paths:
           - /manage-project
 
+  - name: kafka-ui-service
+    url: http://kafka-ui:8080
+    routes:
+      - name: kafka-ui-route
+        paths:
+          - /kafka-ui
+
 
 plugins:
   - name: rate-limiting

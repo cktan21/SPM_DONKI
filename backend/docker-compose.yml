@@ -1,8 +1,6 @@
 # volumes:
 #   pgdata:
 #     name: esd_pgdata
-#   rabbitmq_data:
-#     name: esd_rabbitmq_data
 
 networks:
     spm-net:
@@ -168,7 +166,7 @@ services:
                     "CMD",
                     "kafka-broker-api-versions",
                     "--bootstrap-server",
-                    "localhost:9092",
+                    "kafka:9092",
                 ]
             interval: 10s
             timeout: 5s
