@@ -47,13 +47,14 @@ def get_schedule_by_sid(sid: str):
 # Create new Row
 @app.post("/")
 def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
+    print(new_data)
     tid = new_data.get("tid")
     start = new_data.get("start", None)
     deadline = new_data.get("deadline")
     is_recurring = new_data.get("is_recurring", False)
     next_occurrence = new_data.get("next_occurrence") if is_recurring else None
     frequency = new_data.get("frequency") if is_recurring else None
-    status = "ongoing"
+    status = new_data.get("status")
     is_recurring = new_data.get("is_recurring", False)
 
     try:
