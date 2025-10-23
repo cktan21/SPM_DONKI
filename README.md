@@ -43,6 +43,18 @@ docker pull sonarqube:lts-community
 docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 ``` -->
 
+3. Kong UI (access management console on localhost:8002)
+```bash
+docker pull kong/kong-gateway:3.9.0.1
+docker run -d --name kong-dbless -p 8000:8000 -p 8443:8443 -p 8001:8001 -p 8444:8444 -p 8002:8002 -p 8445:8445 -p 8003:8003 -p 8004:8004 kong/kong-gateway:3.9.0.1
+```
+
+4. Kafka UI (access kafka ui on localhost:8080)
+```bash
+docker pull provectuslabs/kafka-ui:latest
+docker run -d --name kafka-ui -p 8080:8080 provectuslabs/kafka-ui:latest
+```
+
 ## Technical Architecture Diagram
 <img width="1195" height="911" alt="image" src="assets/TechnicalArchitecture.svg" />
 
