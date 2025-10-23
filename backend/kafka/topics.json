@@ -1,0 +1,49 @@
+{
+    "topics": [
+        {
+            "name": "task-events",
+            "partitions": 3,
+            "replication_factor": 1,
+            "config": {
+                "cleanup.policy": "delete",
+                "retention.ms": "604800000"
+            }
+        },
+        {
+            "name": "project-events",
+            "partitions": 3,
+            "replication_factor": 1,
+            "config": {
+                "cleanup.policy": "delete",
+                "retention.ms": "604800000"
+            }
+        },
+        {
+            "name": "schedule-events",
+            "partitions": 3,
+            "replication_factor": 1,
+            "config": {
+                "cleanup.policy": "delete",
+                "retention.ms": "604800000"
+            }
+        },
+        {
+            "name": "notification-events",
+            "partitions": 3,
+            "replication_factor": 1,
+            "config": {
+                "cleanup.policy": "delete",
+                "retention.ms": "1209600000"
+            }
+        },
+        {
+            "name": "user-events",
+            "partitions": 3,
+            "replication_factor": 1,
+            "config": {
+                "cleanup.policy": "delete",
+                "retention.ms": "604800000"
+            }
+        }
+    ]
+}

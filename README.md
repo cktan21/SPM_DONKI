@@ -43,6 +43,18 @@ docker pull sonarqube:lts-community
 docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 ``` -->
 
+3. Kong UI (access management console on localhost:8002)
+```bash
+docker pull kong/kong-gateway:3.9.0.1
+docker run -d --name kong-dbless -p 8000:8000 -p 8443:8443 -p 8001:8001 -p 8444:8444 -p 8002:8002 -p 8445:8445 -p 8003:8003 -p 8004:8004 kong/kong-gateway:3.9.0.1
+```
+
+4. Kafka UI (access kafka ui on localhost:8080)
+```bash
+docker pull provectuslabs/kafka-ui:latest
+docker run -d --name kafka-ui -p 8080:8080 provectuslabs/kafka-ui:latest
+```
+
 ## Technical Architecture Diagram
 <img width="1195" height="911" alt="image" src="assets/TechnicalArchitecture.svg" />
 
@@ -52,12 +64,10 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 - <b>Microservice Archictecture</b>
 - <b>Loosely Coupled</b> Atomic Microservices
 - Variety of <b>Languages and Frameworks and Runtimes</b> to show <b>Language Agnostic</b> properties in Microservices
-- <b>RabbitMQ as message broker</b> for real time changes
-- Websocket as message consumer of RabbitMQ
+- <b>Kafka as message broker</b> for real time changes
+- Websocket as message consumer of Kafka
 - <b>Kong API Gateway</b> for aggregating requests and routing
 - <b>Grafana + Prometheus</b> for data ingestion and monitoring of microservices and Kong
-- <b>CI/CD pipeline</b> to automate Image and Container building on Cloud
-- <b>CI/CD pipeline</b> to run automated static code testing with Snyk and Checkov
 
 ### Frontend
 - Vue + Nuxt + TypeScript
@@ -70,7 +80,7 @@ docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 <a href="https://www.typescriptlang.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Typescript_logo_2020.svg/1200px-Typescript_logo_2020.svg.png" alt="TypeScript" width="40"/></a>&nbsp;&nbsp;
 <a href="https://vuejs.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/9/95/Vue.js_Logo_2.svg" alt="Vue" width="40"/></a>  
 <a href="https://nuxt.com/"><img src="https://nuxt.com/assets/design-kit/icon-green.svg" alt="Nuxt" width="50"/></a>  
-<!-- <a href="https://tailwindcss.com/"><img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Tailwind_CSS_Logo.svg" alt="Tailwind" width="30"/></a>&nbsp;&nbsp; -->
+<a href="https://tailwindcss.com/"><img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Tailwind_CSS_Logo.svg" alt="Tailwind" width="30"/></a>&nbsp;&nbsp;
 <!-- <a href="https://ui.shadcn.com/"><img src="https://github.com/user-attachments/assets/dd2eb75e-28c6-46e5-bb11-734e9e9a04f3" alt="ShadCN" width="30"/></a>&nbsp;&nbsp; -->
 <a href="https://supabase.com/auth"><img src="https://www.vectorlogo.zone/logos/supabase/supabase-icon.svg" alt="Supabase" width="40"/></a>&nbsp;&nbsp;
 <a href="https://bun.sh/"><img src="https://bun.sh/logo.svg" alt="Bun" width="55"/></a>&nbsp;&nbsp;

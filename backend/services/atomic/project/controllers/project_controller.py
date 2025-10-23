@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import HTTPException
 from models import Project, ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse
 from services.project_service import ProjectService
@@ -126,3 +126,9 @@ class ProjectController:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+    def get_all_logs(self, filter_by: str = None) -> List[Dict[str, Any]]:
+        """
+        Get all logs for a project
+        """
+        return self.project_service.get_all_logs(filter_by)

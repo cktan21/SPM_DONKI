@@ -55,3 +55,11 @@ class SupabaseClient:
             .execute()
         )
         return response
+    
+    def get_all_logs(self, filter_by: str = None):
+        """Get all logs from LOG table."""
+        query = self.client.table("AUDIT_TRAIL").select("*").eq("table_name", "TASK").eq("table_name", "SCHEDULE")
+        if filter_by:
+            query = query.eq("record_id", filter_by)
+        resp = query.execute()
+        return getattr(resp, "data", None) or []

@@ -276,5 +276,19 @@ async def delete_task(
 
 #     return {"message": "Task deleted successfully", "task": rows[0]}
 
+@app.get("/logs", summary="Get all logs")
+async def get_all_logs():
+    logs = supabase.get_all_logs()
+    return {"message": f"{len(logs)} log(s) retrieved", "logs": logs}
+
+@app.get("/logs/{tid}", summary="Get a log by its ID")
+async def get_log(
+    tid: str = Path(..., description="ID of the log to get"),
+):
+    log = supabase.get_all_logs(filter_by=tid)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    return {"message": "Log retrieved successfully", "log": log}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5500)

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Body
 from typing import Any, Dict
+from fastapi.params import Path
 from fastapi.responses import Response
 from dotenv import load_dotenv
 import uvicorn
@@ -51,7 +52,19 @@ def update_project(id: str, new_data: Dict[str, Any] = Body(...)):
 def delete_project(id: str):
     return project_controller.delete_project(id)
 
+@app.get("/logs", summary="Get all logs")
+async def get_all_logs():
+    logs = project_controller.get_all_logs()
+    return {"message": f"{len(logs)} log(s) retrieved", "logs": logs}
 
+@app.get("/logs/{pid}", summary="Get a log by its ID")
+async def get_log(
+    pid: str = Path(..., description="ID of the log to get"),
+):
+    log = project_controller.get_all_logs(filter_by=pid)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    return {"message": "Log retrieved successfully", "log": log}
 
 @app.get("/favicon.ico")
 async def get_favicon():

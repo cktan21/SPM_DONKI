@@ -37,3 +37,9 @@ class ProjectService:
         Delete a project
         """
         return self.supabase_client.delete_project(project_id)
+    
+    def get_all_logs(self, filter_by: str = None) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get all logs for a project
+        """
+        return self.supabase_client.get_all_logs(filter_by)
