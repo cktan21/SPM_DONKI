@@ -163,6 +163,7 @@ const progressData = computed(() => {
 
   // Only count main tasks (tasks without parentTaskId)
   const tasks = mainTasks.value
+  console.log(tasks)
   const done = tasks.filter(t => t.status === 'done').length
   const ongoing = tasks.filter(t => t.status === 'ongoing').length
   const toDo = tasks.filter(t => t.status === 'to do').length
