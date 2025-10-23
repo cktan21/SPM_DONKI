@@ -1,0 +1,113 @@
+name: Tests and Coverage (Combined)
+
+on:
+    pull_request:
+        branches:
+            - main
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
+
+jobs:
+    unit-tests:
+        name: Python Unit Tests + Coverage
+        runs-on: ubuntu-latest
+        steps:
+            - name: 📥 Checkout code
+              uses: actions/checkout@v4
+
+            - name: Install Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install Python Dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install pytest pytest-cov coveralls supabase dotenv fastapi httpx pydantic uvicorn
+                  pip install \
+                    fastapi \
+                    starlette \
+                    pydantic \
+                    httpx \
+                    anyio \
+                    uvicorn \
+                    pytest \
+                    pytest-cov \
+                    pytest-asyncio
+
+            - name: Run Unit Tests (pytest) with coverage
+              run: |
+                  pytest -v --cov=./backend/services/ \
+                    --cov-report=term-missing \
+                    --cov-report=xml:coverage-python.xml \
+                    test/unit/
+
+            - name: Upload Python coverage to Coveralls (parallel)
+              uses: coverallsapp/github-action@v2
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  flag-name: python
+                  parallel: true
+                  file: coverage-python.xml
+                  format: cobertura
+              env:
+                  COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+
+    integration-tests:
+        name: Go Integration Tests + Coverage
+        runs-on: ubuntu-latest
+        env:
+            SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+            SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+            SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+            SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        defaults:
+            run:
+                working-directory: ./backend
+        steps:
+            - name: 📥 Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: "1.25"
+
+            - name: Setup Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Start services (optimized)
+              run: |
+                  export DOCKER_BUILDKIT=1
+                  export BUILDKIT_PROGRESS=plain
+                  docker compose up -d --build
+                  echo "Waiting for services to be ready..."
+                  timeout 60s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 1; done'
+                  echo "Services are ready!"
+
+            - name: Run Go integration tests with coverage
+              run: |
+                  cd ../test/integration
+                  go test -v -race -covermode=atomic -coverprofile=coverage.out
+
+            - name: Upload Go coverage to Coveralls (parallel)
+              uses: shogo82148/actions-goveralls@v1
+              with:
+                  path-to-profile: test/integration/coverage.out
+                  parallel: true
+                  flag-name: go
+              env:
+                  COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+
+            - name: Container Cleanup
+              if: always()
+              run: |
+                  docker compose down --volumes --remove-orphans
+                  docker system prune -f

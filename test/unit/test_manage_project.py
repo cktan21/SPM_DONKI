@@ -108,7 +108,7 @@ async def test_get_project_not_found():
 
         result = await main.get_project("p1")
 
-        assert result["message"] == "No projects found for this user"
+        assert result["message"] == "No project found for this ID"
         assert result["project_id"] == "p1"
         assert result["project"] is None
 
@@ -157,13 +157,22 @@ async def test_concurrent_task_fetching():
         
         async def mock_get(url, **kwargs):
             call_order.append(url)
-            if "uid" in url:
+            if "internal" in url:
+                # This is the user service call - return user data
+                return AsyncMock(
+                    status_code=200, 
+                    json=Mock(return_value={"name": "Test User"}), 
+                    raise_for_status=Mock()
+                )
+            elif "uid" in url:
+                # This is the project service call - return projects
                 return AsyncMock(
                     status_code=200, 
                     json=Mock(return_value=fake_projects), 
                     raise_for_status=Mock()
                 )
             else:
+                # This is task service calls
                 return AsyncMock(
                     status_code=200, 
                     json=Mock(return_value=fake_tasks)
@@ -177,7 +186,7 @@ async def test_concurrent_task_fetching():
         assert result["message"] == "Projects retrieved successfully"
         assert len(result["projects"]) == 2
         # Verify that project service was called first
-        assert "uid" in call_order[0]
+        assert "internal" in call_order[0]
 
 
 async def test_malformed_response_handling():
