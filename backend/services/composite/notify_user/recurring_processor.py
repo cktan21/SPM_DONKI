@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
-from supabaseClient import SupabaseClient
+from schedule_client import ScheduleClient
 import logging
 
 # Configure logging
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class RecurringTaskProcessor:
     def __init__(self):
         self.scheduler = BackgroundScheduler()
-        self.supabase = SupabaseClient()
+        self.schedule_client = ScheduleClient()
         self.scheduler.start()
         logger.info("RecurringTaskProcessor initialized and scheduler started")
 
@@ -63,8 +63,8 @@ class RecurringTaskProcessor:
             # Calculate next occurrence for the new entry
             next_occurrence = self.calculate_next_occurrence(frequency, new_start, new_deadline)
             
-            # Create new schedule entry
-            new_entry = self.supabase.insert_schedule(
+            # Create new schedule entry via schedule service
+            new_entry = self.schedule_client.create_schedule(
                 tid=tid,
                 start=new_start.isoformat(),
                 deadline=new_deadline.isoformat(),
@@ -86,8 +86,8 @@ class RecurringTaskProcessor:
         Schedule a recurring task to be processed at the next occurrence time
         """
         try:
-            # Get the current schedule entry
-            current_entry = self.supabase.fetch_schedule_by_sid(sid)
+            # Get the current schedule entry via schedule service
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
             if not current_entry:
                 logger.error(f"Schedule entry {sid} not found")
                 return False
@@ -116,8 +116,8 @@ class RecurringTaskProcessor:
         try:
             logger.info(f"Processing recurring task {sid} with frequency {frequency}")
             
-            # Get the current schedule entry
-            current_entry = self.supabase.fetch_schedule_by_sid(sid)
+            # Get the current schedule entry via schedule service
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
             if not current_entry:
                 logger.error(f"Schedule entry {sid} not found")
                 return
