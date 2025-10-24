@@ -68,8 +68,3 @@ class SupabaseClient:
     def fetch_recurring_tasks(self):
         response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).not_.is_("next_occurrence", "null").execute()
         return response.data if response.data else []
-
-    # Get all schedules
-    def fetch_all_recurring_schedules(self):
-        response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).execute()
-        return response.data if response.data else []

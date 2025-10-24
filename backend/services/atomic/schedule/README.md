@@ -231,63 +231,38 @@ Sample Output:
 }
 ```
 
-### Get Scheduled Recurring Tasks
+### Get All Recurring Tasks
 
-GET http://localhost:5300/recurring/scheduled
+GET http://localhost:5300/recurring/all
 
 Sample Output:
 
 ```json
 {
-    "message": "Found 3 scheduled recurring tasks",
-    "jobs": [
+    "message": "Retrieved 2 recurring tasks",
+    "tasks": [
         {
-            "id": "recurring_053a4e96-cefd-4a8e-9941-5b621ff8ca52",
-            "next_run_time": "2025-10-18T08:34:20+00:00"
+            "tid": "1991067d-18d4-48c4-987b-7c06743725b4",
+            "start": "2025-09-25T15:42:21+00:00",
+            "deadline": "2025-09-26T15:42:21+00:00",
+            "is_recurring": false,
+            "status": "ongoing",
+            "created_at": "2025-09-25T15:42:21+00:00",
+            "next_occurrence": null,
+            "sid": "6c2c6617-971d-4c30-a0ec-263c386bc937"
         },
         {
-            "id": "recurring_9f7c031a-41b7-4fbd-813b-b3b4e66bb11a",
-            "next_run_time": "2025-11-18T08:34:20+00:00"
+            "tid": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
+            "start": "2025-09-25T15:42:21+00:00",
+            "deadline": "2025-09-26T15:42:21+00:00",
+            "is_recurring": false,
+            "status": "ongoing",
+            "created_at": "2025-09-25T15:42:21+00:00",
+            "next_occurrence": null,
+            "sid": "6c2c6617-971d-4c30-a0ec-263c386bc938"
         }
     ]
 }
 ```
 
-## Recurring Task Functionality
 
-The schedule service now supports automatic recurring task creation using APScheduler. When a task is marked as recurring with a frequency, the system will:
-
-1. **Automatically create new schedule entries** when the `next_occurrence` time is reached
-2. **Maintain the same time gap** between start and deadline as the original task
-3. **Calculate the next occurrence** based on the frequency:
-    - **Weekly**: Adds 1 week to the start time
-    - **Monthly**: Adds 1 month to the start time
-    - **Yearly**: Adds 1 year to the start time
-    - **Immediate**: Creates the next entry 1 minute after the deadline
-
-### How It Works
-
-1. When you create a recurring task, the system schedules a background job
-2. At the `next_occurrence` time, the system:
-
-    - Creates a new schedule entry with the same task ID
-    - Calculates new start/deadline times maintaining the original gap
-    - Sets up the next occurrence based on frequency
-    - Schedules the next recurring job
-
-3. The process continues automatically until the task is deleted or marked as non-recurring
-
-### Example Recurring Task Creation
-
-```json
-{
-    "tid": "1e5233e4-be0f-4f94-9c59-c6a72debe0aa",
-    "start": "2025-10-18T06:43:45Z",
-    "deadline": "2025-10-25T06:43:45Z",
-    "is_recurring": true,
-    "next_occurrence": "2025-11-18T06:43:45Z",
-    "frequency": "Monthly"
-}
-```
-
-This will create a new entry every month starting from November 18th, 2025, with the same 7-day gap between start and deadline.

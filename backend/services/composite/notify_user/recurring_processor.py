@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
-from supabaseClient import SupabaseClient
+from schedule_client import ScheduleClient
 import logging
 
 # Configure logging
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class RecurringTaskProcessor:
     def __init__(self):
         self.scheduler = BackgroundScheduler()
-        self.supabase = SupabaseClient()
+        self.schedule_client = ScheduleClient()
         self.scheduler.start()
         logger.info("RecurringTaskProcessor initialized and scheduler started")
 
@@ -63,8 +63,8 @@ class RecurringTaskProcessor:
             # Calculate next occurrence for the new entry
             next_occurrence = self.calculate_next_occurrence(frequency, new_start, new_deadline)
             
-            # Create new schedule entry
-            new_entry = self.supabase.insert_schedule(
+            # Create new schedule entry via schedule service
+            new_entry = self.schedule_client.create_schedule(
                 tid=tid,
                 start=new_start.isoformat(),
                 deadline=new_deadline.isoformat(),
@@ -81,28 +81,33 @@ class RecurringTaskProcessor:
             logger.error(f"Error creating recurring entry: {str(e)}")
             return None
 
-    def schedule_recurring_task(self, sid: str, frequency: str, next_occurrence: datetime):
+    def schedule_recurring_task(self, task_data: Dict[str, Any]):
         """
         Schedule a recurring task to be processed at the next occurrence time
         """
         try:
-            # Get the current schedule entry
-            current_entry = self.supabase.fetch_schedule_by_sid(sid)
-            if not current_entry:
-                logger.error(f"Schedule entry {sid} not found")
+            sid = task_data.get("sid")
+            frequency = task_data.get("frequency")
+            next_occurrence_str = task_data.get("next_occurrence")
+            
+            if not all([sid, frequency, next_occurrence_str]):
+                logger.error(f"Missing required fields for task {sid}")
                 return False
+            
+            # Parse the next occurrence datetime
+            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
             
             # Schedule the job to run at the next occurrence time
             job_id = f"recurring_{sid}"
             self.scheduler.add_job(
                 func=self.process_recurring_task,
-                trigger=DateTrigger(run_date=next_occurrence),
+                trigger=DateTrigger(run_date=next_occurrence_dt),
                 args=[sid, frequency],
                 id=job_id,
                 replace_existing=True
             )
             
-            logger.info(f"Scheduled recurring task {sid} for {next_occurrence} with frequency {frequency}")
+            logger.info(f"Scheduled recurring task {sid} for {next_occurrence_dt} with frequency {frequency}")
             return True
             
         except Exception as e:
@@ -116,8 +121,8 @@ class RecurringTaskProcessor:
         try:
             logger.info(f"Processing recurring task {sid} with frequency {frequency}")
             
-            # Get the current schedule entry
-            current_entry = self.supabase.fetch_schedule_by_sid(sid)
+            # Get the current schedule entry via schedule service
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
             if not current_entry:
                 logger.error(f"Schedule entry {sid} not found")
                 return
@@ -143,8 +148,14 @@ class RecurringTaskProcessor:
         """
         try:
             job_id = f"recurring_{sid}"
-            self.scheduler.remove_job(job_id)
-            logger.info(f"Cancelled recurring task {sid}")
+            
+            # Check if job exists before trying to remove it
+            if self.scheduler.get_job(job_id):
+                self.scheduler.remove_job(job_id)
+                logger.info(f"Cancelled recurring task {sid}")
+            else:
+                logger.info(f"Recurring task {sid} was not scheduled (no job found)")
+            
             return True
         except Exception as e:
             logger.error(f"Error cancelling recurring task {sid}: {str(e)}")
