@@ -91,6 +91,52 @@ def update_schedule(sid: str, new_data: Dict[str, Any] = Body(...)):
         return {"message":f"Task Schedule {sid} Updated Successfully" ,"data": data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+
+# Update up task id
+# Update your schedule service endpoint
+@app.put("/tid/{tid}")
+def update_schedule_by_tid(tid: str, new_data: Dict[str, Any] = Body(...)):
+    """Update schedule using task ID instead of schedule ID"""
+    try:
+        print(f"[DEBUG] Received update request for tid: {tid}")
+        print(f"[DEBUG] Update data: {new_data}")
+        
+        # First, get the schedule to find the sid
+        schedule = supabase.fetch_schedule_by_tid(tid, latest=True)
+        if not schedule:
+            raise HTTPException(status_code=404, detail=f"No schedule found for task {tid}")
+        
+        sid = schedule.get("sid")
+        if not sid:
+            raise HTTPException(status_code=404, detail=f"Schedule ID not found for task {tid}")
+        
+        print(f"[DEBUG] Found schedule sid: {sid}")
+        print(f"[DEBUG] Calling supabase.update_schedule with data: {new_data}")
+        
+        # Now update using the sid
+        data = supabase.update_schedule(sid, new_data)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
+        
+        # Handle recurring task updates
+        if "is_recurring" in new_data and new_data["is_recurring"]:
+            frequency = new_data.get("frequency")
+            next_occurrence = new_data.get("next_occurrence")
+            if frequency and next_occurrence:
+                next_occurrence_dt = datetime.fromisoformat(next_occurrence.replace('Z', '+00:00'))
+                recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+        elif "is_recurring" in new_data and not new_data["is_recurring"]:
+            recurring_processor.cancel_recurring_task(sid)
+        
+        return {"message": f"Task {tid} Schedule Updated Successfully", "data": data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Exception in update_schedule_by_tid: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Delete Row
 @app.delete("/{sid}")
