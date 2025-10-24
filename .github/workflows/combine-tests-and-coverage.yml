@@ -39,7 +39,9 @@ jobs:
                     uvicorn \
                     pytest \
                     pytest-cov \
-                    pytest-asyncio
+                    pytest-asyncio \
+                    python-dateutil \
+                    apscheduler
 
             - name: Run Unit Tests (pytest) with coverage
               run: |
