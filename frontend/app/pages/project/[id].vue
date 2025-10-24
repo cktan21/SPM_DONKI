@@ -51,6 +51,14 @@ const selectedProject = useState<Project | null>('selectedProject')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+// Get current user data from middleware
+const userData = useState<any>('userData')
+
+// Get current user ID
+const currentUserId = computed(() => {
+  return userData.value?.user?.id || null
+})
+
 // Fetch project by project ID
 const fetchProjectById = async (projectId: string) => {
   loading.value = true
@@ -67,6 +75,7 @@ const fetchProjectById = async (projectId: string) => {
     const data = await res.json()
     selectedProject.value = data.project
     console.log('Fetched project by ID:', data.project)
+    console.log('Current user ID:', currentUserId.value)
   } catch (err: any) {
     console.error('Error fetching project:', err)
     error.value = err.message || 'Failed to fetch project'
@@ -74,6 +83,72 @@ const fetchProjectById = async (projectId: string) => {
     loading.value = false
   }
 }
+
+// Helper function to check if user has access to a task
+const canUserAccessTask = (task: Task): boolean => {
+  console.log('\n--- Checking Access for Task:', task.name, '---')
+  console.log('1) My User ID:', currentUserId.value)
+  
+  if (!currentUserId.value) {
+    console.warn('No current user ID found')
+    return false
+  }
+
+  // Case 1: User is the creator
+  console.log('Task Creator ID:', task.created_by_uid)
+  console.log('Am I the creator?', task.created_by_uid === currentUserId.value)
+  
+  if (task.created_by_uid === currentUserId.value) {
+    console.log(`✓ User is creator of task: ${task.name}`)
+    return true
+  }
+
+  // Case 2: User is a collaborator
+  if (task.collaborators && Array.isArray(task.collaborators)) {
+    console.log('2) Checking collaborators array...')
+    console.log('Total collaborators:', task.collaborators.length)
+    
+    let isCollaborator = false
+    task.collaborators.forEach((collab, index) => {
+      if (collab) {
+        console.log(`   Collaborator ${index + 1}:`)
+        console.log(`   - Collaborator ID: ${collab.id}`)
+        console.log(`   - Collaborator Name: ${collab.name}`)
+        const isMatch = collab.id === currentUserId.value
+        console.log(`   3) Is my user ID same as this collaborator ID? ${isMatch}`)
+        if (isMatch) {
+          isCollaborator = true
+        }
+      }
+    })
+    
+    if (isCollaborator) {
+      console.log(`✓ User is collaborator on task: ${task.name}`)
+      return true
+    }
+  } else {
+    console.log('No collaborators array or empty array')
+  }
+
+  // Case 3: User is neither creator nor collaborator
+  console.log(`✗ User has no access to task: ${task.name}`)
+  return false
+}
+
+// Filter tasks based on user access
+const accessibleTasks = computed(() => {
+  if (!selectedProject.value?.tasks || !currentUserId.value) {
+    return []
+  }
+  
+  const filtered = selectedProject.value.tasks.filter(task => canUserAccessTask(task))
+  console.log('\n=== ACCESSIBLE TASKS SUMMARY ===')
+  console.log('Total tasks in project:', selectedProject.value.tasks.length)
+  console.log('Accessible tasks after filtering:', filtered.length)
+  console.log('Accessible task names:', filtered.map(t => t.name))
+  
+  return filtered
+})
 
 // On mount, check if project is in state, otherwise fetch from URL
 onMounted(async () => {
@@ -87,6 +162,7 @@ onMounted(async () => {
     await fetchProjectById(projectId)
   } else if (selectedProject.value) {
     console.log('Using project from state:', selectedProject.value)
+    console.log('Current user ID:', currentUserId.value)
   } else {
     console.warn('No project ID in URL and no project in state')
   }
@@ -99,18 +175,28 @@ watch(() => route.params.id, async (newId) => {
   }
 })
 
-// Separate main tasks from subtasks
+// Separate main tasks from subtasks (ONLY from accessible tasks)
 const mainTasks = computed(() => {
-  if (!selectedProject.value?.tasks) return []
+  if (!accessibleTasks.value.length) return []
   // Only return tasks that don't have a parentTaskId
-  return selectedProject.value.tasks.filter(task => !task.parentTaskId)
+  const mains = accessibleTasks.value.filter(task => !task.parentTaskId)
+  
+  console.log('\n=== MAIN TASKS vs SUBTASKS ===')
+  console.log('Main tasks (no parentTaskId):', mains.length)
+  console.log('Main task names:', mains.map(t => t.name))
+  
+  const subs = accessibleTasks.value.filter(task => task.parentTaskId)
+  console.log('Subtasks (have parentTaskId):', subs.length)
+  console.log('Subtask names:', subs.map(t => `${t.name} (parent: ${t.parentTaskId})`))
+  
+  return mains
 })
 
 const subtasksByParentId = computed(() => {
-  if (!selectedProject.value?.tasks) return {}
+  if (!accessibleTasks.value.length) return {}
   
   const map: Record<string, Task[]> = {}
-  selectedProject.value.tasks.forEach(task => {
+  accessibleTasks.value.forEach(task => {
     const parentId = task.parentTaskId
     if (parentId) {
       if (!map[parentId]) {
@@ -155,19 +241,24 @@ const transformedTasks = computed(() => {
   }))
 })
 
-// Calculate progress data from MAIN TASKS ONLY (exclude subtasks)
+// Calculate progress data from ALL ACCESSIBLE TASKS (including subtasks)
 const progressData = computed(() => {
-  if (!selectedProject.value?.tasks) {
+  if (!accessibleTasks.value.length) {
     return { done: 0, ongoing: 0, toDo: 0, total: 0 }
   }
 
-  // Only count main tasks (tasks without parentTaskId)
-  const tasks = mainTasks.value
-  console.log(tasks)
+  // Count ALL accessible tasks (both main tasks and subtasks)
+  const tasks = accessibleTasks.value
   const done = tasks.filter(t => t.status === 'done').length
   const ongoing = tasks.filter(t => t.status === 'ongoing').length
   const toDo = tasks.filter(t => t.status === 'to do').length
   const total = tasks.length
+
+  console.log('\n=== PROGRESS CALCULATION ===')
+  console.log('Total accessible tasks (main + subtasks):', total)
+  console.log('Done:', done)
+  console.log('Ongoing:', ongoing)
+  console.log('To Do:', toDo)
 
   return { done, ongoing, toDo, total }
 })
@@ -184,13 +275,35 @@ const chartSegments = computed(() => {
   }
 })
 
-// Get unique collaborators from all tasks (including subtasks)
+// Get unique collaborators from ACCESSIBLE tasks only (including creators)
 const uniqueCollaborators = computed(() => {
-  if (!selectedProject.value?.tasks) return []
+  if (!accessibleTasks.value.length) return []
 
   const collabMap = new Map<string, { id: string; name: string }>()
   
-  selectedProject.value.tasks.forEach(task => {
+  accessibleTasks.value.forEach(task => {
+    // Add the task creator
+    if (task.created_by_uid) {
+      // Try to get creator info from the task's created_by field if it exists
+      const creatorInfo = (task as any).created_by
+      if (creatorInfo && creatorInfo.id && creatorInfo.name) {
+        collabMap.set(creatorInfo.id, { id: creatorInfo.id, name: creatorInfo.name })
+      } else {
+        // If no created_by info, just use the UID (we'll need to handle the name)
+        if (!collabMap.has(task.created_by_uid)) {
+          // Try to find the creator's name from other tasks or collaborators
+          const existingEntry = collabMap.get(task.created_by_uid)
+          if (!existingEntry) {
+            collabMap.set(task.created_by_uid, { 
+              id: task.created_by_uid, 
+              name: 'Task Creator' // Fallback name
+            })
+          }
+        }
+      }
+    }
+    
+    // Add collaborators
     if (task.collaborators && Array.isArray(task.collaborators)) {
       task.collaborators.forEach(collab => {
         if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
@@ -276,7 +389,6 @@ const handleCreateTask = () => {
             Manage your tasks and view their details
           </p>
         </div>
-        <!-- Desktop Create Button - Hidden, will be shown below with "Tasks" -->
       </div>
 
       <!-- Loading State -->
@@ -287,6 +399,11 @@ const handleCreateTask = () => {
       <!-- Error State -->
       <div v-else-if="error" class="text-center py-8 text-destructive">
         {{ error }}
+      </div>
+
+      <!-- No User ID Warning -->
+      <div v-else-if="!currentUserId" class="text-center py-8 text-destructive">
+        Unable to load user information. Please log in again.
       </div>
 
       <!-- Progress and Collaborators Cards - RESPONSIVE -->
@@ -443,17 +560,17 @@ const handleCreateTask = () => {
       </div>
 
       <!-- Tasks Title + Create Button (Desktop only) -->
-      <div v-if="!loading && !error" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div v-if="!loading && !error && currentUserId" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">Tasks</h2>
         <div class="hidden sm:block">
           <Button @click="handleCreateTask">Create New Task</Button>
         </div>
       </div>
       
-      <DataTable v-if="!loading && !error" :data="transformedTasks" :columns="columns" />
+      <DataTable v-if="!loading && !error && currentUserId" :data="transformedTasks" :columns="columns" />
       
       <!-- Mobile Create Button - Bottom of page -->
-      <div class="block sm:hidden mt-4">
+      <div v-if="!loading && !error && currentUserId" class="block sm:hidden mt-4">
         <Button class="w-full" @click="handleCreateTask">Create Task</Button>
       </div>
     </div>
