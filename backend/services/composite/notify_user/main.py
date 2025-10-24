@@ -1,0 +1,156 @@
+from fastapi import FastAPI, HTTPException, Body
+from typing import Dict, Any
+from fastapi.responses import Response
+from recurring_processor import recurring_processor
+from schedule_client import ScheduleClient
+import uvicorn
+from datetime import datetime
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup
+    try:
+        recurring_tasks = schedule_client.fetch_recurring_tasks()
+        for task in recurring_tasks:
+            if task.get("next_occurrence") and task.get("frequency"):
+                recurring_processor.schedule_recurring_task(task)
+        print(f"Initialized {len(recurring_tasks)} recurring tasks on startup")
+    except Exception as e:
+        print(f"Error initializing recurring tasks: {str(e)}")
+    
+    yield  # This is where the app runs
+    
+    # Shutdown
+    recurring_processor.shutdown()
+
+app = FastAPI(title="Composite Microservice: Notify User Service", lifespan=lifespan)
+schedule_client = ScheduleClient()
+
+@app.get("/")
+def read_root():
+    return {"message": "Notify User Service is running 🚀😌"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for service monitoring"""
+    return {
+        "status": "healthy",
+        "service": "notify_user",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/favicon.ico")
+async def get_favicon():
+    return Response(status_code=204)
+
+# Get all recurring tasks
+@app.get("/task/recurring")
+def get_all_recurring_tasks():
+    """Get all recurring tasks from the Schedule Service"""
+    try:
+        recurring_tasks = schedule_client.fetch_recurring_tasks()
+        return {
+            "message": f"Retrieved {len(recurring_tasks)} recurring tasks",
+            "tasks": recurring_tasks
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching recurring tasks: {str(e)}")
+
+# Get scheduled jobs (jobs currently scheduled in the processor)
+@app.get("/task/scheduled")
+def get_scheduled_jobs():
+    """Get all currently scheduled jobs in the Recurring Processor"""
+    try:
+        jobs = recurring_processor.get_scheduled_jobs()
+        return {
+            "message": f"Retrieved {len(jobs)} scheduled jobs",
+            "jobs": jobs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching scheduled jobs: {str(e)}")
+
+# Endpoint for schedule service to notify about new recurring tasks
+@app.post("/task/recurring/schedule")
+def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
+    """Schedule a new recurring task when notified by the schedule service"""
+    try:
+        sid = task_data.get("sid")
+        frequency = task_data.get("frequency")
+        next_occurrence_str = task_data.get("next_occurrence")
+        
+        if not all([sid, frequency, next_occurrence_str]):
+            raise HTTPException(status_code=400, detail="Missing required fields: sid, frequency, next_occurrence")
+        
+        # Parse the next occurrence datetime
+        next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
+        
+        # Schedule the recurring task
+        success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+        
+        if success:
+            return {
+                "message": f"Successfully scheduled recurring task {sid}",
+                "sid": sid,
+                "frequency": frequency,
+                "next_occurrence": next_occurrence_str
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to schedule recurring task")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error scheduling recurring task: {str(e)}")
+
+# Endpoint for schedule service to notify about cron job updates
+@app.post("/task/recurring/update")
+def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
+    """Update a recurring task's cron job when notified by the schedule service"""
+    try:
+        sid = task_data.get("sid")
+        frequency = task_data.get("frequency")
+        next_occurrence_str = task_data.get("next_occurrence")
+        is_recurring = task_data.get("is_recurring", False)
+        
+        if not sid:
+            raise HTTPException(status_code=400, detail="Missing required field: sid")
+        
+        # First, cancel any existing recurring task for this sid
+        recurring_processor.cancel_recurring_task(sid)
+        
+        # If the task is still recurring and has the required fields, reschedule it
+        if is_recurring and frequency and next_occurrence_str:
+            # Parse the next occurrence datetime
+            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
+            
+            # Schedule the updated recurring task
+            success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+            
+            if success:
+                return {
+                    "message": f"Successfully updated recurring task {sid}",
+                    "sid": sid,
+                    "frequency": frequency,
+                    "next_occurrence": next_occurrence_str,
+                    "action": "rescheduled"
+                }
+            else:
+                return {
+                    "message": f"Cancelled recurring task {sid} but failed to reschedule",
+                    "sid": sid,
+                    "action": "cancelled_only"
+                }
+        else:
+            # Task is no longer recurring, just cancelled
+            return {
+                "message": f"Successfully cancelled recurring task {sid}",
+                "sid": sid,
+                "action": "cancelled"
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating recurring task: {str(e)}")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=4500)
