@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef, onMounted } from "vue"
+import { ref, shallowRef, onMounted, computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { parseDate, type DateValue, getLocalTimeZone } from "@internationalized/date"
 
@@ -24,6 +24,13 @@ const { toast } = useToast()
 const taskId = ref(route.params.id as string)
 const API_BASE_URL = "http://localhost:4000"
 
+// Get authenticated user data from middleware
+const userData = useState<any>("userData")
+
+// --- Authorization State ---
+const canEditAll = ref(false)
+const canEditCollaborators = ref(false)
+
 // --- Form State ---
 const formEdit = ref({
   name: "",
@@ -34,6 +41,9 @@ const formEdit = ref({
   notes: "",
   status: "",
   priorityLabel: "",
+  priorityLevel: "",
+  label: "",
+  createdByUid: "", // Store the creator's ID
 })
 
 // Separate ref for deadline to avoid reactivity type issues
@@ -46,7 +56,95 @@ const state = ref({
   error: null as string | null,
 })
 
+// --- Collaborators State ---
+const selectedCollaborators = ref<string[]>([])
+const allUsers = ref<{ id: string; name: string }[]>([])
+const isCollaboratorPopoverOpen = ref(false)
+const searchQuery = ref("")
+
 const handleBack = () => router.back()
+
+const getUserName = (id: string) =>
+  allUsers.value.find((u) => u.id === id)?.name || id
+
+const filteredUsers = computed(() =>
+  allUsers.value.filter(u =>
+    u.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+)
+
+const selectUser = (id: string) => {
+  if (!selectedCollaborators.value.includes(id)) {
+    selectedCollaborators.value.push(id)
+    formEdit.value.collaboratorsCsv = selectedCollaborators.value.join(", ")
+  }
+  isCollaboratorPopoverOpen.value = false
+  searchQuery.value = ""
+}
+
+const removeCollaborator = (id: string) => {
+  selectedCollaborators.value = selectedCollaborators.value.filter((x) => x !== id)
+  formEdit.value.collaboratorsCsv = selectedCollaborators.value.join(", ")
+}
+
+// --- Fetch All Users ---
+const fetchAllUsers = async () => {
+  try {
+    const res = await fetch("http://localhost:5100/allUsers")
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    allUsers.value = (data.users || []).map((u: any) => ({
+      id: u.id,
+      name: u.name || "Unknown User",
+    }))
+  } catch (err) {
+    console.error("Failed to fetch users:", err)
+    toast({
+      title: "Error loading users",
+      description: "Could not load collaborators list",
+      variant: "destructive"
+    })
+  }
+}
+
+// --- Check Authorization ---
+const checkAuthorization = () => {
+  const currentUserId = userData.value?.user?.id
+  const currentUserRole = userData.value?.user?.role
+
+  if (!currentUserId) {
+    toast({
+      title: "Authentication required",
+      description: "Unable to determine user identity. Please log in again.",
+      variant: "destructive"
+    })
+    return navigateTo("/auth/login")
+  }
+
+  // Check if user is the creator
+  if (formEdit.value.createdByUid === currentUserId) {
+    canEditAll.value = true
+    canEditCollaborators.value = true
+    console.log("User is creator - full edit access granted")
+  }
+  // Check if user is manager but not creator
+  else if (currentUserRole === "manager") {
+    canEditAll.value = false
+    canEditCollaborators.value = true
+    console.log("User is manager - collaborator edit access granted")
+  }
+  // No access
+  else {
+    canEditAll.value = false
+    canEditCollaborators.value = false
+    toast({
+      title: "Access Denied",
+      description: "You don't have permission to edit this task.",
+      variant: "destructive"
+    })
+    router.push(`/task/${taskId.value}`)
+  }
+}
 
 // --- Fetch Task Data ---
 const fetchTaskData = async () => {
@@ -67,18 +165,26 @@ const fetchTaskData = async () => {
     formEdit.value.notes = task.notes || ""
     formEdit.value.status = task.schedule?.status || task.status || ""
     formEdit.value.priorityLabel = task.priorityLabel || ""
+    formEdit.value.priorityLevel = task.priorityLevel?.toString() || ""
+    formEdit.value.label = task.label || ""
+    formEdit.value.createdByUid = task.created_by_uid || ""
 
     // Convert ISO string to DateValue
     const deadlineISO = task.schedule?.deadline || task.deadline
     deadline.value = deadlineISO ? parseDate(deadlineISO.slice(0, 10)) : undefined
 
-    // Convert collaborators array to CSV string
+    // Convert collaborators array to CSV string and populate selectedCollaborators
     if (Array.isArray(task.collaborators)) {
-      formEdit.value.collaboratorsCsv = task.collaborators
+      const collaboratorIds = task.collaborators
         .map((c: any) => (typeof c === "string" ? c : c?.id))
         .filter(Boolean)
-        .join(", ")
+      
+      selectedCollaborators.value = collaboratorIds
+      formEdit.value.collaboratorsCsv = collaboratorIds.join(", ")
     }
+
+    // Check authorization after loading task data
+    checkAuthorization()
   } catch (err: any) {
     state.value.error = err.message
   } finally {
@@ -101,16 +207,25 @@ const updateTask = async () => {
       .map((s) => s.trim())
       .filter(Boolean)
 
-    const payload: any = {
-      name: formEdit.value.name,
-      desc: formEdit.value.desc || undefined,
-      notes: formEdit.value.notes || undefined,
-      priorityLabel: formEdit.value.priorityLabel || undefined,
-      status: formEdit.value.status || undefined,
-      deadline: deadline.value
+    const payload: any = {}
+
+    // If user can edit all fields, include everything
+    if (canEditAll.value) {
+      payload.name = formEdit.value.name
+      payload.desc = formEdit.value.desc || undefined
+      payload.notes = formEdit.value.notes || undefined
+      payload.priorityLabel = formEdit.value.priorityLabel || undefined
+      payload.priorityLevel = formEdit.value.priorityLevel ? parseInt(formEdit.value.priorityLevel) : undefined
+      payload.label = formEdit.value.label || undefined
+      payload.status = formEdit.value.status || undefined
+      payload.deadline = deadline.value
         ? deadline.value.toDate(getLocalTimeZone()).toISOString()
-        : undefined,
-      collaborators: collaborators.length > 0 ? collaborators : undefined,
+        : undefined
+      payload.collaborators = collaborators.length > 0 ? collaborators : undefined
+    }
+    // If user can only edit collaborators
+    else if (canEditCollaborators.value) {
+      payload.collaborators = collaborators.length > 0 ? collaborators : undefined
     }
 
     const response = await fetch(`${API_BASE_URL}/tasks/${taskId.value}`, {
@@ -129,7 +244,10 @@ const updateTask = async () => {
   }
 }
 
-onMounted(fetchTaskData)
+onMounted(async () => {
+  await fetchAllUsers()
+  await fetchTaskData()
+})
 </script>
 
 <template>
@@ -142,7 +260,9 @@ onMounted(fetchTaskData)
       <Card>
         <CardHeader>
           <CardTitle class="text-2xl sm:text-3xl">Edit Task</CardTitle>
-          <CardDescription>Update the details for your task</CardDescription>
+          <CardDescription>
+            {{ canEditAll ? 'Update the details for your task' : canEditCollaborators ? 'Update collaborators for this task' : 'View task details' }}
+          </CardDescription>
         </CardHeader>
 
         <CardContent class="pt-6">
@@ -157,13 +277,31 @@ onMounted(fetchTaskData)
           </Alert>
 
           <form v-else @submit.prevent="updateTask" class="space-y-6">
+            <!-- Authorization Info Alert -->
+            <Alert v-if="canEditCollaborators && !canEditAll" class="border-blue-500 bg-blue-50 dark:bg-blue-950">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <AlertTitle>Limited Edit Access</AlertTitle>
+              <AlertDescription>As a manager, you can only modify collaborators for this task.</AlertDescription>
+            </Alert>
+
             <!-- Task Info -->
             <div class="space-y-4">
               <h3 class="text-lg font-semibold">Task Information</h3>
               <div class="grid gap-4 sm:gap-6">
                 <div class="space-y-2">
-                  <Label for="task-name" class="text-sm font-medium">Task Name <span class="text-destructive">*</span></Label>
-                  <Input id="task-name" v-model="formEdit.name" placeholder="Enter a descriptive task name" required class="w-full"/>
+                  <Label for="task-name" class="text-sm font-medium">
+                    Task Name <span class="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="task-name" 
+                    v-model="formEdit.name" 
+                    placeholder="Enter a descriptive task name" 
+                    required 
+                    class="w-full"
+                    :disabled="!canEditAll"
+                  />
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -179,18 +317,137 @@ onMounted(fetchTaskData)
 
                 <div class="space-y-2">
                   <Label for="task-description" class="text-sm font-medium">Description</Label>
-                  <Textarea id="task-description" v-model="formEdit.desc" placeholder="Describe the task purpose, requirements, and any important details..." class="resize-none min-h-[100px] w-full" rows="4"/>
+                  <Textarea 
+                    id="task-description" 
+                    v-model="formEdit.desc" 
+                    placeholder="Describe the task purpose, requirements, and any important details..." 
+                    class="resize-none min-h-[100px] w-full" 
+                    rows="4"
+                    :disabled="!canEditAll"
+                  />
                 </div>
 
                 <div class="space-y-2">
                   <Label for="task-notes" class="text-sm font-medium">Additional Notes</Label>
-                  <Input id="task-notes" v-model="formEdit.notes" placeholder="Any extra information or reminders" class="w-full"/>
+                  <Input 
+                    id="task-notes" 
+                    v-model="formEdit.notes" 
+                    placeholder="Any extra information or reminders" 
+                    class="w-full"
+                    :disabled="!canEditAll"
+                  />
                 </div>
 
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <Label for="task-priority-level" class="text-sm font-medium">Priority Level (1-10)</Label>
+                      <Popover>
+                        <PopoverTrigger as-child>
+                          <Button variant="ghost" size="icon" class="h-5 w-5 rounded-full p-0" type="button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent class="w-auto p-3 text-sm" :align="'start'">
+                          <p class="font-semibold mb-1">Priority Scale</p>
+                          <p class="text-muted-foreground">1 = Lowest priority</p>
+                          <p class="text-muted-foreground">10 = Highest priority</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Input 
+                      id="task-priority-level" 
+                      v-model="formEdit.priorityLevel" 
+                      type="number" 
+                      min="1" 
+                      max="10" 
+                      placeholder="1-10" 
+                      class="w-full"
+                      :disabled="!canEditAll"
+                    />
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label for="task-label" class="text-sm font-medium">Label</Label>
+                    <Select v-model="formEdit.label" :disabled="!canEditAll">
+                      <SelectTrigger id="task-label" class="w-full">
+                        <SelectValue placeholder="Select label" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bug">Bug</SelectItem>
+                        <SelectItem value="feature">Feature</SelectItem>
+                        <SelectItem value="enhancement">Enhancement</SelectItem>
+                        <SelectItem value="documentation">Documentation</SelectItem>
+                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <!-- Collaborators Combobox -->
                 <div class="space-y-2">
                   <Label for="task-collaborators" class="text-sm font-medium">Collaborators</Label>
-                  <Input id="task-collaborators" v-model="formEdit.collaboratorsCsv" placeholder="Comma-separated UUIDs" class="w-full"/>
-                  <p class="text-xs text-muted-foreground">Enter user IDs separated by commas</p>
+                  <Popover v-model:open="isCollaboratorPopoverOpen">
+                    <PopoverTrigger as-child>
+                      <Button 
+                        variant="outline" 
+                        role="combobox" 
+                        class="w-full justify-between"
+                        :disabled="!canEditCollaborators"
+                      >
+                        Search and select collaborators
+                        <svg xmlns="http://www.w3.org/2000/svg" class="ml-2 h-4 w-4 shrink-0 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent class="w-[var(--radix-popover-trigger-width)] p-0" :align="'start'" :side-offset="4">
+                      <div class="p-2">
+                        <Input v-model="searchQuery" placeholder="Type to search..." class="mb-2" />
+                        <div class="max-h-48 overflow-auto">
+                          <button 
+                            v-for="user in filteredUsers" 
+                            :key="user.id" 
+                            type="button"
+                            class="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-sm transition-colors"
+                            :class="{ 'bg-accent': selectedCollaborators.includes(user.id) }"
+                            @click="selectUser(user.id)"
+                          >
+                            {{ user.name }}
+                            <span v-if="selectedCollaborators.includes(user.id)" class="ml-2 text-xs text-muted-foreground">
+                              ✓
+                            </span>
+                          </button>
+                          <div v-if="filteredUsers.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+                            No users found
+                          </div>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  <!-- Tag Display -->
+                  <div class="flex flex-wrap gap-2 mt-2" v-if="selectedCollaborators.length > 0">
+                    <span 
+                      v-for="id in selectedCollaborators" 
+                      :key="id"
+                      class="px-2 py-1 bg-secondary text-sm rounded-full flex items-center gap-1"
+                    >
+                      {{ getUserName(id) }}
+                      <button 
+                        v-if="canEditCollaborators"
+                        type="button" 
+                        @click="removeCollaborator(id)"
+                        class="text-muted-foreground hover:text-destructive"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+
+                  <Input v-model="formEdit.collaboratorsCsv" type="hidden" />
                 </div>
               </div>
             </div>
@@ -203,8 +460,10 @@ onMounted(fetchTaskData)
               <div class="grid gap-4 sm:grid-cols-3">
                 <div class="space-y-2">
                   <Label for="task-status" class="text-sm font-medium">Status</Label>
-                  <Select v-model="formEdit.status">
-                    <SelectTrigger id="task-status" class="w-full"><SelectValue placeholder="Select status"/></SelectTrigger>
+                  <Select v-model="formEdit.status" :disabled="!canEditAll">
+                    <SelectTrigger id="task-status" class="w-full">
+                      <SelectValue placeholder="Select status"/>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="not started">Not Started</SelectItem>
                       <SelectItem value="ongoing">Ongoing</SelectItem>
@@ -215,15 +474,27 @@ onMounted(fetchTaskData)
 
                 <div class="space-y-2">
                   <Label for="task-priority" class="text-sm font-medium">Priority Label</Label>
-                  <Input id="task-priority" v-model="formEdit.priorityLabel" placeholder="e.g. High, Medium, Low" class="w-full"/>
+                  <Input 
+                    id="task-priority" 
+                    v-model="formEdit.priorityLabel" 
+                    placeholder="e.g. High, Medium, Low" 
+                    class="w-full"
+                    :disabled="!canEditAll"
+                  />
                 </div>
 
                 <div class="space-y-2">
                   <Label for="task-deadline" class="text-sm font-medium">Deadline</Label>
                   <Popover>
                     <PopoverTrigger as-child>
-                      <Button variant="outline" class="w-full justify-start text-left font-normal">
-                        <span class="flex-1 truncate">{{ deadline ? deadline.toDate(getLocalTimeZone()).toLocaleDateString() : "Pick a date" }}</span>
+                      <Button 
+                        variant="outline" 
+                        class="w-full justify-start text-left font-normal"
+                        :disabled="!canEditAll"
+                      >
+                        <span class="flex-1 truncate">
+                          {{ deadline ? deadline.toDate(getLocalTimeZone()).toLocaleDateString() : "Pick a date" }}
+                        </span>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent class="w-auto p-0" :align="'start'">
@@ -241,8 +512,14 @@ onMounted(fetchTaskData)
 
             <!-- Action Buttons -->
             <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
-              <Button variant="outline" type="button" @click="handleBack" class="w-full sm:w-auto" :disabled="state.saving">Cancel</Button>
-              <Button type="submit" :disabled="state.saving" class="w-full sm:w-auto">
+              <Button variant="outline" type="button" @click="handleBack" class="w-full sm:w-auto" :disabled="state.saving">
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                :disabled="state.saving || (!canEditAll && !canEditCollaborators)" 
+                class="w-full sm:w-auto"
+              >
                 <Loader2 v-if="state.saving" class="h-4 w-4 mr-2 animate-spin"/>
                 <span v-if="state.saving">Saving Changes...</span>
                 <span v-else>Save Changes</span>
