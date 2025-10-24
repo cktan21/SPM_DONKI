@@ -51,6 +51,9 @@ const selectedProject = useState<Project | null>('selectedProject')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+// Get current user data from auth state
+const userData = useState<{ user: { id: string; email: string; role: string; name: string } } | null>("userData")
+
 // Fetch project by project ID
 const fetchProjectById = async (projectId: string) => {
   loading.value = true
@@ -99,20 +102,48 @@ watch(() => route.params.id, async (newId) => {
   }
 })
 
-// Separate main tasks from subtasks
+// Filtered main + sub tasks for current user
 const mainTasks = computed(() => {
-  if (!selectedProject.value?.tasks) return []
-  // Only return tasks that don't have a parentTaskId
-  return selectedProject.value.tasks.filter(task => !task.parentTaskId)
+  if (!selectedProject.value?.tasks || !userData.value?.user?.id) return []
+
+  const currentUserId = userData.value.user.id
+  const allTasks = selectedProject.value.tasks
+
+  // Step 1️⃣: Get only the main tasks that the user can access
+  const visibleMainTasks = allTasks.filter(task => {
+    if (task.parentTaskId) return false // only main tasks
+
+    const isCreator = task.created_by_uid === currentUserId
+    const collaborators = Array.isArray(task.collaborators) ? task.collaborators : []
+    const isCollaborator = collaborators.some(
+      c => c?.id?.toString() === currentUserId.toString()
+    )
+
+    return isCreator || isCollaborator
+  })
+
+  // Step 2️⃣: For each visible main task, attach its subtasks
+  const visibleTasksWithSubtasks = visibleMainTasks.map(mainTask => {
+    const subtasks = allTasks.filter(t => t.parentTaskId === mainTask.id)
+    return { ...mainTask, subtasks }
+  })
+
+  return visibleTasksWithSubtasks
 })
 
 const subtasksByParentId = computed(() => {
-  if (!selectedProject.value?.tasks) return {}
+  if (!selectedProject.value?.tasks || !userData.value?.user?.id) return {}
   
+  const currentUserId = userData.value.user.id
   const map: Record<string, Task[]> = {}
+  
+  // Get list of accessible parent task IDs
+  const accessibleParentIds = new Set(mainTasks.value.map(t => t.id))
+  
   selectedProject.value.tasks.forEach(task => {
     const parentId = task.parentTaskId
-    if (parentId) {
+    // Only include subtasks whose parent is accessible
+    if (parentId && accessibleParentIds.has(parentId)) {
       if (!map[parentId]) {
         map[parentId] = []
       }
@@ -161,7 +192,7 @@ const progressData = computed(() => {
     return { done: 0, ongoing: 0, toDo: 0, total: 0 }
   }
 
-  // Only count main tasks (tasks without parentTaskId)
+  // Only count main tasks that are accessible (tasks without parentTaskId and user has access)
   const tasks = mainTasks.value
   console.log(tasks)
   const done = tasks.filter(t => t.status === 'done').length
@@ -184,20 +215,32 @@ const chartSegments = computed(() => {
   }
 })
 
-// Get unique collaborators from all tasks (including subtasks)
+// Get unique collaborators from accessible tasks only (including subtasks)
 const uniqueCollaborators = computed(() => {
-  if (!selectedProject.value?.tasks) return []
+  if (!selectedProject.value?.tasks || !userData.value?.user?.id) return []
 
   const collabMap = new Map<string, { id: string; name: string }>()
+  const currentUserId = userData.value.user.id
+  const accessibleParentIds = new Set(mainTasks.value.map(t => t.id))
   
+  // Iterate through all tasks
   selectedProject.value.tasks.forEach(task => {
-    if (task.collaborators && Array.isArray(task.collaborators)) {
-      task.collaborators.forEach(collab => {
-        if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
-          const collaborator = collab as { id: string; name: string }
-          collabMap.set(collaborator.id, { id: collaborator.id, name: collaborator.name })
-        }
-      })
+    // Include task if it's a main task the user has access to, or a subtask of an accessible parent
+    const isAccessibleMainTask = !task.parentTaskId && (
+      task.created_by_uid === currentUserId || 
+      task.collaborators?.some(c => c && c.id === currentUserId)
+    )
+    const isAccessibleSubtask = task.parentTaskId && accessibleParentIds.has(task.parentTaskId)
+    
+    if (isAccessibleMainTask || isAccessibleSubtask) {
+      if (task.collaborators && Array.isArray(task.collaborators)) {
+        task.collaborators.forEach(collab => {
+          if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
+            const collaborator = collab as { id: string; name: string }
+            collabMap.set(collaborator.id, { id: collaborator.id, name: collaborator.name })
+          }
+        })
+      }
     }
   })
 
@@ -436,7 +479,7 @@ const handleCreateTask = () => {
 
             <!-- No collaborators message -->
             <div v-else class="text-center py-6 sm:py-8 text-muted-foreground">
-              <p class="text-xs sm:text-sm">No collaborators in this project yet</p>
+              <p class="text-xs sm:text-sm">No collaborators in accessible tasks</p>
             </div>
           </CardContent>
         </Card>
