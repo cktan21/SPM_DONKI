@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body
+from typing import Dict, Any
 from fastapi.responses import Response
 from recurring_processor import recurring_processor
 from schedule_client import ScheduleClient
@@ -32,6 +33,15 @@ schedule_client = ScheduleClient()
 def read_root():
     return {"message": "Notify User Service is running 🚀😌"}
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint for service monitoring"""
+    return {
+        "status": "healthy",
+        "service": "notify_user",
+        "timestamp": datetime.now().isoformat()
+    }
+
 @app.get("/favicon.ico")
 async def get_favicon():
     return Response(status_code=204)
@@ -61,6 +71,37 @@ def get_scheduled_jobs():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching scheduled jobs: {str(e)}")
+
+# Endpoint for schedule service to notify about new recurring tasks
+@app.post("/task/recurring/schedule")
+def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
+    """Schedule a new recurring task when notified by the schedule service"""
+    try:
+        sid = task_data.get("sid")
+        frequency = task_data.get("frequency")
+        next_occurrence_str = task_data.get("next_occurrence")
+        
+        if not all([sid, frequency, next_occurrence_str]):
+            raise HTTPException(status_code=400, detail="Missing required fields: sid, frequency, next_occurrence")
+        
+        # Parse the next occurrence datetime
+        next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
+        
+        # Schedule the recurring task
+        success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+        
+        if success:
+            return {
+                "message": f"Successfully scheduled recurring task {sid}",
+                "sid": sid,
+                "frequency": frequency,
+                "next_occurrence": next_occurrence_str
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to schedule recurring task")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error scheduling recurring task: {str(e)}")
 
 
 if __name__ == "__main__":

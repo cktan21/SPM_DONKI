@@ -4,12 +4,57 @@ from fastapi.responses import Response
 from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
 import uvicorn
-from datetime import datetime
+import httpx
+import logging
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Atomic Microservice: Schedule Service")
 supabase = SupabaseClient()
+
+# Notify User Service URL
+NOTIFY_USER_SERVICE_URL = "http://notify_user:4500"
+
+async def notify_recurring_task_added(schedule_data: Dict[str, Any]):
+    """Notify the notify_user service when a new recurring task is added"""
+    import asyncio
+    
+    # Try multiple connection methods with retries
+    urls_to_try = [
+        NOTIFY_USER_SERVICE_URL,  # Original hostname
+        "http://172.18.0.10:4500",  # Direct IP address
+        "http://notify-user:4500",  # Alternative hostname format
+    ]
+    
+    for attempt in range(3):  # 3 attempts
+        for url in urls_to_try:
+            try:
+                async with httpx.AsyncClient() as client:
+                    logger.info(f"Attempting to notify notify_user service at {url} (attempt {attempt + 1})")
+                    response = await client.post(
+                        f"{url}/task/recurring/schedule",
+                        json=schedule_data,
+                        timeout=10.0
+                    )
+                    if response.status_code == 200:
+                        logger.info(f"Successfully notified notify_user service about new recurring task {schedule_data.get('sid')}")
+                        return  # Success, exit function
+                    else:
+                        logger.warning(f"Failed to notify notify_user service at {url}: {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error connecting to {url}: {str(e)}")
+                continue
+        
+        # Wait before retry
+        if attempt < 2:  # Don't wait after the last attempt
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+    
+    # If all attempts failed, log the error but don't crash the main operation
+    logger.error(f"Failed to notify notify_user service after all attempts for task {schedule_data.get('sid')}")
 
 @app.get("/")
 def read_root():
@@ -45,7 +90,7 @@ def get_schedule_by_sid(sid: str):
 
 # Create new Row
 @app.post("/")
-def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
+async def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
     print(new_data)
     tid = new_data.get("tid")
     start = new_data.get("start", None)
@@ -58,6 +103,23 @@ def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
 
     try:
         data = supabase.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
+        
+        # If this is a recurring task, notify the notify_user service
+        if is_recurring and data:
+            # Prepare the data to send to notify_user service
+            notify_data = {
+                "sid": data.get("sid"),
+                "tid": data.get("tid"),
+                "frequency": frequency,
+                "next_occurrence": next_occurrence,
+                "start": start,
+                "deadline": deadline,
+                "status": status
+            }
+            # Notify asynchronously (don't wait for response)
+            import asyncio
+            asyncio.create_task(notify_recurring_task_added(notify_data))
+        
         return {"message":f"Task {tid} Schedule Inserted Successfully" ,"data": data}
     except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -91,10 +153,6 @@ def get_recurring_tasks_for_notify():
         return {"tasks": recurring_tasks}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-# Note: Recurring task initialization is now handled by the notify_user service
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5300)
