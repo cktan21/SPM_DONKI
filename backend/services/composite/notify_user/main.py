@@ -15,8 +15,7 @@ async def lifespan(app: FastAPI):
         recurring_tasks = schedule_client.fetch_recurring_tasks()
         for task in recurring_tasks:
             if task.get("next_occurrence") and task.get("frequency"):
-                next_occurrence_dt = datetime.fromisoformat(task["next_occurrence"].replace('Z', '+00:00'))
-                recurring_processor.schedule_recurring_task(task["sid"], task["frequency"], next_occurrence_dt)
+                recurring_processor.schedule_recurring_task(task)
         print(f"Initialized {len(recurring_tasks)} recurring tasks on startup")
     except Exception as e:
         print(f"Error initializing recurring tasks: {str(e)}")
@@ -102,6 +101,55 @@ def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error scheduling recurring task: {str(e)}")
+
+# Endpoint for schedule service to notify about cron job updates
+@app.post("/task/recurring/update")
+def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
+    """Update a recurring task's cron job when notified by the schedule service"""
+    try:
+        sid = task_data.get("sid")
+        frequency = task_data.get("frequency")
+        next_occurrence_str = task_data.get("next_occurrence")
+        is_recurring = task_data.get("is_recurring", False)
+        
+        if not sid:
+            raise HTTPException(status_code=400, detail="Missing required field: sid")
+        
+        # First, cancel any existing recurring task for this sid
+        recurring_processor.cancel_recurring_task(sid)
+        
+        # If the task is still recurring and has the required fields, reschedule it
+        if is_recurring and frequency and next_occurrence_str:
+            # Parse the next occurrence datetime
+            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
+            
+            # Schedule the updated recurring task
+            success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+            
+            if success:
+                return {
+                    "message": f"Successfully updated recurring task {sid}",
+                    "sid": sid,
+                    "frequency": frequency,
+                    "next_occurrence": next_occurrence_str,
+                    "action": "rescheduled"
+                }
+            else:
+                return {
+                    "message": f"Cancelled recurring task {sid} but failed to reschedule",
+                    "sid": sid,
+                    "action": "cancelled_only"
+                }
+        else:
+            # Task is no longer recurring, just cancelled
+            return {
+                "message": f"Successfully cancelled recurring task {sid}",
+                "sid": sid,
+                "action": "cancelled"
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating recurring task: {str(e)}")
 
 
 if __name__ == "__main__":

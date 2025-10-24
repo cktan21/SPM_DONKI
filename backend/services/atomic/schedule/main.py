@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import uvicorn
 import httpx
 import logging
+from datetime import datetime
 
 load_dotenv()
 
@@ -55,6 +56,54 @@ async def notify_recurring_task_added(schedule_data: Dict[str, Any]):
     
     # If all attempts failed, log the error but don't crash the main operation
     logger.error(f"Failed to notify notify_user service after all attempts for task {schedule_data.get('sid')}")
+
+async def notify_recurring_task_updated(schedule_data: Dict[str, Any]):
+    """Notify the notify_user service when a recurring task is updated"""
+    import asyncio
+    
+    # Try multiple connection methods with retries
+    urls_to_try = [
+        NOTIFY_USER_SERVICE_URL,  # Original hostname
+        "http://172.18.0.10:4500",  # Direct IP address
+        "http://notify-user:4500",  # Alternative hostname format
+    ]
+    
+    for attempt in range(3):  # 3 attempts
+        for url in urls_to_try:
+            try:
+                async with httpx.AsyncClient() as client:
+                    logger.info(f"Attempting to notify notify_user service of update at {url} (attempt {attempt + 1})")
+                    response = await client.post(
+                        f"{url}/task/recurring/update",
+                        json=schedule_data,
+                        timeout=10.0
+                    )
+                    if response.status_code == 200:
+                        logger.info(f"Successfully notified notify_user service about updated recurring task {schedule_data.get('sid')}")
+                        return  # Success, exit function
+                    else:
+                        logger.warning(f"Failed to notify notify_user service at {url}: {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error connecting to {url}: {str(e)}")
+                continue
+        
+        # Wait before retry
+        if attempt < 2:  # Don't wait after the last attempt
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+    
+    # If all attempts failed, log the error but don't crash the main operation
+    logger.error(f"Failed to notify notify_user service after all attempts for task {schedule_data.get('sid')}")
+
+def has_cron_affecting_changes(old_data: Dict[str, Any], new_data: Dict[str, Any]) -> bool:
+    """Check if any fields that affect cron jobs have changed"""
+    cron_affecting_fields = ['is_recurring', 'frequency', 'next_occurrence', 'start', 'deadline']
+    
+    for field in cron_affecting_fields:
+        if field in new_data and old_data.get(field) != new_data.get(field):
+            logger.info(f"Detected change in cron-affecting field '{field}': {old_data.get(field)} -> {new_data.get(field)}")
+            return True
+    
+    return False
 
 @app.get("/")
 def read_root():
@@ -126,11 +175,39 @@ async def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
 
 # Update the row
 @app.put("/{sid}")
-def update_schedule(sid: str, new_data: Dict[str, Any] = Body(...)):
+async def update_schedule(sid: str, new_data: Dict[str, Any] = Body(...)):
     try:
+        # Get the current schedule data to compare changes
+        current_schedule = supabase.fetch_schedule_by_sid(sid)
+        if not current_schedule:
+            raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
+        
+        # Check if any cron-affecting fields have changed
+        has_cron_changes = has_cron_affecting_changes(current_schedule, new_data)
+        
+        # Update the schedule
         data = supabase.update_schedule(sid, new_data)
         if not data:
             raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
+        
+        # If cron-affecting fields have changed, notify the notify_user service
+        if has_cron_changes:
+            print(f"[DEBUG] Cron-affecting changes detected, notifying notify_user service")
+            
+            # Prepare notification data
+            notify_data = {
+                "sid": sid,
+                "tid": current_schedule.get("tid"),
+                "is_recurring": new_data.get("is_recurring", current_schedule.get("is_recurring", False)),
+                "frequency": new_data.get("frequency", current_schedule.get("frequency")),
+                "next_occurrence": new_data.get("next_occurrence", current_schedule.get("next_occurrence")),
+                "start": new_data.get("start", current_schedule.get("start")),
+                "deadline": new_data.get("deadline", current_schedule.get("deadline"))
+            }
+            
+            # Notify asynchronously (don't wait for response)
+            import asyncio
+            asyncio.create_task(notify_recurring_task_updated(notify_data))
         
         return {"message":f"Task Schedule {sid} Updated Successfully" ,"data": data}
     except Exception as e:
@@ -140,7 +217,7 @@ def update_schedule(sid: str, new_data: Dict[str, Any] = Body(...)):
 # Update up task id
 # Update your schedule service endpoint
 @app.put("/tid/{tid}")
-def update_schedule_by_tid(tid: str, new_data: Dict[str, Any] = Body(...)):
+async def update_schedule_by_tid(tid: str, new_data: Dict[str, Any] = Body(...)):
     """Update schedule using task ID instead of schedule ID"""
     try:
         print(f"[DEBUG] Received update request for tid: {tid}")
@@ -158,20 +235,35 @@ def update_schedule_by_tid(tid: str, new_data: Dict[str, Any] = Body(...)):
         print(f"[DEBUG] Found schedule sid: {sid}")
         print(f"[DEBUG] Calling supabase.update_schedule with data: {new_data}")
         
+        # Check if any cron-affecting fields have changed
+        has_cron_changes = has_cron_affecting_changes(schedule, new_data)
+        
         # Now update using the sid
         data = supabase.update_schedule(sid, new_data)
         if not data:
             raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
         
-        # Handle recurring task updates
-        if "is_recurring" in new_data and new_data["is_recurring"]:
-            frequency = new_data.get("frequency")
-            next_occurrence = new_data.get("next_occurrence")
-            if frequency and next_occurrence:
-                next_occurrence_dt = datetime.fromisoformat(next_occurrence.replace('Z', '+00:00'))
-                recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
-        elif "is_recurring" in new_data and not new_data["is_recurring"]:
-            recurring_processor.cancel_recurring_task(sid)
+        # If cron-affecting fields have changed, notify the notify_user service
+        if has_cron_changes:
+            print(f"[DEBUG] Cron-affecting changes detected, notifying notify_user service")
+            
+            # Prepare notification data
+            notify_data = {
+                "sid": sid,
+                "tid": tid,
+                "is_recurring": new_data.get("is_recurring", schedule.get("is_recurring", False)),
+                "frequency": new_data.get("frequency", schedule.get("frequency")),
+                "next_occurrence": new_data.get("next_occurrence", schedule.get("next_occurrence")),
+                "start": new_data.get("start", schedule.get("start")),
+                "deadline": new_data.get("deadline", schedule.get("deadline"))
+            }
+            
+            # Notify asynchronously (don't wait for response)
+            import asyncio
+            asyncio.create_task(notify_recurring_task_updated(notify_data))
+        
+        # Note: Recurring task handling is now managed by the notify_user service
+        # through the notification system above
         
         return {"message": f"Task {tid} Schedule Updated Successfully", "data": data}
     except HTTPException:
