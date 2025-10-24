@@ -437,7 +437,7 @@ async def sync_project_members(project_id: str, user_id: str, action: str = "add
                 # Check if user should be removed (not owner/collaborator of any task)
                 if user_id in current_members:
                     # Get all tasks in the project
-                    tasks_resp = await client.get(f"{TASKS_SERVICE_URL}/project/{project_id}")
+                    tasks_resp = await client.get(f"{TASK_SERVICE_URL}/project/{project_id}")
                     if tasks_resp.status_code == 200:
                         tasks_data = tasks_resp.json()
                         tasks = tasks_data.get("tasks", [])
@@ -855,7 +855,7 @@ async def update_task_composite(
     # STEP 1: VALIDATE AND FILTER PAYLOAD
     # ===================================================================
     allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes", "priorityLevel", "label", "created_by_uid"}
-    schedule_fields = {"status", "deadline"}
+    schedule_fields = {"status", "deadline", "start", "is_recurring", "frequency", "next_occurrence"}
     
     # Filter task updates
     filtered_updates = {}
