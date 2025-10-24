@@ -75,7 +75,7 @@ async def get_tasks_by_user_composite(
     1. Fetch all tasks from Task MS
     2. Filter tasks where user_id is in collaborators
     3. Enrich each task with schedule and project data
-    4. Flatten key schedule fields (progress, deadline, priority) for easier rendering
+    4. Flatten key schedule fields (status, deadline) directly into task object
     5. Nest subtasks under parent tasks
     6. Fetch user's display name from Users MS and include in response
     """
@@ -140,14 +140,18 @@ async def get_tasks_by_user_composite(
             for task in user_tasks:
                 task_id = task.get("id")
 
-                # schedule
-                schedule_data = None
+                # schedule - extract status and deadline
+                schedule_status = None
+                schedule_deadline = None
                 try:
                     schedule_response = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                     if schedule_response.status_code == 200:
-                        schedule_data = schedule_response.json()
+                        schedule_resp = schedule_response.json()
+                        schedule_data = schedule_resp.get("data", schedule_resp)
+                        schedule_status = schedule_data.get("status")
+                        schedule_deadline = schedule_data.get("deadline")
                 except Exception:
-                    schedule_data = {"message": "No schedule found for this task"}
+                    pass
 
                 # project
                 project_data = None
@@ -159,35 +163,30 @@ async def get_tasks_by_user_composite(
                     except Exception:
                         project_data = {"message": "Project information unavailable"}
 
-                # ✅ 4) Dual-mode flattening: keep schedule object + expose key fields top-level
-                # Extract key schedule fields safely
-                deadline_str = schedule_data.get("deadline") if schedule_data else None
-                status = schedule_data.get("status") if schedule_data else None
-
-                deadline_flag = None  # default: no special flag
-                if deadline_str:
+                # Calculate deadline flag
+                deadline_flag = None
+                if schedule_deadline:
                     try:
-                        # Convert to datetime and compute time difference
-                        deadline_dt = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+                        deadline_dt = datetime.fromisoformat(schedule_deadline.replace("Z", "+00:00"))
                         now = datetime.now(timezone.utc)
 
-                        if status != "complete":  # Only check active tasks
+                        if schedule_status != "complete":
                             if now > deadline_dt:
                                 deadline_flag = "Overdue"
                             elif 0 <= (deadline_dt - now).days <= 3:
                                 deadline_flag = "Upcoming"
                     except Exception:
-                        deadline_flag = None  # Gracefully handle bad date format
+                        deadline_flag = None
 
-                # ✅ Dual-mode flattening + flag
+                # Build enriched task with status and deadline inside task object
                 enriched_task = {
-                    "task": task,
-                    "schedule": schedule_data,
+                    "task": {
+                        **task,
+                        "status": schedule_status,
+                        "deadline": schedule_deadline,
+                    },
                     "project": project_data,
-                    "progress": schedule_data.get("progress") if schedule_data else None,
-                    "deadline": deadline_str,
-                    "priority": schedule_data.get("priority") if schedule_data else None,
-                    "deadline_flag": deadline_flag  # <-- new field for Upcoming / Overdue
+                    "deadline_flag": deadline_flag
                 }
 
                 enriched_tasks.append(enriched_task)
@@ -212,12 +211,9 @@ async def get_tasks_by_user_composite(
                     total = len(subtasks)
                     completed = sum(
                         1 for sub in subtasks
-                        if (sub.get("schedule") or {}).get("status") == "complete"
+                        if sub["task"].get("status") == "complete"
                     )
-                    entry["progress"] = round((completed / total) * 100, 2)  # two decimals
-                else:
-                    # leave existing progress from schedule if no subtasks
-                    entry["progress"] = entry.get("progress", 0)
+                    entry["task"]["progress"] = round((completed / total) * 100, 2)
 
             # ✅ 6) Return with nested tasks and user info
             return {
@@ -279,15 +275,17 @@ async def get_task_composite(
                 raise HTTPException(status_code=500, detail="Invalid task format from Task MS")
 
             # === 2. Get Schedule ===
-            schedule_data = None
+            schedule_status = None
+            schedule_deadline = None
             try:
                 s_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
                 if s_resp.status_code == 200:
-                    schedule_data = s_resp.json()
-                else:
-                    schedule_data = {"message": "No schedule found"}
+                    schedule_resp = s_resp.json()
+                    schedule_data = schedule_resp.get("data", schedule_resp)
+                    schedule_status = schedule_data.get("status")
+                    schedule_deadline = schedule_data.get("deadline")
             except Exception:
-                schedule_data = {"message": "No schedule found"}
+                pass
 
             # === 3. Get Project (by pid) ===
             project_obj = None
@@ -366,13 +364,14 @@ async def get_task_composite(
                     "created_by": created_by,
                     "collaborators": collaborators_info,
                     "parent_task": parent_task,
+                    "status": schedule_status,
+                    "deadline": schedule_deadline,
                 },
-                "schedule": schedule_data,
                 "metadata": {
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
                     "queried_services": {
                         "task": True,
-                        "schedule": schedule_data is not None,
+                        "schedule": schedule_status is not None or schedule_deadline is not None,
                         "project": project_obj is not None,
                         "users": True,
                         "parent_task": parent_task is not None,
@@ -385,16 +384,100 @@ async def get_task_composite(
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Upstream error: {e.response.text}")
 
+# Helper function to sync project members
+async def sync_project_members(project_id: str, user_id: str, action: str = "add"):
+    """
+    Sync project members by adding or checking removal
+    action: "add" or "check_remove"
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get current project data
+            project_resp = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{project_id}")
+            if project_resp.status_code != 200:
+                print(f"Warning: Could not fetch project {project_id} for member sync")
+                return
+            
+            project_data = project_resp.json()
+            print(f"DEBUG: Full project response: {project_data}")
+            
+            # Handle both nested and direct response structures
+            if "project" in project_data:
+                current_members = project_data["project"].get("members") or []
+            else:
+                current_members = project_data.get("members") or []
+            
+            print(f"DEBUG: Current members before update: {current_members}")
+            
+            # Ensure current_members is a list
+            if not isinstance(current_members, list):
+                current_members = []
+            
+            if action == "add":
+                # Add user to members if not already present
+                if user_id not in current_members:
+                    current_members.append(user_id)
+                    print(f"DEBUG: Updated members list: {current_members}")
+                    
+                    update_resp = await client.put(
+                        f"{PROJECTS_SERVICE_URL}/{project_id}",
+                        json={"members": current_members}
+                    )
+                    print(f"DEBUG: Update response status: {update_resp.status_code}")
+                    print(f"DEBUG: Update response body: {update_resp.json()}")
+                    
+                    if update_resp.status_code == 200:
+                        print(f"✅ Added user {user_id} to project {project_id} members")
+                    else:
+                        print(f"❌ Warning: Failed to add user {user_id} to project members (status: {update_resp.status_code})")
+                else:
+                    print(f"ℹ️ User {user_id} already in project {project_id} members")
+            
+            elif action == "check_remove":
+                # Check if user should be removed (not owner/collaborator of any task)
+                if user_id in current_members:
+                    # Get all tasks in the project
+                    tasks_resp = await client.get(f"{TASKS_SERVICE_URL}/project/{project_id}")
+                    if tasks_resp.status_code == 200:
+                        tasks_data = tasks_resp.json()
+                        tasks = tasks_data.get("tasks", [])
+                        
+                        # Check if user is owner or collaborator of any task
+                        is_involved = False
+                        for task in tasks:
+                            if task.get("created_by_uid") == user_id:
+                                is_involved = True
+                                break
+                            if user_id in (task.get("collaborators") or []):
+                                is_involved = True
+                                break
+                        
+                        # Remove user from members if not involved in any task
+                        if not is_involved:
+                            current_members.remove(user_id)
+                            update_resp = await client.put(
+                                f"{PROJECTS_SERVICE_URL}/{project_id}",
+                                json={"members": current_members}
+                            )
+                            if update_resp.status_code == 200:
+                                print(f"Removed user {user_id} from project {project_id} members")
+                            else:
+                                print(f"Warning: Failed to remove user {user_id} from project members")
     
+    except Exception as e:
+        print(f"Error syncing project members: {str(e)}")
+
+
+
 @app.post("/createTask", summary="Create task via composite service with full workflow", response_description="Created task with schedule and notifications")
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
         ...,
-          examples={
+        examples={
             "create_task": {
                 "summary": "Create a new task with schedule",
                 "description": "Example of creating a task with all optional fields including schedule",
-                "value":   {
+                "value": {
                     "name": "New Task Title 4.0",
                     "pid": "695d5107-0229-481a-9301-7c0562ea52d1",
                     "parentTaskId": "null",
@@ -403,7 +486,7 @@ async def create_task_composite(
                     "notes": "Optional notes",
                     "priorityLevel": 10,
                     "label": "bug",
-                    "created_by_uid":"fb892a63-2401-46fc-b660-bf3fe1196d4e",
+                    "created_by_uid": "fb892a63-2401-46fc-b660-bf3fe1196d4e",
                     "schedule": {
                         "status": "done",
                         "start": "2024-10-20T09:00:00Z",
@@ -424,7 +507,8 @@ async def create_task_composite(
     3) Create the task in Task MS (only after ALL validations pass)
     4) Create schedule entry in Schedule MS (if provided)
     5) ROLLBACK task if schedule creation fails
-    6) Return enriched response (project & collaborators info)
+    6) Sync project members (add task owner and collaborators)
+    7) Return enriched response (project & collaborators info)
     """
 
     def _extract_task_id_from_json(obj: Any) -> Optional[str]:
@@ -577,7 +661,42 @@ async def create_task_composite(
                 )
 
         # ===================================================================
-        # STEP 4: ENRICH RESPONSE WITH ADDITIONAL DATA
+        # STEP 4: SYNC PROJECT MEMBERS (Add task owner and collaborators)
+        # ===================================================================
+        project_id = task_json.get("pid")
+        if project_id:
+            # Get current project members
+            try:
+                async with httpx.AsyncClient() as client:
+                    proj_resp = await client.get(f"{PROJECTS_SERVICE_URL}/pid/{project_id}")
+                    if proj_resp.status_code == 200:
+                        project_data = proj_resp.json()
+                        # Extract members array from project data
+                        existing_members = set(project_data.get("members", []))
+                    else:
+                        existing_members = set()
+            except Exception:
+                existing_members = set()
+            
+            # Collect all unique users to add (owner + collaborators)
+            users_to_add = set()
+            
+            # Add task owner
+            if task_json.get("created_by_uid"):
+                users_to_add.add(task_json["created_by_uid"])
+            
+            # Add all collaborators
+            if task_json.get("collaborators"):
+                for collaborator_id in task_json["collaborators"]:
+                    users_to_add.add(collaborator_id)
+            
+            # Add each unique user to project members (only if not already a member)
+            for user_id in users_to_add:
+                if user_id not in existing_members:
+                    await sync_project_members(project_id, user_id, action="add")
+
+        # ===================================================================
+        # STEP 5: ENRICH RESPONSE WITH ADDITIONAL DATA
         # ===================================================================
         
         # Enrich: project info (optional)
@@ -612,7 +731,7 @@ async def create_task_composite(
                         collaborator_info.append({"id": collab_id, "message": f"Details unavailable: {str(ex)}"})
 
         # ===================================================================
-        # STEP 5: COMPOSE FINAL RESPONSE
+        # STEP 6: COMPOSE FINAL RESPONSE
         # ===================================================================
         return {
             "message": "Task created successfully via composite service",
@@ -637,6 +756,7 @@ async def create_task_composite(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 
 
 # Helper function to create schedule entries
@@ -684,44 +804,57 @@ async def delete_task_service(task_id: str):
         return response.json() if response.status_code == 200 else None
         
 
-    
 @app.put("/{task_id}", summary="Update task via composite service", response_description="Updated task with validation")
 async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
     updates: Dict[str, Any] = Body(
         ...,
-        examples={
-            "update_task": {
-                "summary": "Update task with all fields",
-                "description": "Example of updating a task with task fields and schedule fields",
-                "value": {
-                    "name": "Update task from composite service",
-                    "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
-                    "collaborators": ["655a9260-f871-480f-abea-ded735b2170a", "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"],
-                    "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-                    "desc": "Set up the initial project structure and dependencies",
-                    "notes": "Remember to update the README file",
-                    "status": "in_progress",
-                    "deadline": "2024-12-31T23:59:59Z",
-                    "priorityLevel": 2,
-                    "label": "SetupUpdated"
-                }
-            }
+        example={
+            "name": "Update task from composite service",
+            "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+            "collaborators": [
+                "655a9260-f871-480f-abea-ded735b2170a",
+                "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"
+            ],
+            "pid": "695d5107-0229-481a-9301-7c0562ea52d1",
+            "desc": "Set up the initial project structure and dependencies",
+            "notes": "Remember to update the README file",
+            "status": "in_progress",
+            "deadline": "2024-12-31T23:59:59Z",
+            "priorityLevel": 2,
+            "label": "SetupUpdated",
+            "created_by_uid": "655a9260-f871-480f-abea-ded735b2170a"
         }
     ),
 ):
     """
     Composite function to update a task with comprehensive validation:
     1. Validates and filters payload fields
-    2. Validates ALL inputs (parentTaskId, collaborators, project ID)
+    2. Validates ALL inputs (parentTaskId, collaborators, project ID, created_by_uid)
     3. Updates task via task service (only after all validations pass)
     4. Updates schedule service (status, deadline)
+    5. Syncs project members (adds new collaborators, removes users no longer involved)
     """
+    
+    # ===================================================================
+    # STEP 0: GET CURRENT TASK DATA TO TRACK CHANGES
+    # ===================================================================
+    try:
+        async with httpx.AsyncClient() as client:
+            current_task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
+            if current_task_resp.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+            current_task = current_task_resp.json().get("task", {})
+            old_collaborators = set(current_task.get("collaborators") or [])
+            old_owner = current_task.get("created_by_uid")
+            project_id = current_task.get("pid")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch current task: {str(e)}")
     
     # ===================================================================
     # STEP 1: VALIDATE AND FILTER PAYLOAD
     # ===================================================================
-    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes", "priorityLevel", "label"}
+    allowed_fields = {"name", "parentTaskId", "collaborators", "pid", "desc", "notes", "priorityLevel", "label", "created_by_uid"}
     schedule_fields = {"status", "deadline"}
     
     # Filter task updates
@@ -741,7 +874,8 @@ async def update_task_composite(
         validation_results = {
             "parentTaskId": False,
             "collaborators": False,
-            "project": False
+            "project": False,
+            "created_by_uid": False
         }
         
         # Validate parent task ID
@@ -759,6 +893,11 @@ async def update_task_composite(
             await validate_project_id(filtered_updates["pid"])
             validation_results["project"] = True
         
+        # Validate created_by_uid exists in Users DB
+        if "created_by_uid" in filtered_updates and filtered_updates["created_by_uid"]:
+            await validate_user_exists(filtered_updates["created_by_uid"])
+            validation_results["created_by_uid"] = True
+        
         # ===================================================================
         # STEP 3: UPDATE TASK (only after all validations pass)
         # ===================================================================
@@ -774,7 +913,33 @@ async def update_task_composite(
             schedule_response = await update_schedule_service(task_id, schedule_updates)
         
         # ===================================================================
-        # STEP 5: COMPOSE RESPONSE
+        # STEP 5: SYNC PROJECT MEMBERS
+        # ===================================================================
+        if project_id:
+            # Get new collaborators from update
+            new_collaborators = set(filtered_updates.get("collaborators", old_collaborators))
+            new_owner = filtered_updates.get("created_by_uid", old_owner)
+            
+            # Add new owner to members if changed
+            if new_owner and new_owner != old_owner:
+                await sync_project_members(project_id, new_owner, action="add")
+            
+            # Add any new collaborators
+            added_collaborators = new_collaborators - old_collaborators
+            for collaborator_id in added_collaborators:
+                await sync_project_members(project_id, collaborator_id, action="add")
+            
+            # Check if removed collaborators should be removed from project members
+            removed_collaborators = old_collaborators - new_collaborators
+            for collaborator_id in removed_collaborators:
+                await sync_project_members(project_id, collaborator_id, action="check_remove")
+            
+            # Check if old owner should be removed (if owner changed)
+            if new_owner and old_owner and new_owner != old_owner:
+                await sync_project_members(project_id, old_owner, action="check_remove")
+        
+        # ===================================================================
+        # STEP 6: COMPOSE RESPONSE
         # ===================================================================
         response_data = {
             "message": "Task updated successfully via composite service",
@@ -804,7 +969,6 @@ async def update_task_composite(
 
         return response_data   
 
-        
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
     except HTTPException as e:
@@ -812,7 +976,37 @@ async def update_task_composite(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
-    
+
+async def validate_user_exists(user_id: str):
+    """
+    Validates that a user exists in the Users microservice.
+    Raises HTTPException if user doesn't exist.
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{USERS_SERVICE_URL}/internal/{user_id}")
+            if response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"User with ID {user_id} not found"
+                )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"User with ID {user_id} not found"
+                )
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"Failed to validate user: {e.response.text}"
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to connect to Users service: {str(e)}"
+            )
+        
 # Helper functions for validations -- for update
 async def validate_parent_task_id(parent_task_id: str):
     """Validate that parentTaskId exists and is valid"""
@@ -876,15 +1070,18 @@ async def update_task_service(task_id: str, updates: Dict[str, Any]):
             raise HTTPException(status_code=503, detail=f"Task service unavailable: {str(e)}")
 
 # Schedule Service
-async def update_schedule_service(schedule_id: str, schedule_updates: Dict[str, Any]):
-    """Send schedule updates to the schedule service matching the PUT /{tid} endpoint"""
+async def update_schedule_service(task_id: str, schedule_updates: Dict[str, Any]):
+    """Send schedule updates to the schedule service using task ID"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.put(f"{SCHEDULE_SERVICE_URL}/{schedule_id}", json=schedule_updates)
+            response = await client.put(
+                f"{SCHEDULE_SERVICE_URL}/tid/{task_id}",  # Use /tid/ endpoint
+                json=schedule_updates
+            )
             
             if response.status_code == 404:
-                print(f"Warning: Task {schedule_id} not found in schedule service")
-                return {"status": "not_found", "message": f"Task {schedule_id} not found in schedule service"}
+                print(f"Warning: No schedule found for task {task_id}")
+                return {"status": "not_found", "message": f"No schedule found for task {task_id}"}
             elif response.status_code == 400:
                 print(f"Warning: Bad request to schedule service: {response.text}")
                 return {"status": "bad_request", "message": "Invalid schedule data"}
@@ -894,7 +1091,7 @@ async def update_schedule_service(schedule_id: str, schedule_updates: Dict[str, 
             
             return {
                 "status": "success",
-                "message": f"Task {schedule_id} schedule updated successfully",
+                "message": f"Task {task_id} schedule updated successfully",
                 "data": response.json()
             }
             
@@ -933,37 +1130,86 @@ async def delete_task_composite(
 ):
     """
     Workflow:
-      1) DELETE schedules for this task -> SCHEDULE_SERVICE_URL/schedule_api/{task_id}
-      2) DELETE task itself            -> TASK_SERVICE_URL/task_api/{task_id}
+      1) GET task details (owner, collaborators, project) BEFORE deletion
+      2) DELETE task itself -> TASK_SERVICE_URL/{task_id}
+      3) SYNC project members (check if users should be removed)
 
     Notes:
-      - 404 from either service is treated as already deleted (idempotent).
+      - 404 from task service is treated as already deleted (idempotent).
       - Any other non-2xx/404 becomes a 502 to the client (downstream error).
     """
+    project_id = None
+    task_owner = None
+    collaborators = []
+    
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            # 2) Delete the task itself (also treat 404 as already deleted)
-            task_url = f"{TASK_SERVICE_URL}/{task_id}"
-            task_resp = await client.delete(task_url)
-            if task_resp.status_code not in (200, 204, 404):
+            # 1) Get task details BEFORE deletion (to get project_id, owner, collaborators)
+            task_url = f"{TASK_SERVICE_URL}/tasks/{task_id}"
+            get_resp = await client.get(task_url)
+            
+            if get_resp.status_code == 200:
+                task_data = get_resp.json().get("task", {})
+                project_id = task_data.get("pid")
+                task_owner = task_data.get("created_by_uid")
+                collaborators = task_data.get("collaborators") or []
+            elif get_resp.status_code == 404:
+                # Task already deleted - treat as idempotent success
+                return {
+                    "message": "Task already deleted (idempotent)",
+                    "task_id": task_id,
+                    "task_delete": {
+                        "url": task_url,
+                        "status_code": 404,
+                        "result": "already_deleted"
+                    }
+                }
+            else:
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "Task service get failed",
+                        "status_code": get_resp.status_code,
+                        "body": _safe_json(get_resp),
+                        "url": task_url,
+                    },
+                )
+            
+            # 2) Delete the task itself
+            delete_resp = await client.delete(task_url)
+            if delete_resp.status_code not in (200, 204, 404):
                 raise HTTPException(
                     status_code=502,
                     detail={
                         "message": "Task service delete failed",
-                        "status_code": task_resp.status_code,
-                        "body": _safe_json(task_resp),
+                        "status_code": delete_resp.status_code,
+                        "body": _safe_json(delete_resp),
                         "url": task_url,
                     },
                 )
+        
+        # 3) Sync project members (check if users should be removed)
+        if project_id:
+            # Check if owner should be removed from project members
+            if task_owner:
+                await sync_project_members(project_id, task_owner, action="check_remove")
+            
+            # Check if collaborators should be removed from project members
+            for collaborator_id in collaborators:
+                await sync_project_members(project_id, collaborator_id, action="check_remove")
 
         return {
-            "message": "Delete workflow completed",
+            "message": "Delete workflow completed and project members synced",
             "task_id": task_id,
             "task_delete": {
                 "url": task_url,
-                "status_code": task_resp.status_code,
-                "result": _safe_json(task_resp),
+                "status_code": delete_resp.status_code,
+                "result": _safe_json(delete_resp),
             },
+            "members_sync": {
+                "project_id": project_id,
+                "checked_users": [task_owner] + collaborators if task_owner else collaborators
+            }
         }
 
     except httpx.RequestError as e:
