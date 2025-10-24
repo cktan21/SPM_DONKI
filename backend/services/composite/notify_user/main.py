@@ -4,8 +4,28 @@ from recurring_processor import recurring_processor
 from schedule_client import ScheduleClient
 import uvicorn
 from datetime import datetime
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Composite Microservice: Notify User Service")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown"""
+    # Startup
+    try:
+        recurring_tasks = schedule_client.fetch_recurring_tasks()
+        for task in recurring_tasks:
+            if task.get("next_occurrence") and task.get("frequency"):
+                next_occurrence_dt = datetime.fromisoformat(task["next_occurrence"].replace('Z', '+00:00'))
+                recurring_processor.schedule_recurring_task(task["sid"], task["frequency"], next_occurrence_dt)
+        print(f"Initialized {len(recurring_tasks)} recurring tasks on startup")
+    except Exception as e:
+        print(f"Error initializing recurring tasks: {str(e)}")
+    
+    yield  # This is where the app runs
+    
+    # Shutdown
+    recurring_processor.shutdown()
+
+app = FastAPI(title="Composite Microservice: Notify User Service", lifespan=lifespan)
 schedule_client = ScheduleClient()
 
 @app.get("/")
@@ -41,27 +61,6 @@ def get_scheduled_jobs():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching scheduled jobs: {str(e)}")
-
-
-# Initialize recurring tasks on startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize all existing recurring tasks on startup"""
-    try:
-        recurring_tasks = schedule_client.fetch_recurring_tasks()
-        for task in recurring_tasks:
-            if task.get("next_occurrence") and task.get("frequency"):
-                next_occurrence_dt = datetime.fromisoformat(task["next_occurrence"].replace('Z', '+00:00'))
-                recurring_processor.schedule_recurring_task(task["sid"], task["frequency"], next_occurrence_dt)
-        print(f"Initialized {len(recurring_tasks)} recurring tasks on startup")
-    except Exception as e:
-        print(f"Error initializing recurring tasks: {str(e)}")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown the recurring processor"""
-    recurring_processor.shutdown()
 
 
 if __name__ == "__main__":
