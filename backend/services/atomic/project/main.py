@@ -18,6 +18,12 @@ project_controller = ProjectController()
 def read_root():
     return {"message": "Project Service is running 🚀😫"}
 
+# Get all projects
+@app.get("/all", summary="Get all projects", response_description="List of all projects")
+def get_all_projects():
+    return project_controller.get_all_projects()
+
+
 # Get project by Project ID
 @app.get("/pid/{project_id}")
 def get_project_by_id(project_id: str):

@@ -19,6 +19,12 @@ class SupabaseClient:
         data = response.data
         return data[0] if data else None
     
+    # Fetch All Projects
+    def fetch_all_projects(self):
+        response = self.client.table("PROJECT").select("*").execute()
+        data = response.data
+        return data if data else None
+    
     # Get Project by Project ID
     def fetch_project_by_pid(self, pid):
         response = self.client.table("PROJECT").select("*").eq("id", pid).execute()

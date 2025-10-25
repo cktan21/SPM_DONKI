@@ -7,6 +7,12 @@ class ProjectService:
     
     def __init__(self):
         self.supabase_client = SupabaseClient()
+
+    def get_all_projects(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch all projects from Supabase.
+        """
+        return self.supabase_client.fetch_all_projects()
     
     def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """

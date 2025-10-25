@@ -399,50 +399,6 @@ async def get_project(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-    
-# Get all projects
-@app.get(
-    "/Allprojects",
-    summary="Get all projects (atomic)",
-    response_description="Raw list of projects from Project MS"
-)
-async def get_all_projects():
-    """
-    Atomic getAll: fetch and return all projects directly from the Project MS.
-    No enrichment, no fan-out calls—just a thin pass-through.
-    """
-    internal_headers = {"X-Internal-API-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else None
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Keep it simple: try a primary route, then one fallback.
-            r = await client.get(f"{PROJECTS_SERVICE_URL}/all", headers=internal_headers)
-            if r.status_code != 200:
-                r = await client.get(f"{PROJECTS_SERVICE_URL}/projects", headers=internal_headers)
-
-            r.raise_for_status()
-            data = r.json()
-
-            # Normalize common shapes to a plain list
-            if isinstance(data, list):
-                projects = data
-            elif isinstance(data, dict):
-                projects = data.get("projects") or data.get("project") or data.get("data") or []
-            else:
-                projects = []
-
-            return {
-                "message": "Projects retrieved",
-                "count": len(projects),
-                "projects": projects,
-            }
-
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Project service unavailable: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
