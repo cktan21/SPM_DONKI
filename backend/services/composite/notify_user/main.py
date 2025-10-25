@@ -105,19 +105,26 @@ def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
             deadline_success = recurring_processor.schedule_deadline_monitoring(task_data)
         
         if recurring_success and deadline_success:
-            return {
+            response = {
                 "message": f"Successfully scheduled recurring task and deadline monitoring for task {sid}",
                 "sid": sid,
                 "action": "scheduled",
-                "recurring_success": recurring_success,
                 "deadline_success": deadline_success
             }
+            # Only include recurring_success if the task is actually recurring
+            if is_recurring:
+                response["recurring_success"] = recurring_success
+            return response
         else:
-            return {
+            response = {
                 "message": f"Failed to schedule recurring task or deadline monitoring for task {sid}",
                 "sid": sid,
                 "action": "failed"
             }
+            # Only include recurring_success if the task is actually recurring
+            if is_recurring:
+                response["recurring_success"] = recurring_success
+            return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error scheduling recurring task or deadline monitoring: {str(e)}")
 
