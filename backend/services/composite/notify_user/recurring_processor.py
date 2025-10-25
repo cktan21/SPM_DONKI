@@ -5,6 +5,7 @@ from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
+from kafka_client import KafkaEventPublisher, Topics
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,6 +15,7 @@ class RecurringTaskProcessor:
     def __init__(self):
         self.scheduler = BackgroundScheduler()
         self.schedule_client = ScheduleClient()
+        self.kafka_publisher = KafkaEventPublisher()
         self.scheduler.start()
         logger.info("RecurringTaskProcessor initialized and scheduler started")
 
@@ -114,6 +116,91 @@ class RecurringTaskProcessor:
             logger.error(f"Error scheduling recurring task {sid}: {str(e)}")
             return False
 
+    def schedule_deadline_monitoring(self, task_data: Dict[str, Any]):
+        """
+        Schedule a deadline monitoring job for a task
+        """
+        try:
+            sid = task_data.get("sid")
+            deadline_str = task_data.get("deadline")
+            
+            if not all([sid, deadline_str]):
+                logger.error(f"Missing required fields for deadline monitoring {sid}")
+                return False
+            
+            # Parse the deadline datetime
+            deadline_dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+            
+            # Schedule the deadline monitoring job
+            job_id = f"deadline_{sid}"
+            self.scheduler.add_job(
+                func=self.process_deadline_reached,
+                trigger=DateTrigger(run_date=deadline_dt),
+                args=[sid],
+                id=job_id,
+                replace_existing=True
+            )
+            
+            logger.info(f"Scheduled deadline monitoring for task {sid} at {deadline_dt}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error scheduling deadline monitoring for {sid}: {str(e)}")
+            return False
+
+    def process_deadline_reached(self, sid: str):
+        """
+        Process when a task deadline is reached - broadcast to Kafka and update status
+        """
+        try:
+            logger.info(f"Processing deadline reached for task {sid}")
+            
+            # Get the current schedule entry
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
+            if not current_entry:
+                logger.error(f"Schedule entry {sid} not found for deadline processing")
+                return False
+            
+            # Update task status to "overdue" via schedule service
+            update_success = self.schedule_client.update_schedule(sid, {"status": "overdue"})
+            if not update_success:
+                logger.error(f"Failed to update task status to overdue for {sid}")
+                return False
+            
+            # Broadcast deadline overdue event to Kafka
+            event_data = {
+                "sid": sid,
+                "tid": current_entry.get("tid"),
+                "deadline": current_entry.get("deadline"),
+                "status": "overdue",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Run the async publish_event in a new event loop
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            success = loop.run_until_complete(self.kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type="deadline_overdue",
+                data=event_data,
+                key=sid
+            ))
+            
+            if success:
+                logger.info(f"Successfully broadcasted deadline overdue event for task {sid}")
+                return True
+            else:
+                logger.error(f"Failed to broadcast deadline overdue event for task {sid}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error processing deadline reached for {sid}: {str(e)}")
+
     def process_recurring_task(self, sid: str, frequency: str):
         """
         Process a recurring task when its next occurrence time is reached
@@ -135,7 +222,14 @@ class RecurringTaskProcessor:
                 # Schedule the next occurrence for the new entry
                 new_sid = new_entry["sid"]
                 new_next_occurrence = datetime.fromisoformat(new_entry["next_occurrence"].replace('Z', '+00:00'))
-                self.schedule_recurring_task(new_sid, frequency, new_next_occurrence)
+                self.schedule_recurring_task({
+                    "sid": new_sid,
+                    "frequency": frequency,
+                    "next_occurrence": new_entry["next_occurrence"]
+                })
+                
+                # Also schedule deadline monitoring for the new entry
+                self.schedule_deadline_monitoring(new_entry)
             else:
                 logger.error(f"Failed to create new recurring entry for task {current_entry['tid']}")
                 
@@ -159,6 +253,38 @@ class RecurringTaskProcessor:
             return True
         except Exception as e:
             logger.error(f"Error cancelling recurring task {sid}: {str(e)}")
+            return False
+
+    def cancel_deadline_monitoring(self, sid: str):
+        """
+        Cancel a scheduled deadline monitoring job
+        """
+        try:
+            job_id = f"deadline_{sid}"
+            
+            # Check if job exists before trying to remove it
+            if self.scheduler.get_job(job_id):
+                self.scheduler.remove_job(job_id)
+                logger.info(f"Cancelled deadline monitoring for {sid}")
+            else:
+                logger.info(f"Deadline monitoring for {sid} was not scheduled (no job found)")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling deadline monitoring for {sid}: {str(e)}")
+            return False
+
+    def cancel_all_task_jobs(self, sid: str):
+        """
+        Cancel both recurring and deadline monitoring jobs for a task
+        """
+        try:
+            recurring_cancelled = self.cancel_recurring_task(sid)
+            deadline_cancelled = self.cancel_deadline_monitoring(sid)
+            
+            return recurring_cancelled and deadline_cancelled
+        except Exception as e:
+            logger.error(f"Error cancelling all jobs for {sid}: {str(e)}")
             return False
 
     def get_scheduled_jobs(self):

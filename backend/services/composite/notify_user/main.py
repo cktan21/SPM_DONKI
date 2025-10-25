@@ -12,13 +12,19 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     # Startup
     try:
-        recurring_tasks = schedule_client.fetch_recurring_tasks()
-        for task in recurring_tasks:
-            if task.get("next_occurrence") and task.get("frequency"):
-                recurring_processor.schedule_recurring_task(task)
-        print(f"Initialized {len(recurring_tasks)} recurring tasks on startup")
+        all_schedules = schedule_client.fetch_all_schedules()
+        
+        for schedule in all_schedules:
+            is_recurring = schedule.get("is_recurring")
+            if is_recurring:
+                if schedule.get("next_occurrence") and schedule.get("frequency"):
+                    recurring_processor.schedule_recurring_task(schedule)
+            if schedule.get("deadline"):
+                recurring_processor.schedule_deadline_monitoring(schedule)
+        print(f"Initialized {len(all_schedules)} schedules on startup")
+        
     except Exception as e:
-        print(f"Error initializing recurring tasks: {str(e)}")
+        print(f"Error initializing schedules: {str(e)}")
     
     yield  # This is where the app runs
     
@@ -72,35 +78,48 @@ def get_scheduled_jobs():
         raise HTTPException(status_code=500, detail=f"Error fetching scheduled jobs: {str(e)}")
 
 # Endpoint for schedule service to notify about new recurring tasks
-@app.post("/task/recurring/schedule")
+@app.post("/schedule/update")
 def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
     """Schedule a new recurring task when notified by the schedule service"""
+    
+    recurring_success = True
+    deadline_success = True
+    
     try:
+        is_recurring = task_data.get("is_recurring")
         sid = task_data.get("sid")
         frequency = task_data.get("frequency")
         next_occurrence_str = task_data.get("next_occurrence")
+        deadline = task_data.get("deadline")
+        if is_recurring:
+            if not all([sid, frequency, next_occurrence_str]):
+                raise HTTPException(status_code=400, detail="Missing required fields: sid, frequency, next_occurrence")
+            
+            # Parse the next occurrence datetime
+            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
+            
+            # Schedule the recurring task
+            recurring_success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
         
-        if not all([sid, frequency, next_occurrence_str]):
-            raise HTTPException(status_code=400, detail="Missing required fields: sid, frequency, next_occurrence")
+        if deadline:
+            deadline_success = recurring_processor.schedule_deadline_monitoring(task_data)
         
-        # Parse the next occurrence datetime
-        next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
-        
-        # Schedule the recurring task
-        success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
-        
-        if success:
+        if recurring_success and deadline_success:
             return {
-                "message": f"Successfully scheduled recurring task {sid}",
+                "message": f"Successfully scheduled recurring task and deadline monitoring for task {sid}",
                 "sid": sid,
-                "frequency": frequency,
-                "next_occurrence": next_occurrence_str
+                "action": "scheduled",
+                "recurring_success": recurring_success,
+                "deadline_success": deadline_success
             }
         else:
-            raise HTTPException(status_code=500, detail="Failed to schedule recurring task")
-            
+            return {
+                "message": f"Failed to schedule recurring task or deadline monitoring for task {sid}",
+                "sid": sid,
+                "action": "failed"
+            }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error scheduling recurring task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error scheduling recurring task or deadline monitoring: {str(e)}")
 
 # Endpoint for schedule service to notify about cron job updates
 @app.post("/task/recurring/update")
@@ -150,6 +169,52 @@ def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating recurring task: {str(e)}")
+
+@app.post("/task/deadline/cancel")
+def cancel_deadline_monitoring(task_data: Dict[str, Any] = Body(...)):
+    """Cancel deadline monitoring for a task"""
+    try:
+        sid = task_data.get("sid")
+        
+        if not sid:
+            raise HTTPException(status_code=400, detail="Missing required field: sid")
+        
+        # Cancel the deadline monitoring
+        success = recurring_processor.cancel_deadline_monitoring(sid)
+        
+        if success:
+            return {
+                "message": f"Successfully cancelled deadline monitoring for task {sid}",
+                "sid": sid
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to cancel deadline monitoring")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cancelling deadline monitoring: {str(e)}")
+
+@app.post("/task/cancel-all")
+def cancel_all_task_jobs(task_data: Dict[str, Any] = Body(...)):
+    """Cancel both recurring and deadline monitoring jobs for a task"""
+    try:
+        sid = task_data.get("sid")
+        
+        if not sid:
+            raise HTTPException(status_code=400, detail="Missing required field: sid")
+        
+        # Cancel all jobs for this task
+        success = recurring_processor.cancel_all_task_jobs(sid)
+        
+        if success:
+            return {
+                "message": f"Successfully cancelled all jobs for task {sid}",
+                "sid": sid
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to cancel all jobs")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cancelling all jobs: {str(e)}")
 
 
 if __name__ == "__main__":
