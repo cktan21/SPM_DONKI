@@ -219,6 +219,7 @@ class RecurringTaskProcessor:
                 local_event_data["name"] = user.get("name")
                 local_event_data["email"] = user.get("email")
                 local_event_data["role"] = user.get("role")
+                local_event_data["department"] = user.get("department")
                 
                 # Create async task for each user
                 task = self.kafka_publisher.publish_event(
