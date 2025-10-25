@@ -809,9 +809,10 @@ async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
     updates: Dict[str, Any] = Body(
         ...,
-        example={
-            "name": "Update task from composite service",
-            "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
+        examples={
+            "example": {
+                "name": "Update task from composite service",
+                "parentTaskId": "33949f99-20d0-423d-9b26-f09292b2e40d",
             "collaborators": [
                 "655a9260-f871-480f-abea-ded735b2170a",
                 "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"
@@ -824,6 +825,7 @@ async def update_task_composite(
             "priorityLevel": 2,
             "label": "SetupUpdated",
             "created_by_uid": "655a9260-f871-480f-abea-ded735b2170a"
+            }
         }
     ),
 ):
