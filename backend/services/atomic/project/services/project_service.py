@@ -20,11 +20,11 @@ class ProjectService:
         """
         return self.supabase_client.fetch_project_by_uid(user_id)
     
-    def create_project(self, uid: str, name: str, desc: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def create_project(self, uid: str, name: str, desc: Optional[str] = None, members: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """
         Create a new project
         """
-        return self.supabase_client.insert_project(uid, name, desc)
+        return self.supabase_client.insert_project(uid, name, desc, members)
     
     def update_project(self, project_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """

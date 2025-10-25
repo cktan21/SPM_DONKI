@@ -47,6 +47,8 @@ def insert_new_project(new_data: Dict[str, Any] = Body(...) ):
 def update_project(id: str, new_data: Dict[str, Any] = Body(...)):
     return project_controller.update_project(id, new_data)
 
+    
+
 # Delete Row
 @app.delete("/{id}")
 def delete_project(id: str):

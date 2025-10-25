@@ -9,11 +9,12 @@ class SupabaseClient:
         self.client: Client = create_client(self.url, self.key)
     
     # Insert Project
-    def insert_project(self, uid, name, desc):
+    def insert_project(self, uid, name, desc, members):
         response = self.client.table("PROJECT").insert({
             "uid": uid,
             "name": name,
-            "desc": desc
+            "desc": desc,
+            "members": members or []
         }).execute()
         data = response.data
         return data[0] if data else None
