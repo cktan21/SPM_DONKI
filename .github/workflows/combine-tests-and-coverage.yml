@@ -129,6 +129,5 @@ jobs:
             - name: Container Cleanup
               if: always()
               run: |
-                  cd backend
                   docker compose down --volumes --remove-orphans
                   docker system prune -f
