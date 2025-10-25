@@ -142,7 +142,7 @@ def has_cron_affecting_changes(old_data: Dict[str, Any], new_data: Dict[str, Any
     
     return False
 
-@app.get("/")
+@app.get("/health")
 def read_root():
     return {"message": "Schedule Service is running 🚀😌"}
 

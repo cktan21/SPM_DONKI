@@ -95,11 +95,12 @@ def schedule_new_recurring_task(task_data: Dict[str, Any] = Body(...)):
             if not all([sid, frequency, next_occurrence_str]):
                 raise HTTPException(status_code=400, detail="Missing required fields: sid, frequency, next_occurrence")
             
-            # Parse the next occurrence datetime
-            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
-            
             # Schedule the recurring task
-            recurring_success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+            recurring_success = recurring_processor.schedule_recurring_task({
+                "sid": sid,
+                "frequency": frequency,
+                "next_occurrence": next_occurrence_str
+            })
         
         if deadline:
             deadline_success = recurring_processor.schedule_deadline_monitoring(task_data)
@@ -146,11 +147,12 @@ def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
         
         # If the task is still recurring and has the required fields, reschedule it
         if is_recurring and frequency and next_occurrence_str:
-            # Parse the next occurrence datetime
-            next_occurrence_dt = datetime.fromisoformat(next_occurrence_str.replace('Z', '+00:00'))
-            
             # Schedule the updated recurring task
-            success = recurring_processor.schedule_recurring_task(sid, frequency, next_occurrence_dt)
+            success = recurring_processor.schedule_recurring_task({
+                "sid": sid,
+                "frequency": frequency,
+                "next_occurrence": next_occurrence_str
+            })
             
             if success:
                 return {
