@@ -23,6 +23,11 @@ def read_root():
 def get_all_projects():
     return project_controller.get_all_projects()
 
+# Get all projects by Department
+@app.get("/dept/{department}", summary="Get all projects by department")
+def get_all_projects_by_dept(department: str):
+    return project_controller.get_all_projects_by_dept(department)
+
 
 # Get project by Project ID
 @app.get("/pid/{project_id}")

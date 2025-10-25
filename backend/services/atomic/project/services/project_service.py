@@ -14,6 +14,14 @@ class ProjectService:
         """
         return self.supabase_client.fetch_all_projects()
     
+    def get_all_projects_by_dept(self, department: str) -> List[Dict[str, Any]]:
+        """
+        Fetch projects by owner_department using the DB view.
+        """
+        rows = self.supabase_client.get_projects_by_department(department) or []
+        # return as-is; controller will map into Pydantic Project safely
+        return rows
+
     def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a project by its ID

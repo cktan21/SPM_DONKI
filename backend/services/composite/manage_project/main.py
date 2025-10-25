@@ -62,20 +62,24 @@ async def get_favicon():
     from fastapi.responses import Response
     return Response(status_code=204)
 
-
-# Get all projects by user (project owner + task collaborators)
+# ==================== Get All Projects by User (Role-Based) ====================
 @app.get(
     "/uid/{uid}",
-    summary="Get all projects by user via composite service",
-    response_description="List of all projects with Tasks"
+    summary="Get all projects by user via composite service (role-based access)",
+    response_description="List of all projects with Tasks based on user role"
 )
 async def get_project_with_tasks(uid: str):
     """
-    1) Fetch owned projects from Project MS.
-    2) Find collaborator project IDs via Task MS and merge.
-    3) For each final project, get raw task IDs via Task MS, then enrich each task by calling Manage-Task /tasks/{task_id}.
-    4) Return structured response with top-level user_name and enriched tasks.
+    Role-based project retrieval:
+    1) Fetch user info including role from Users MS
+    2) HR/Admin: Get ALL projects from Project MS
+    3) Staff: Get owned projects + projects where user is a member
+    4) Manager: Get owned projects + projects where user is a member + department projects
+    5) For each final project, get raw task IDs via Task MS, then enrich each task via Manage-Task
+    6) Return structured response with user info and enriched tasks
     """
+    
+    # ==================== Helper Function: Extract User Name ====================
     def extract_user_name(payload: dict) -> str:
         return (
             payload.get("name")
@@ -89,100 +93,163 @@ async def get_project_with_tasks(uid: str):
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            # === 0) Resolve top-level user's name ===
+            # ==================== STEP 1: Fetch User Info (Name, Role, Department) ====================
+            print(f"\n[DEBUG] Starting project fetch for uid: {uid}")
             user_name = "Unknown User"
+            user_role = "staff"  # default role
+            user_dept = None
+            
             try:
+                print(f"[DEBUG] Fetching user info from: {USERS_SERVICE_URL}/internal/{uid}")
                 r_user = await client.get(f"{USERS_SERVICE_URL}/internal/{uid}", headers=internal_headers)
                 if r_user.status_code == 200:
-                    user_name = extract_user_name(r_user.json())
-            except Exception as e:
-                print(f"[Users] main user fetch error for {uid}: {e}")
-
-            # === 1) Owned projects ===
-            owned_resp = await client.get(f"{PROJECTS_SERVICE_URL}/uid/{uid}", headers=internal_headers)
-            owned_resp.raise_for_status()
-            owned_json = owned_resp.json()
-            owned_projects = owned_json.get("project", []) or []
-
-            projects_by_id = {p.get("id"): {**p, "tasks": []} for p in owned_projects if p.get("id")}
-            project_ids = set(projects_by_id.keys())
-
-            # === 2) Collaborator projects (via Task MS) ===
-            collab_pids: set[str] = set()
-            try:
-                c1 = await client.get(f"{TASK_SERVICE_URL}/by-collaborator/{uid}/pids", headers=internal_headers)
-                if c1.status_code == 200:
-                    data = c1.json()
-                    if isinstance(data, dict) and isinstance(data.get("pids"), list):
-                        collab_pids.update([pid for pid in data["pids"] if pid])
-                else:
-                    c2 = await client.get(f"{TASK_SERVICE_URL}/by-collaborator/{uid}", headers=internal_headers)
-                    if c2.status_code == 200:
-                        d2 = c2.json()
-                        task_list = d2.get("tasks") if isinstance(d2, dict) else d2
-                        if isinstance(task_list, list):
-                            for t in task_list:
-                                pid = (t or {}).get("pid")
-                                if pid:
-                                    collab_pids.add(pid)
-                    else:
-                        c3 = await client.get(f"{TASK_SERVICE_URL}/search?collaborator={uid}", headers=internal_headers)
-                        if c3.status_code == 200:
-                            d3 = c3.json()
-                            tl = d3.get("tasks") if isinstance(d3, dict) else d3
-                            if isinstance(tl, list):
-                                for t in tl:
-                                    pid = (t or {}).get("pid")
-                                    if pid:
-                                        collab_pids.add(pid)
-            except Exception as e:
-                print(f"[Tasks] collaborator PIDs fetch error for {uid}: {e}")
-
-            collab_pids_to_fetch = [pid for pid in collab_pids if pid and pid not in project_ids]
-
-            # Fetch collaborator projects and merge
-            if collab_pids_to_fetch:
-                bulk_url = f"{PROJECTS_SERVICE_URL}/ids?in={','.join(collab_pids_to_fetch)}"
-                collab_projects = []
-                try:
-                    bulk_resp = await client.get(bulk_url, headers=internal_headers)
-                    if bulk_resp.status_code == 200:
-                        bj = bulk_resp.json()
-                        collab_projects = bj.get("project", []) or bj.get("projects", []) or []
-                except Exception:
-                    collab_projects = []
-
-                if not collab_projects:
-                    loop_results = await asyncio.gather(
-                        *[client.get(f"{PROJECTS_SERVICE_URL}/pid/{pid}", headers=internal_headers) for pid in collab_pids_to_fetch],
-                        return_exceptions=True
+                    user_data = r_user.json()
+                    print(f"[DEBUG] User data retrieved: {user_data}")
+                    
+                    user_name = extract_user_name(user_data)
+                    
+                    # Extract role (check multiple possible locations)
+                    user_role = (
+                        user_data.get("role")
+                        or user_data.get("data", {}).get("role")
+                        or user_data.get("user", {}).get("role")
+                        or "staff"
+                    ).lower()
+                    
+                    # Extract department
+                    user_dept = (
+                        user_data.get("dept")
+                        or user_data.get("department")
+                        or user_data.get("data", {}).get("dept")
+                        or user_data.get("data", {}).get("department")
+                        or user_data.get("user", {}).get("dept")
+                        or user_data.get("user", {}).get("department")
                     )
-                    for i, r in enumerate(loop_results):
-                        pid = collab_pids_to_fetch[i]
-                        if isinstance(r, Exception):
-                            print(f"[Project] collab project fetch error for pid={pid}: {r}")
-                            continue
-                        if r.status_code == 200:
-                            pj = r.json()
-                            proj_obj = pj.get("project", pj)
-                            if isinstance(proj_obj, dict) and proj_obj.get("id"):
-                                collab_projects.append(proj_obj)
+                    
+                    print(f"[DEBUG] Extracted - Name: {user_name}, Role: {user_role}, Dept: {user_dept}")
+                else:
+                    print(f"[DEBUG] User fetch returned status: {r_user.status_code}")
+            except Exception as e:
+                print(f"[ERROR] User fetch failed for {uid}: {e}")
 
-                for p in collab_projects:
-                    pid = p.get("id")
-                    if pid and pid not in projects_by_id:
-                        projects_by_id[pid] = {**p, "tasks": []}
+            projects_by_id = {}
+            project_ids = set()
+
+            # ==================== STEP 2: Role-Based Project Retrieval ====================
+            
+            # --- HR or Admin: Get ALL projects ---
+            if user_role in ["hr", "admin"]:
+                print(f"[DEBUG] User role is {user_role} - fetching ALL projects")
+                try:
+                    all_projects_resp = await client.get(f"{PROJECTS_SERVICE_URL}/all", headers=internal_headers)
+                    all_projects_resp.raise_for_status()
+                    all_projects_json = all_projects_resp.json()
+                    print(f"[DEBUG] All projects response: {all_projects_json}")
+                    
+                    all_projects = all_projects_json.get("project", []) or all_projects_json.get("projects", []) or []
+                    print(f"[DEBUG] Retrieved {len(all_projects)} total projects")
+                    
+                    projects_by_id = {p.get("id"): {**p, "tasks": []} for p in all_projects if p.get("id")}
+                    project_ids = set(projects_by_id.keys())
+                    print(f"[DEBUG] Processed {len(project_ids)} unique projects")
+                    
+                except Exception as e:
+                    print(f"[ERROR] Failed to fetch all projects: {e}")
+                    raise HTTPException(status_code=500, detail=f"Failed to fetch all projects: {str(e)}")
+            
+            # --- Staff or Manager: Get owned + member projects ---
+            else:
+                print(f"[DEBUG] User role is {user_role} - fetching owned and member projects")
+                
+                # Get owned projects
+                try:
+                    print(f"[DEBUG] Fetching owned projects from: {PROJECTS_SERVICE_URL}/uid/{uid}")
+                    owned_resp = await client.get(f"{PROJECTS_SERVICE_URL}/uid/{uid}", headers=internal_headers)
+                    owned_resp.raise_for_status()
+                    owned_json = owned_resp.json()
+                    owned_projects = owned_json.get("project", []) or []
+                    print(f"[DEBUG] Retrieved {len(owned_projects)} owned projects")
+
+                    projects_by_id = {p.get("id"): {**p, "tasks": []} for p in owned_projects if p.get("id")}
+                    project_ids = set(projects_by_id.keys())
+                except Exception as e:
+                    print(f"[ERROR] Failed to fetch owned projects: {e}")
+                    owned_projects = []
+                    projects_by_id = {}
+                    project_ids = set()
+
+                # Get ALL projects to check members[] array
+                print(f"[DEBUG] Fetching all projects to check members[] array")
+                all_projects_for_member_check = []
+                try:
+                    all_resp = await client.get(f"{PROJECTS_SERVICE_URL}/all", headers=internal_headers)
+                    if all_resp.status_code == 200:
+                        all_json = all_resp.json()
+                        all_projects_for_member_check = all_json.get("project", []) or all_json.get("projects", []) or []
+                        print(f"[DEBUG] Retrieved {len(all_projects_for_member_check)} total projects for member check")
+                except Exception as e:
+                    print(f"[ERROR] Failed to fetch all projects for member check: {e}")
+
+                # Filter projects where uid is in members[] array
+                for proj in all_projects_for_member_check:
+                    pid = proj.get("id")
+                    members = proj.get("members", []) or []
+                    
+                    # Check if uid is in members array
+                    if pid and pid not in project_ids and uid in members:
+                        print(f"[DEBUG] Found user {uid} in members[] of project {pid}")
+                        projects_by_id[pid] = {**proj, "tasks": []}
                         project_ids.add(pid)
 
+                print(f"[DEBUG] After checking members[]: {len(project_ids)} total projects")
+
+                # --- Manager: Also get projects where owner is in the same department ---
+                if user_role == "manager" and user_dept:
+                    print(f"[DEBUG] User is manager in dept: {user_dept} - checking for projects with owners in same dept")
+                    
+                    # For each project in all_projects_for_member_check, check if owner's dept matches
+                    for proj in all_projects_for_member_check:
+                        pid = proj.get("id")
+                        owner_uid = proj.get("uid") or proj.get("user_id")
+                        
+                        if pid and pid not in project_ids and owner_uid:
+                            # Fetch owner's department
+                            try:
+                                owner_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{owner_uid}", headers=internal_headers)
+                                if owner_resp.status_code == 200:
+                                    owner_data = owner_resp.json()
+                                    owner_dept = (
+                                        owner_data.get("dept")
+                                        or owner_data.get("department")
+                                        or owner_data.get("data", {}).get("dept")
+                                        or owner_data.get("data", {}).get("department")
+                                        or owner_data.get("user", {}).get("dept")
+                                        or owner_data.get("user", {}).get("department")
+                                    )
+                                    
+                                    if owner_dept and owner_dept == user_dept:
+                                        print(f"[DEBUG] Found project {pid} with owner in same dept: {user_dept}")
+                                        projects_by_id[pid] = {**proj, "tasks": []}
+                                        project_ids.add(pid)
+                            except Exception as e:
+                                print(f"[ERROR] Failed to fetch owner dept for project {pid}: {e}")
+                    
+                    print(f"[DEBUG] After checking department projects: {len(project_ids)} total projects")
+
+            # ==================== STEP 3: Check if No Projects Found ====================
             if not projects_by_id:
+                print(f"[DEBUG] No projects found for user {uid} with role {user_role}")
                 return {
                     "message": "No projects found for this user",
                     "user_id": uid,
                     "user_name": user_name,
+                    "user_role": user_role,
+                    "user_dept": user_dept,
                     "projects": [],
                 }
 
-            # === 3) Fetch raw tasks for ALL final projects (to get task IDs) ===
+            # ==================== STEP 4: Fetch Raw Tasks for All Projects ====================
+            print(f"[DEBUG] Fetching tasks for {len(project_ids)} projects")
             all_pids = list(project_ids)
             task_requests = [client.get(f"{TASK_SERVICE_URL}/pid/{pid}", headers=internal_headers) for pid in all_pids]
             task_responses = await asyncio.gather(*task_requests, return_exceptions=True)
@@ -191,15 +258,17 @@ async def get_project_with_tasks(uid: str):
             for i, resp in enumerate(task_responses):
                 pid = all_pids[i]
                 if isinstance(resp, Exception):
-                    print(f"[Tasks] error fetching tasks for project {pid}: {resp}")
+                    print(f"[ERROR] Error fetching tasks for project {pid}: {resp}")
                     continue
                 if resp.status_code == 200:
                     td = resp.json()
                     tasks = td.get("tasks", []) if isinstance(td, dict) else td
                     if isinstance(tasks, list):
                         project_tasks_map[pid] = [t for t in tasks if isinstance(t, dict) and t.get("id")]
+                        print(f"[DEBUG] Project {pid}: found {len(project_tasks_map[pid])} tasks")
 
-            # === 4) Enrich each task via Manage-Task: /tasks/{task_id} ===
+            # ==================== STEP 5: Enrich Tasks via Manage-Task Service ====================
+            print(f"[DEBUG] Starting task enrichment via Manage-Task service")
             for pid in all_pids:
                 raw_tasks = project_tasks_map.get(pid, [])
                 if not raw_tasks:
@@ -207,59 +276,69 @@ async def get_project_with_tasks(uid: str):
                     continue
 
                 tids = [t["id"] for t in raw_tasks if t.get("id")]
+                print(f"[DEBUG] Enriching {len(tids)} tasks for project {pid}")
+                
                 reqs = [client.get(f"{MANAGE_TASK_URL}/tasks/{tid}", headers=internal_headers) for tid in tids]
                 results = await asyncio.gather(*reqs, return_exceptions=True)
 
                 enriched = []
                 for tid, res in zip(tids, results):
-                    # Fallback to the original raw task if enrichment fails
                     fallback = next((t for t in raw_tasks if t.get("id") == tid), {})
+                    
                     if isinstance(res, Exception):
-                        print(f"⚠️ Manage-Task call failed for task {tid}: {res}")
+                        print(f"[ERROR] Manage-Task call failed for task {tid}: {res}")
                         enriched.append(fallback)
                         continue
+                        
                     if getattr(res, "status_code", 0) == 200:
                         try:
                             payload = res.json()
                             task_obj = payload.get("task") if isinstance(payload, dict) else None
                             if not task_obj and isinstance(payload, dict):
-                                task_obj = payload  # support flat shape
+                                task_obj = payload
                             if isinstance(task_obj, dict) and task_obj:
-                                # optional: merge with fallback so we don't lose fields
                                 task_obj = {**fallback, **task_obj}
                                 enriched.append(task_obj)
+                                print(f"[DEBUG] Successfully enriched task {tid}")
                             else:
+                                print(f"[WARN] Unexpected task shape for {tid}, using fallback")
                                 enriched.append(fallback)
                         except Exception as e:
-                            print(f"⚠️ Failed parsing Manage-Task response for {tid}: {e}")
+                            print(f"[ERROR] Failed parsing Manage-Task response for {tid}: {e}")
                             enriched.append(fallback)
                     else:
-                        print(f"⚠️ Manage-Task returned {res.status_code} for {tid}")
+                        print(f"[WARN] Manage-Task returned {res.status_code} for {tid}")
                         enriched.append(fallback)
 
                 projects_by_id[pid]["tasks"] = enriched
 
-            # === 5) Return (no need to do separate schedule/user map; Manage-Task provides enrichment) ===
+            # ==================== STEP 6: Return Final Response ====================
+            print(f"[DEBUG] Successfully completed. Returning {len(projects_by_id)} projects for user {uid}")
             return {
                 "message": "Projects retrieved successfully",
                 "user_id": uid,
                 "user_name": user_name,
+                "user_role": user_role,
+                "user_dept": user_dept,
                 "projects": list(projects_by_id.values()),
             }
 
         except httpx.HTTPStatusError as e:
+            print(f"[ERROR] HTTP Status Error: {e.response.status_code} - {e.response.text}")
             raise HTTPException(
                 status_code=e.response.status_code,
                 detail=f"Project service error: {e.response.text}"
             )
         except httpx.RequestError as e:
+            print(f"[ERROR] Request Error: {str(e)}")
             raise HTTPException(
                 status_code=503,
                 detail=f"Project service unavailable: {str(e)}"
             )
         except Exception as e:
-            print(f"[Composite] unexpected error: {type(e).__name__}: {e}")
-            import traceback; traceback.print_exc()
+            print(f"[ERROR] Unexpected error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"Internal server error: {str(e)}"

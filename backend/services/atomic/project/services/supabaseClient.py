@@ -58,7 +58,9 @@ class SupabaseClient:
         return getattr(resp, "data", None) or []
     
     def get_projects_by_department(self, department: str):
-        """Get projects by department"""
-        response = self.client.table("V_PROJECT_WITH_DEPT").select("*").eq("owner_department", department).execute()
-        data = response.data
-        return data if data else None
+        # If you created view unquoted, prefer "v_project_with_dept"
+        response = self.client.table("V_PROJECT_WITH_DEPT") \
+            .select("*") \
+            .eq("owner_department", department) \
+            .execute()
+        return response.data or None
