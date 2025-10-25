@@ -85,6 +85,59 @@ Sample Output:
 }
 ```
 
+### Get projects by department
+
+GET http://localhost:5200/department/{department}
+
+> http://localhost:5200/department/Tech
+
+Sample Output:
+
+```json
+{
+    "message": "3 project(s) retrieved",
+    "projects": [
+        {
+            "id": "2c34dac5-b347-4b4f-aa41-a9e84030f39e",
+            "uid": "655a9260-f871-480f-abea-ded735b2170a",
+            "created_at": "2025-10-19T10:49:39.934347+00:00",
+            "name": "manager test",
+            "desc": "desc manager test",
+            "members": [
+                "944d73be-9625-4fd1-8c6a-00e161da0642"
+            ],
+            "department": "Tech"
+        },
+        {
+            "id": "352486e8-a727-470c-add4-10fe26f1fbce",
+            "uid": "655a9260-f871-480f-abea-ded735b2170a",
+            "created_at": "2025-10-25T10:03:48.066105+00:00",
+            "name": "Delete this project",
+            "desc": "Xian xia",
+            "members": [
+                "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+                "655a9260-f871-480f-abea-ded735b2170a",
+                "17a40371-66fe-411a-963b-a977cc7cb475"
+            ],
+            "department": "Tech"
+        },
+        {
+            "id": "ccfcfc03-d00a-4732-b8f7-99019000670b",
+            "uid": "655a9260-f871-480f-abea-ded735b2170a",
+            "created_at": "2025-10-24T06:06:24.593428+00:00",
+            "name": "AI Chat Application",
+            "desc": "A real-time chat application powered by AI",
+            "members": [
+                "655a9260-f871-480f-abea-ded735b2170a",
+                "fb892a63-2401-46fc-b660-bf3fe1196d4e"
+            ],
+            "department": "Tech"
+        }
+    ]
+}
+```
+
+
 ### Insert new Project
 
 POST http://localhost:5200

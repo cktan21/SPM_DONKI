@@ -9,7 +9,34 @@ class ProjectController:
     
     def __init__(self):
         self.project_service = ProjectService()
-    
+
+    # Get all projects
+    def get_all_projects(self) -> ProjectListResponse:
+        """
+        Retrieve all projects from Supabase.
+        """
+        try:
+            projects_data = self.project_service.get_all_projects() or []
+
+            # Inline fix: replace None members with []
+            projects = [
+                Project(**{**p, "members": p.get("members") or []})
+                for p in projects_data
+            ]
+
+            if not projects:
+                return ProjectListResponse(message="No projects found", project=[])
+
+            return ProjectListResponse(
+                message=f"{len(projects)} project(s) retrieved",
+                project=projects
+            )
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        
+        
     def get_project_by_id(self, project_id: str) -> ProjectResponse:
         """
         Get a project by its ID
@@ -69,7 +96,9 @@ class ProjectController:
             created_data = self.project_service.create_project(
                 uid=project_data["uid"],
                 name=project_data["name"],
-                desc=project_data.get("desc")
+                desc=project_data.get("desc"),
+                members=project_data.get("members", [])
+                
             )
             
             if created_data:
@@ -132,3 +161,10 @@ class ProjectController:
         Get all logs for a project
         """
         return self.project_service.get_all_logs(filter_by)
+    
+    
+    def get_projects_by_department(self, department: str) -> ProjectListResponse:
+        """
+        Get projects by department
+        """
+        return self.project_service.get_projects_by_department(department)

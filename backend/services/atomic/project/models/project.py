@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -8,6 +8,7 @@ class ProjectBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
     desc: Optional[str] = Field(None, max_length=1000, description="Project description")
     uid: str = Field(..., description="User ID who owns the project")
+    members: List[str] = Field(default_factory=list, description="List of member user IDs")
 
 
 class ProjectCreate(ProjectBase):
@@ -20,6 +21,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     desc: Optional[str] = Field(None, max_length=1000)
     uid: Optional[str] = None
+    members: Optional[List[str]] = None
 
 
 class Project(ProjectBase):

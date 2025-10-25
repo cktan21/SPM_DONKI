@@ -7,6 +7,12 @@ class ProjectService:
     
     def __init__(self):
         self.supabase_client = SupabaseClient()
+
+    def get_all_projects(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch all projects from Supabase.
+        """
+        return self.supabase_client.fetch_all_projects()
     
     def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -20,11 +26,11 @@ class ProjectService:
         """
         return self.supabase_client.fetch_project_by_uid(user_id)
     
-    def create_project(self, uid: str, name: str, desc: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def create_project(self, uid: str, name: str, desc: Optional[str] = None, members: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """
         Create a new project
         """
-        return self.supabase_client.insert_project(uid, name, desc)
+        return self.supabase_client.insert_project(uid, name, desc, members)
     
     def update_project(self, project_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -43,3 +49,13 @@ class ProjectService:
         Get all logs for a project
         """
         return self.supabase_client.get_all_logs(filter_by)
+    
+    def get_projects_by_department(self, department: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get projects by department
+        """
+        client_response = self.supabase_client.get_projects_by_department(department)
+        for project in client_response:
+            project["department"] = project["owner_department"]
+            del project["owner_department"]
+        return client_response

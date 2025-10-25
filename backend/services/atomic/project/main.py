@@ -18,6 +18,12 @@ project_controller = ProjectController()
 def read_root():
     return {"message": "Project Service is running 🚀😫"}
 
+# Get all projects
+@app.get("/all", summary="Get all projects", response_description="List of all projects")
+def get_all_projects():
+    return project_controller.get_all_projects()
+
+
 # Get project by Project ID
 @app.get("/pid/{project_id}")
 def get_project_by_id(project_id: str):
@@ -65,6 +71,11 @@ async def get_log(
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return {"message": "Log retrieved successfully", "log": log}
+
+@app.get("/department/{department}", summary="Get projects by department")
+async def get_projects_by_department(department: str):
+    projects = project_controller.get_projects_by_department(department)
+    return {"message": f"{len(projects)} project(s) retrieved", "projects": projects}
 
 @app.get("/favicon.ico")
 async def get_favicon():
