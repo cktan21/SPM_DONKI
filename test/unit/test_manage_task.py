@@ -153,17 +153,37 @@ async def test_create_task_composite_schedule_validation_error(monkeypatch):
 # -------------------------------
 async def test_delete_task_composite_success():
     task_id = "33949f99-20d0-423d-9b26-f09292b2e40d"
+    fake_task_data = {
+        "task": {
+            "pid": "p1",
+            "created_by_uid": "u1", 
+            "collaborators": ["u2"]
+        }
+    }
     fake_task_delete = {"deleted": True}
 
     with patch("backend.services.composite.manage_task.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
-        mock_client.delete.return_value = AsyncMock(status_code=204, json=Mock(return_value=fake_task_delete))
+        
+        # Mock the GET request (to fetch task details)
+        mock_get_response = AsyncMock()
+        mock_get_response.status_code = 200
+        mock_get_response.json = Mock(return_value=fake_task_data)
+        mock_client.get.return_value = mock_get_response
+        
+        # Mock the DELETE request
+        mock_delete_response = AsyncMock()
+        mock_delete_response.status_code = 204
+        mock_delete_response.json = Mock(return_value=fake_task_delete)
+        mock_client.delete.return_value = mock_delete_response
+        
         mock_client_cls.return_value.__aenter__.return_value = mock_client
 
         result = await main.delete_task_composite(task_id)
 
         assert result["task_id"] == task_id
-        assert result["message"] == "Delete workflow completed"
+        assert result["message"] == "Delete workflow completed and project members synced"
         assert "task_delete" in result
+        assert "members_sync" in result
         # Verify that only task_delete is present, not schedule_delete
         assert "schedule_delete" not in result
