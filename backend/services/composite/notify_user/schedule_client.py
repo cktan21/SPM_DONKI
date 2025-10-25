@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Schedule Client
+This module provides a client for interacting with the schedule service
+"""
+
 import requests
 import logging
 import time
@@ -6,9 +12,12 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 class ScheduleClient:
-    def __init__(self, schedule_service_url: str = "http://schedule:5300"):
+    def __init__(self, schedule_service_url: str = "http://schedule:5300", task_service_url: str = "http://task:5500", user_service_url: str = "http://user:5100"):
         self.schedule_service_url = schedule_service_url
+        self.task_service_url = task_service_url
+        self.user_service_url = user_service_url
         self.session = requests.Session()
+        
         
     def _make_request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> Optional[requests.Response]:
         """Make HTTP request with retry logic"""
@@ -81,3 +90,19 @@ class ScheduleClient:
         if response:
             return response.json()
         return None
+    
+    def get_user_info(self, sid: str) -> Optional[Dict[str, Any]]:
+        """Get task info by SID from schedule service"""
+        schedule_response = self._make_request_with_retry("GET", f"{self.schedule_service_url}/sid/{sid}")
+        tid = schedule_response.json().get("data").get("tid")
+        if not tid:
+            return None
+        task_response = self._make_request_with_retry("GET", f"{self.task_service_url}/tid/{tid}")
+        user_ids = task_response.json().get("data").get("collaborators")
+        user_ids.append(task_response.json().get("data").get("created_by_uid"))
+        user_response = self._make_request_with_retry("GET", f"{self.user_service_url}/user", params={"uid": user_ids})
+        if user_response:
+            data = user_response.json()
+            return data.get("users")
+        return None
+        

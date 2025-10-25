@@ -5,6 +5,7 @@ from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
+import asyncio
 from kafka_client import KafkaEventPublisher, Topics
 
 # Configure logging
@@ -18,6 +19,18 @@ class RecurringTaskProcessor:
         self.kafka_publisher = KafkaEventPublisher()
         self.scheduler.start()
         logger.info("RecurringTaskProcessor initialized and scheduler started")
+    
+    async def initialize_kafka(self):
+        """
+        Initialize Kafka producer connection
+        """
+        try:
+            await self.kafka_publisher._connect()
+            logger.info("Kafka producer initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Kafka producer: {e}")
+            return False
 
     def calculate_next_occurrence(self, frequency: str, current_start: datetime, current_deadline: datetime) -> datetime:
         """
@@ -176,30 +189,68 @@ class RecurringTaskProcessor:
                 "timestamp": datetime.now().isoformat()
             }
             
-            # Run the async publish_event in a new event loop
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            success = loop.run_until_complete(self.kafka_publisher.publish_event(
-                topic=Topics.NOTIFICATION_EVENTS,
-                event_type="deadline_overdue",
-                data=event_data,
-                key=sid
-            ))
-            
-            if success:
-                logger.info(f"Successfully broadcasted deadline overdue event for task {sid}")
-                return True
-            else:
-                logger.error(f"Failed to broadcast deadline overdue event for task {sid}")
+            # Call sid and then task to get the user info
+            user_info = self.schedule_client.get_user_info(sid)
+            if not user_info:
+                logger.error(f"Task info not found for {sid}")
                 return False
+            
+            # Use asyncio.run for proper async handling
+            return asyncio.run(self._broadcast_deadline_events(user_info, event_data))
                 
         except Exception as e:
             logger.error(f"Error processing deadline reached for {sid}: {str(e)}")
+            return False
+
+    async def _broadcast_deadline_events(self, user_info: list, event_data: dict) -> bool:
+        """
+        Broadcast deadline overdue events to all users asynchronously
+        """
+        try:
+            # Ensure Kafka producer is connected
+            if not self.kafka_publisher.producer:
+                await self.kafka_publisher._connect()
+            
+            # Send events to all users concurrently
+            tasks = []
+            for user in user_info:
+                local_event_data = event_data.copy()
+                local_event_data["uid"] = user.get("id")
+                local_event_data["name"] = user.get("name")
+                local_event_data["email"] = user.get("email")
+                local_event_data["role"] = user.get("role")
+                
+                # Create async task for each user
+                task = self.kafka_publisher.publish_event(
+                    topic=Topics.NOTIFICATION_EVENTS,
+                    event_type="deadline_overdue",
+                    data=local_event_data,
+                )
+                tasks.append(task)
+            
+            # Wait for all events to be published
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Check results
+            failed_count = 0
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}: {result}")
+                    failed_count += 1
+                elif not result:
+                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}")
+                    failed_count += 1
+            
+            if failed_count > 0:
+                logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} deadline overdue events")
+                return False
+            
+            logger.info(f"Successfully broadcasted deadline overdue events for {len(user_info)} users")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error broadcasting deadline events: {str(e)}")
+            return False
 
     def process_recurring_task(self, sid: str, frequency: str):
         """

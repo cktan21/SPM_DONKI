@@ -52,8 +52,11 @@ class KafkaEventPublisher:
             partition: Optional partition number
         """
         if not self.producer:
-            logger.error("Producer not initialized")
-            return False
+            logger.warning("Producer not initialized, attempting to connect...")
+            await self._connect()
+            if not self.producer:
+                logger.error("Failed to initialize producer")
+                return False
         
         try:
             event = {

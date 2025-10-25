@@ -1,3 +1,5 @@
+from typing import List
+from uuid import UUID
 from fastapi import FastAPI, Path, Request, HTTPException, Header, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -382,8 +384,16 @@ def get_all_users():
     users = supabase.get_all_users()
     return JSONResponse(status_code=200, content={"message": "Users retrieved successfully", "users": users})
 
-
-# ---------------------------------------- INTERNAL SERVICE --------------------------------------------
+#do note this method can break if exceeds url limits LMAO
+@app.get("/user")
+def get_user_by_id(uid: List[UUID]):
+    """
+    Get users by user IDs in bulk
+    """
+    user = supabase.get_user_by_id_mass(uid)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return JSONResponse(status_code=200, content={"message": f"Users {uid} retrieved successfully", "users": user})
 
 # Get user by userID -- used for backend check
 
