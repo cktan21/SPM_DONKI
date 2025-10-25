@@ -56,3 +56,9 @@ class SupabaseClient:
             query = query.eq("record_id", filter_by)
         resp = query.execute()
         return getattr(resp, "data", None) or []
+    
+    def get_projects_by_department(self, department: str):
+        """Get projects by department"""
+        response = self.client.table("V_PROJECT_WITH_DEPT").select("*").eq("owner_department", department).execute()
+        data = response.data
+        return data if data else None

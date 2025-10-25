@@ -53,8 +53,6 @@ def insert_new_project(new_data: Dict[str, Any] = Body(...) ):
 def update_project(id: str, new_data: Dict[str, Any] = Body(...)):
     return project_controller.update_project(id, new_data)
 
-    
-
 # Delete Row
 @app.delete("/{id}")
 def delete_project(id: str):
@@ -73,6 +71,11 @@ async def get_log(
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return {"message": "Log retrieved successfully", "log": log}
+
+@app.get("/department/{department}", summary="Get projects by department")
+async def get_projects_by_department(department: str):
+    projects = project_controller.get_projects_by_department(department)
+    return {"message": f"{len(projects)} project(s) retrieved", "projects": projects}
 
 @app.get("/favicon.ico")
 async def get_favicon():

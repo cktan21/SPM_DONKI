@@ -49,3 +49,13 @@ class ProjectService:
         Get all logs for a project
         """
         return self.supabase_client.get_all_logs(filter_by)
+    
+    def get_projects_by_department(self, department: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get projects by department
+        """
+        client_response = self.supabase_client.get_projects_by_department(department)
+        for project in client_response:
+            project["department"] = project["owner_department"]
+            del project["owner_department"]
+        return client_response

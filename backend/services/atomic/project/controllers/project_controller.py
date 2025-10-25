@@ -161,3 +161,10 @@ class ProjectController:
         Get all logs for a project
         """
         return self.project_service.get_all_logs(filter_by)
+    
+    
+    def get_projects_by_department(self, department: str) -> ProjectListResponse:
+        """
+        Get projects by department
+        """
+        return self.project_service.get_projects_by_department(department)
