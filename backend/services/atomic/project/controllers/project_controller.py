@@ -69,7 +69,9 @@ class ProjectController:
             created_data = self.project_service.create_project(
                 uid=project_data["uid"],
                 name=project_data["name"],
-                desc=project_data.get("desc")
+                desc=project_data.get("desc"),
+                members=project_data.get("members", [])
+                
             )
             
             if created_data:
