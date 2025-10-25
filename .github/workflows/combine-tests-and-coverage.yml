@@ -14,9 +14,15 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    unit-tests:
-        name: Python Unit Tests + Coverage
+    setup:
+        name: Initial Setup
         runs-on: ubuntu-latest
+        env:
+            SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+            SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+            SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+            SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
         steps:
             - name: 📥 Checkout code
               uses: actions/checkout@v4
@@ -25,6 +31,14 @@ jobs:
               uses: actions/setup-python@v5
               with:
                   python-version: "3.13"
+
+            - name: Setup Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: "1.25"
+
+            - name: Setup Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
             - name: Install Python Dependencies
               run: |
@@ -43,6 +57,21 @@ jobs:
                     python-dateutil \
                     apscheduler
 
+            - name: Start services (optimized)
+              run: |
+                  export DOCKER_BUILDKIT=1
+                  export BUILDKIT_PROGRESS=plain
+                  cd backend
+                  docker compose up -d --build
+                  echo "Waiting for services to be ready..."
+                  timeout 60s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 1; done'
+                  echo "Services are ready!"
+
+    unit-tests:
+        name: Python Unit Tests + Coverage
+        runs-on: ubuntu-latest
+        needs: setup
+        steps:
             - name: Run Unit Tests (pytest) with coverage
               run: |
                   pytest -v --cov=./backend/services/ \
@@ -64,39 +93,17 @@ jobs:
     integration-tests:
         name: Go Integration Tests + Coverage
         runs-on: ubuntu-latest
+        needs: setup
         env:
             SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
             SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
             SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
             SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
             INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
-        defaults:
-            run:
-                working-directory: ./backend
         steps:
-            - name: 📥 Checkout code
-              uses: actions/checkout@v4
-
-            - name: Setup Go
-              uses: actions/setup-go@v4
-              with:
-                  go-version: "1.25"
-
-            - name: Setup Docker Buildx
-              uses: docker/setup-buildx-action@v3
-
-            - name: Start services (optimized)
-              run: |
-                  export DOCKER_BUILDKIT=1
-                  export BUILDKIT_PROGRESS=plain
-                  docker compose up -d --build
-                  echo "Waiting for services to be ready..."
-                  timeout 60s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 1; done'
-                  echo "Services are ready!"
-
             - name: Run Go integration tests with coverage
               run: |
-                  cd ../test/integration
+                  cd test/integration
                   go test -v -race -covermode=atomic -coverprofile=coverage.out
 
             - name: Upload Go coverage to Coveralls (parallel)
