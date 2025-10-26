@@ -573,7 +573,7 @@ async def ensure_members_present(project_id: str, user_ids: List[str]):
 async def create_task_composite(
     task_json: Dict[str, Any] = Body(
         ...,
-        example=
+        examples=
             {
                 "name": "Im a gorrilla",
                 "pid": "26db0258-e3a3-4454-b921-f721c3f29283",
