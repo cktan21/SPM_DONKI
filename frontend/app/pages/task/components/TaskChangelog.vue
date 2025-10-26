@@ -39,64 +39,160 @@ const getChangeDescription = (log: any) => {
     return 'Record created'
   }
   
+  if (operation === 'delete') {
+    if (tableName === 'task') return 'Task deleted'
+    if (tableName === 'schedule') return 'Schedule removed'
+    return 'Record deleted'
+  }
+  
   if (operation === 'update') {
     const changedFields = log.changed_fields || []
     const delta = log.delta || {}
     
-    if (changedFields.length === 0) return 'Updated'
+    // If no changed fields or only updated_timestamp, it's a generic update
+    const meaningfulFields = changedFields.filter((f: string) => 
+      f !== 'updated_timestamp' && f !== 'created_at'
+    )
+    
+    if (meaningfulFields.length === 0) {
+      return 'Task updated'
+    }
     
     const descriptions = []
     
-    for (const field of changedFields) {
+    for (const field of meaningfulFields) {
       if (field === 'status' && delta[field]) {
         const oldStatus = delta[field].old || 'unknown'
         const newStatus = delta[field].new || 'unknown'
-        descriptions.push(`Status changed from "${oldStatus}" to "${newStatus}"`)
-      } else if (field === 'label' && delta[field]) {
+        descriptions.push(`Status: "${oldStatus}" → "${newStatus}"`)
+      } 
+      else if (field === 'label' && delta[field]) {
         const oldLabel = delta[field].old || 'none'
         const newLabel = delta[field].new || 'none'
-        descriptions.push(`Label changed from "${oldLabel}" to "${newLabel}"`)
-      } else if (field === 'desc') {
-        descriptions.push('Description updated')
-      } else if (field === 'name' && delta[field]) {
-        descriptions.push(`Renamed to "${delta[field].new}"`)
-      } else if (field === 'collaborators' && delta[field]) {
-        const oldCount = delta[field].old?.length || 0
-        const newCount = delta[field].new?.length || 0
+        descriptions.push(`Label: "${oldLabel}" → "${newLabel}"`)
+      } 
+      else if (field === 'desc' && delta[field]) {
+        const oldDesc = delta[field].old || ''
+        const newDesc = delta[field].new || ''
+        if (!oldDesc && newDesc) {
+          descriptions.push('Description added')
+        } else if (oldDesc && !newDesc) {
+          descriptions.push('Description removed')
+        } else {
+          descriptions.push('Description updated')
+        }
+      } 
+      else if (field === 'notes' && delta[field]) {
+        const oldNotes = delta[field].old || ''
+        const newNotes = delta[field].new || ''
+        if (!oldNotes && newNotes) {
+          descriptions.push('Notes added')
+        } else if (oldNotes && !newNotes) {
+          descriptions.push('Notes removed')
+        } else {
+          descriptions.push('Notes updated')
+        }
+      }
+      else if (field === 'name' && delta[field]) {
+        const newName = delta[field].new
+        descriptions.push(`Renamed to "${newName}"`)
+      } 
+      else if (field === 'collaborators' && delta[field]) {
+        const oldCollabs = Array.isArray(delta[field].old) ? delta[field].old : []
+        const newCollabs = Array.isArray(delta[field].new) ? delta[field].new : []
+        const oldCount = oldCollabs.length
+        const newCount = newCollabs.length
+        
         if (newCount > oldCount) {
-          descriptions.push(`Added ${newCount - oldCount} collaborator(s)`)
+          const added = newCount - oldCount
+          descriptions.push(`Added ${added} collaborator${added > 1 ? 's' : ''}`)
         } else if (newCount < oldCount) {
-          descriptions.push(`Removed ${oldCount - newCount} collaborator(s)`)
+          const removed = oldCount - newCount
+          descriptions.push(`Removed ${removed} collaborator${removed > 1 ? 's' : ''}`)
         } else {
           descriptions.push('Collaborators updated')
         }
-      } else if (field === 'deadline' && delta[field]) {
-        descriptions.push('Deadline updated')
-      } else if (field === 'priorityLevel' && delta[field]) {
-        descriptions.push(`Priority changed to P${delta[field].new}`)
-      } else if (field !== 'updated_timestamp' && field !== 'created_at') {
-        descriptions.push(`${field.charAt(0).toUpperCase() + field.slice(1)} updated`)
+      } 
+      else if (field === 'deadline' && delta[field]) {
+        const oldDeadline = delta[field].old
+        const newDeadline = delta[field].new
+        if (!oldDeadline && newDeadline) {
+          descriptions.push('Deadline set')
+        } else if (oldDeadline && !newDeadline) {
+          descriptions.push('Deadline removed')
+        } else {
+          descriptions.push('Deadline updated')
+        }
+      }
+      else if (field === 'start' && delta[field]) {
+        const oldStart = delta[field].old
+        const newStart = delta[field].new
+        if (!oldStart && newStart) {
+          descriptions.push('Start date set')
+        } else if (oldStart && !newStart) {
+          descriptions.push('Start date removed')
+        } else {
+          descriptions.push('Start date updated')
+        }
+      }
+      else if (field === 'priorityLevel' && delta[field]) {
+        const oldPriority = delta[field].old
+        const newPriority = delta[field].new
+        descriptions.push(`Priority: ${oldPriority} → ${newPriority}`)
+      }
+      else if (field === 'parentTaskId' && delta[field]) {
+        const oldParent = delta[field].old
+        const newParent = delta[field].new
+        if (!oldParent && newParent) {
+          descriptions.push('Converted to subtask')
+        } else if (oldParent && !newParent) {
+          descriptions.push('Converted to main task')
+        } else {
+          descriptions.push('Parent task changed')
+        }
+      }
+      else if (field === 'frequency' && delta[field]) {
+        descriptions.push('Recurrence updated')
+      }
+      else if (field === 'is_recurring' && delta[field]) {
+        const isRecurring = delta[field].new
+        descriptions.push(isRecurring ? 'Made recurring' : 'Made non-recurring')
+      }
+      else {
+        // Generic field update
+        const fieldName = field.charAt(0).toUpperCase() + field.slice(1)
+        descriptions.push(`${fieldName} updated`)
       }
     }
     
-    return descriptions.length > 0 ? descriptions.join(', ') : 'Updated'
+    // If we have multiple changes, combine them intelligently
+    if (descriptions.length === 0) {
+      return 'Task updated'
+    } else if (descriptions.length === 1) {
+      return descriptions[0]
+    } else if (descriptions.length === 2) {
+      return descriptions.join(', ')
+    } else {
+      // For 3+ changes, show first two and count the rest
+      return `${descriptions.slice(0, 2).join(', ')} +${descriptions.length - 2} more`
+    }
   }
   
-  if (operation === 'delete') return 'Deleted'
-  
-  return operation || 'Changed'
+  return 'Task modified'
 }
 
 const processedChangelog = computed(() => {
   if (!props.changelog || props.changelog.length === 0) return []
   
+  // Sort from newest to oldest (reverse chronological)
   return props.changelog
-    .sort((b, a) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .map((log, index, array) => ({
       step: index + 1,
       title: getChangeDescription(log),
       timestamp: formatChangelogDate(log.timestamp),
-      status: index === array.length - 1 ? 'active' : 'completed',
+      // First item (newest) is active, rest are completed
+      status: index === 0 ? 'active' : 'completed',
       operation: log.operation,
       tableName: log.table_name
     }))
