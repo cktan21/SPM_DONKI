@@ -3,11 +3,7 @@ import { ref } from 'vue'
 import type { Row } from '@tanstack/vue-table'
 import type { Task } from '../data/schema'
 import { Badge } from '@/components/ui/badge'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -59,41 +55,40 @@ const updateLabel = async (newLabel: string) => {
       <Badge
         v-if="currentLabel"
         variant="outline"
-        class="text-left justify-start px-2 cursor-pointer transition-colors hover:bg-accent hover:text-foreground"
+        class="capitalize px-2.5 py-1 text-xs font-medium cursor-pointer transition-all hover:shadow-sm bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20 dark:hover:bg-purple-500/20"
         @click.stop="isOpen = true"
       >
         {{ labels.find(l => l.value === currentLabel)?.label || currentLabel }}
       </Badge>
-      <span
+      <Button
         v-else
-        class="px-2 py-1 text-xs text-muted-foreground cursor-pointer transition-colors hover:bg-accent"
+        variant="ghost"
+        size="sm"
+        class="h-7 px-2.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-800"
         @click.stop="isOpen = true"
       >
         Set label
-      </span>
+      </Button>
     </PopoverTrigger>
 
-    <PopoverContent class="w-48 p-2" align="start" @click.stop>
-  <div class="space-y-1">
-    <Button
-      v-for="label in labels"
-      :key="label.value"
-      variant="ghost"
-      size="sm"
-      class="w-full justify-start text-xs h-8 text-left px-0 focus-visible:ring-0 focus:ring-0 focus:outline-none"
-      :class="{
-        'bg-accent text-foreground': label.value === currentLabel
-      }"
-      :disabled="isUpdating"
-      @click="updateLabel(label.value)"
-      tabindex="-1"
-    >
-      {{ label.label }}
-    </Button>
-  </div>
-</PopoverContent>
-
+    <PopoverContent class="w-48 p-1.5 shadow-lg border-slate-200 dark:border-slate-800" align="start" @click.stop>
+      <div class="space-y-0.5">
+        <Button
+          v-for="label in labels"
+          :key="label.value"
+          variant="ghost"
+          size="sm"
+          class="w-full justify-start text-xs h-8 rounded-md"
+          :class="{
+            'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100': label.value === currentLabel,
+            'hover:bg-slate-50 dark:hover:bg-slate-900': label.value !== currentLabel
+          }"
+          :disabled="isUpdating"
+          @click="updateLabel(label.value)"
+        >
+          {{ label.label }}
+        </Button>
+      </div>
+    </PopoverContent>
   </Popover>
 </template>
-
-
