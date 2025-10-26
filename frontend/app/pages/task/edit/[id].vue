@@ -23,6 +23,7 @@ const route = useRoute()
 const { toast } = useToast()
 const taskId = ref(route.params.id as string)
 const API_BASE_URL = "http://localhost:4000"
+const COMPOSITE_API_URL = "http://localhost:4100"
 
 // Get authenticated user data from middleware
 const userData = useState<any>("userData")
@@ -43,12 +44,12 @@ const formEdit = ref({
   priorityLabel: "",
   priorityLevel: "",
   label: "",
-  createdByUid: "", // Store the creator's ID
-  isRecurring: "false", // String "true" or "false"
+  createdByUid: "",
+  isRecurring: "false",
   frequency: "",
 })
 
-// Separate refs for dates to avoid reactivity type issues
+// Separate refs for dates
 const startDate = shallowRef<DateValue | undefined>(undefined)
 const deadline = shallowRef<DateValue | undefined>(undefined)
 
@@ -65,14 +66,29 @@ const allUsers = ref<{ id: string; name: string }[]>([])
 const isCollaboratorPopoverOpen = ref(false)
 const searchQuery = ref("")
 
+// --- Parent Task State ---
+const projectTasks = ref<{ id: string; name: string }[]>([])
+const isParentTaskPopoverOpen = ref(false)
+const parentTaskSearchQuery = ref("")
+
 const handleBack = () => router.back()
 
 const getUserName = (id: string) =>
   allUsers.value.find((u) => u.id === id)?.name || id
 
+const getTaskName = (id: string) =>
+  projectTasks.value.find((t) => t.id === id)?.name || id
+
 const filteredUsers = computed(() =>
   allUsers.value.filter(u =>
     u.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+)
+
+const filteredTasks = computed(() =>
+  projectTasks.value.filter(t =>
+    t.name.toLowerCase().includes(parentTaskSearchQuery.value.toLowerCase()) &&
+    t.id !== taskId.value // Exclude current task
   )
 )
 
@@ -90,7 +106,17 @@ const removeCollaborator = (id: string) => {
   formEdit.value.collaboratorsCsv = selectedCollaborators.value.join(", ")
 }
 
-// Helper function to format date as dd/mm/yyyy
+const selectParentTask = (id: string) => {
+  formEdit.value.parentTaskId = id
+  isParentTaskPopoverOpen.value = false
+  parentTaskSearchQuery.value = ""
+}
+
+const clearParentTask = () => {
+  formEdit.value.parentTaskId = ""
+}
+
+// Helper function to format date
 const formatDate = (dateValue: any): string => {
   if (!dateValue) return "Pick a date"
   
@@ -106,10 +132,10 @@ const formatDate = (dateValue: any): string => {
   }
 }
 
-// Computed property to check if dates are valid (start must be before deadline)
+// Validate date range
 const isDateRangeValid = computed(() => {
   if (!startDate.value || !deadline.value) {
-    return true // If either date is missing, don't show error
+    return true
   }
   
   const start = startDate.value.toDate(getLocalTimeZone())
@@ -118,7 +144,7 @@ const isDateRangeValid = computed(() => {
   return start < end
 })
 
-// Computed property to auto-calculate next_occurrence based on start date and frequency
+// Auto-calculate next_occurrence
 const nextOccurrence = computed(() => {
   if (
     formEdit.value.isRecurring !== "true" ||
@@ -161,7 +187,7 @@ watch(
     formEdit.value.frequency,
   ],
   () => {
-    // This will trigger the computed property to recalculate
+    // Trigger next occurrence recalculation
   }
 )
 
@@ -185,6 +211,27 @@ const fetchAllUsers = async () => {
   }
 }
 
+// --- Fetch Project Tasks for Parent Task Dropdown ---
+const fetchProjectTasks = async (projectId: string) => {
+  try {
+    const res = await fetch(`${COMPOSITE_API_URL}/pid/${projectId}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const tasks = data.project?.tasks || []
+    projectTasks.value = tasks.map((t: any) => ({
+      id: t.id,
+      name: t.name,
+    }))
+  } catch (err) {
+    console.error("Failed to fetch project tasks:", err)
+    toast({
+      title: "Error loading tasks",
+      description: "Could not load parent task options",
+      variant: "destructive"
+    })
+  }
+}
+
 // --- Check Authorization ---
 const checkAuthorization = () => {
   const currentUserId = userData.value?.user?.id
@@ -199,20 +246,15 @@ const checkAuthorization = () => {
     return navigateTo("/auth/login")
   }
 
-  // Check if user is the creator
   if (formEdit.value.createdByUid === currentUserId) {
     canEditAll.value = true
     canEditCollaborators.value = true
     console.log("User is creator - full edit access granted")
-  }
-  // Check if user is manager but not creator
-  else if (currentUserRole === "manager") {
+  } else if (currentUserRole === "manager") {
     canEditAll.value = false
     canEditCollaborators.value = true
     console.log("User is manager - collaborator edit access granted")
-  }
-  // No access
-  else {
+  } else {
     canEditAll.value = false
     canEditCollaborators.value = false
     toast({
@@ -234,13 +276,12 @@ const fetchTaskData = async () => {
     const data = await res.json()
     const task = data?.task ?? data
     
-    // Extract schedule data (might be nested under schedule.data)
     const scheduleData = data?.schedule?.data ?? data?.schedule ?? {}
     
     if (!task) throw new Error("Task data not found in response.")
 
-    console.log("Fetched task data:", task) // Debug log
-    console.log("Schedule data:", scheduleData) // Debug log
+    console.log("Fetched task data:", task)
+    console.log("Schedule data:", scheduleData)
 
     // Fill form fields
     formEdit.value.name = task.name || ""
@@ -248,28 +289,27 @@ const fetchTaskData = async () => {
     formEdit.value.parentTaskId = task.parentTaskId || ""
     formEdit.value.desc = task.desc || ""
     formEdit.value.notes = task.notes || ""
-    // Try task first (flattened), then fall back to scheduleData
     formEdit.value.status = task.status || scheduleData.status || ""
     formEdit.value.priorityLabel = task.priorityLabel || ""
     formEdit.value.priorityLevel = task.priorityLevel?.toString() || ""
     formEdit.value.label = task.label || ""
     formEdit.value.createdByUid = task.created_by_uid || ""
     
-    // Recurring task fields - try flattened first, then fall back to scheduleData
+    // Recurring task fields
     const isRecurring = task.is_recurring ?? scheduleData.is_recurring ?? false
     formEdit.value.isRecurring = isRecurring ? "true" : "false"
     formEdit.value.frequency = task.frequency || scheduleData.frequency || ""
 
-    // Convert ISO strings to DateValue - try flattened first, then fall back to scheduleData
+    // Convert ISO strings to DateValue
     const startISO = task.start || scheduleData.start
     const deadlineISO = task.deadline || scheduleData.deadline
     
-    console.log("Start ISO:", startISO, "Deadline ISO:", deadlineISO) // Debug log
+    console.log("Start ISO:", startISO, "Deadline ISO:", deadlineISO)
     
     startDate.value = startISO ? parseDate(startISO.slice(0, 10)) : undefined
     deadline.value = deadlineISO ? parseDate(deadlineISO.slice(0, 10)) : undefined
 
-    // Convert collaborators array to CSV string and populate selectedCollaborators
+    // Handle collaborators
     if (Array.isArray(task.collaborators)) {
       const collaboratorIds = task.collaborators
         .map((c: any) => (typeof c === "string" ? c : c?.id))
@@ -279,7 +319,11 @@ const fetchTaskData = async () => {
       formEdit.value.collaboratorsCsv = collaboratorIds.join(", ")
     }
 
-    // Check authorization after loading task data
+    // Fetch project tasks for parent task dropdown
+    if (formEdit.value.pid) {
+      await fetchProjectTasks(formEdit.value.pid)
+    }
+
     checkAuthorization()
   } catch (err: any) {
     state.value.error = err.message
@@ -295,7 +339,6 @@ const updateTask = async () => {
     return
   }
 
-  // Validate date range
   if (!isDateRangeValid.value) {
     toast({ 
       title: "Invalid date range", 
@@ -315,7 +358,6 @@ const updateTask = async () => {
 
     const payload: any = {}
 
-    // If user can edit all fields, include everything
     if (canEditAll.value) {
       payload.name = formEdit.value.name
       payload.desc = formEdit.value.desc || undefined
@@ -324,34 +366,29 @@ const updateTask = async () => {
       payload.priorityLevel = formEdit.value.priorityLevel ? parseInt(formEdit.value.priorityLevel) : undefined
       payload.label = formEdit.value.label || undefined
       payload.status = formEdit.value.status || undefined
+      payload.parentTaskId = formEdit.value.parentTaskId || undefined
       payload.collaborators = collaborators.length > 0 ? collaborators : undefined
       
-      // Add start date
       if (startDate.value) {
         payload.start = startDate.value.toDate(getLocalTimeZone()).toISOString()
       }
       
-      // Add deadline
       if (deadline.value) {
         payload.deadline = deadline.value.toDate(getLocalTimeZone()).toISOString()
       }
       
-      // Add recurring fields
       payload.is_recurring = formEdit.value.isRecurring === "true"
       
       if (formEdit.value.isRecurring === "true") {
         payload.frequency = formEdit.value.frequency || undefined
         
-        // Auto-calculate next_occurrence if recurring is enabled
         if (nextOccurrence.value) {
           payload.next_occurrence = nextOccurrence.value
             .toDate(getLocalTimeZone())
             .toISOString()
         }
       }
-    }
-    // If user can only edit collaborators
-    else if (canEditCollaborators.value) {
+    } else if (canEditCollaborators.value) {
       payload.collaborators = collaborators.length > 0 ? collaborators : undefined
     }
 
@@ -443,9 +480,85 @@ onMounted(async () => {
                     <Input id="task-pid" v-model="formEdit.pid" class="w-full" disabled/>
                   </div>
                   <div class="space-y-2">
-                    <Label for="task-parent" class="text-sm font-medium">Parent Task ID</Label>
-                    <Input id="task-parent" v-model="formEdit.parentTaskId" class="w-full" disabled/>
-                  </div>
+                    <Label for="task-parent" class="text-sm font-medium">Parent Task</Label>
+                    <Popover v-model:open="isParentTaskPopoverOpen">
+                      <PopoverTrigger as-child>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          class="w-full justify-between"
+                          :disabled="!canEditAll"
+                          id="parent-task-trigger"
+                        >
+                          <span class="truncate">
+                            {{ formEdit.parentTaskId ? getTaskName(formEdit.parentTaskId) : "Select parent task (optional)" }}
+                          </span>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="ml-2 h-4 w-4 shrink-0 opacity-50"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        class="p-0"
+                        :align="'start'"
+                        :side-offset="4"
+                        as-child
+                      >
+                        <div class="w-[var(--radix-popper-anchor-width)] p-2">
+                          <Input
+                            v-model="parentTaskSearchQuery"
+                            placeholder="Search tasks..."
+                            class="mb-2"
+                          />
+                          <div class="max-h-48 overflow-auto">
+                            <button
+                              v-if="formEdit.parentTaskId"
+                              type="button"
+                              class="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-sm transition-colors text-destructive"
+                              @click="clearParentTask"
+                            >
+                              Clear parent task
+                            </button>
+                            <button
+                              v-for="task in filteredTasks"
+                              :key="task.id"
+                              type="button"
+                              class="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-sm transition-colors"
+                              :class="{
+                                'bg-accent': formEdit.parentTaskId === task.id,
+                              }"
+                              @click="selectParentTask(task.id)"
+                            >
+                              {{ task.name }}
+                              <span
+                                v-if="formEdit.parentTaskId === task.id"
+                                class="ml-2 text-xs text-muted-foreground"
+                              >
+                                ✓
+                              </span>
+                            </button>
+                            <div
+                              v-if="filteredTasks.length === 0"
+                              class="px-3 py-2 text-sm text-muted-foreground"
+                            >
+                              No tasks found
+                            </div>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                </div>
                 </div>
 
                 <div class="space-y-2">
@@ -529,6 +642,7 @@ onMounted(async () => {
                         role="combobox" 
                         class="w-full justify-between"
                         :disabled="!canEditCollaborators"
+                        id="collaborators-trigger"
                       >
                         Search and select collaborators
                         <svg xmlns="http://www.w3.org/2000/svg" class="ml-2 h-4 w-4 shrink-0 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -536,8 +650,13 @@ onMounted(async () => {
                         </svg>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent class="w-[var(--radix-popover-trigger-width)] p-0" :align="'start'" :side-offset="4">
-                      <div class="p-2">
+                    <PopoverContent 
+                      class="p-0" 
+                      :align="'start'" 
+                      :side-offset="4"
+                      as-child
+                    >
+                      <div class="w-[var(--radix-popper-anchor-width)] p-2">
                         <Input v-model="searchQuery" placeholder="Type to search..." class="mb-2" />
                         <div class="max-h-48 overflow-auto">
                           <button 
