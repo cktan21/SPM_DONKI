@@ -4,31 +4,93 @@ from fastapi.responses import Response
 from recurring_processor import recurring_processor
 from schedule_client import ScheduleClient
 import uvicorn
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def process_overdue_tasks(all_schedules: list):
+    """Process any overdue tasks - used for both startup and manual triggers"""
+    try:
+        logger.info("🔍 Checking for overdue tasks...")
+        
+        # Initialize Kafka connection
+        kafka_initialized = await recurring_processor.initialize_kafka()
+        if not kafka_initialized:
+            logger.error("Failed to initialize Kafka for overdue task processing")
+            return
+        
+        current_time = datetime.now(timezone.utc)
+        overdue_count = 0
+        processed_count = 0
+        
+        for schedule in all_schedules:
+            deadline_str = schedule.get("deadline")
+            status = schedule.get("status", "").lower()
+            sid = schedule.get("sid")
+            
+            # Skip if no deadline, no sid, or already processed
+            if not deadline_str or not sid or status in ["overdue", "completed", "cancelled"]:
+                continue
+            
+            try:
+                deadline_dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+                
+                if deadline_dt < current_time:
+                    overdue_count += 1
+                    logger.warning(f"🚨 Found overdue task {sid}")
+                    
+                    success = recurring_processor.process_deadline_reached(sid)
+                    if success:
+                        processed_count += 1
+                        logger.info(f"✅ Processed overdue task {sid}")
+                    else:
+                        logger.error(f"❌ Failed to process overdue task {sid}")
+                        
+            except Exception as e:
+                logger.error(f"Error processing overdue task {sid}: {str(e)}")
+                continue
+        
+        logger.info(f"📊 Overdue processing complete: {processed_count}/{overdue_count} tasks processed")
+        
+    except Exception as e:
+        logger.error(f"Error during overdue task processing: {str(e)}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     # Startup
     try:
-        all_schedules = schedule_client.fetch_all_schedules()
         
+        all_schedules = schedule_client.fetch_all_schedules()
+        # Process overdue tasks first
+        await process_overdue_tasks(all_schedules)
+        
+        # Initialize normal scheduling
+        logger.info("🔄 Initializing normal task scheduling...")
+        
+        scheduled_count = 0
         for schedule in all_schedules:
             is_recurring = schedule.get("is_recurring")
-            if is_recurring:
-                if schedule.get("next_occurrence") and schedule.get("frequency"):
-                    recurring_processor.schedule_recurring_task(schedule)
+            if is_recurring and schedule.get("next_occurrence") and schedule.get("frequency"):
+                recurring_processor.schedule_recurring_task(schedule)
+                scheduled_count += 1
             if schedule.get("deadline"):
                 recurring_processor.schedule_deadline_monitoring(schedule)
-        print(f"Initialized {len(all_schedules)} schedules on startup")
+                scheduled_count += 1
+        
+        logger.info(f"✅ Initialized {scheduled_count} schedules on startup")
         
     except Exception as e:
-        print(f"Error initializing schedules: {str(e)}")
+        logger.error(f"❌ Error initializing schedules: {str(e)}")
     
     yield  # This is where the app runs
     
     # Shutdown
+    logger.info("🛑 Shutting down recurring processor...")
     recurring_processor.shutdown()
 
 app = FastAPI(title="Composite Microservice: Notify User Service", lifespan=lifespan)
@@ -224,6 +286,21 @@ def cancel_all_task_jobs(task_data: Dict[str, Any] = Body(...)):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error cancelling all jobs: {str(e)}")
+
+@app.post("/task/process-overdue")
+async def process_overdue_tasks_manual():
+    """Manually trigger overdue task processing"""
+    try:
+        logger.info("🔄 Manual overdue task processing triggered")
+        all_schedules = schedule_client.fetch_all_schedules()
+        await process_overdue_tasks(all_schedules)
+        return {
+            "message": "Overdue task processing completed",
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error in manual overdue processing: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing overdue tasks: {str(e)}")
 
 
 if __name__ == "__main__":

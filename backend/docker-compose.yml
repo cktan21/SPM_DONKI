@@ -189,6 +189,7 @@ services:
         ports: ["4500:4500"]
         depends_on:
             - schedule
+            - kafka
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
             KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -206,6 +207,33 @@ services:
                   path: ./services/composite/notify_user/Dockerfile
                 - action: rebuild
                   path: ./services/composite/notify_user/requirements.txt
+
+    email:
+        build: ./services/email
+        container_name: email
+        networks: [spm-net]
+        depends_on:
+            - kafka
+        environment:
+            KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+            SMTP_SERVER: ${SMTP_SERVER}
+            SMTP_PORT: ${SMTP_PORT}
+            SMTP_USER: ${SMTP_USER}
+            SMTP_PASS: ${SMTP_PASS}
+        develop:
+            watch:
+                - action: sync
+                  path: ./services/email
+                  target: /app
+                  ignore:
+                      - "**/__pycache__/**"
+                      - "**/.venv/**"
+                      - "**/node_modules/**"
+                      - ".git/**"
+                - action: rebuild
+                  path: ./services/email/Dockerfile
+                - action: rebuild
+                  path: ./services/email/requirements.txt
 
     zookeeper:
         image: confluentinc/cp-zookeeper:7.4.0

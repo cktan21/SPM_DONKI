@@ -18,7 +18,7 @@ class KafkaEventPublisher:
     """Kafka event publisher for sending events to topics"""
     
     def __init__(self, bootstrap_servers: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
         self.producer = None
         self._loop = None
     

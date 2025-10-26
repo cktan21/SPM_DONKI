@@ -6,7 +6,7 @@ from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
 import asyncio
-from kafka_client import KafkaEventPublisher, Topics
+from kafka_client import EventTypes, KafkaEventPublisher, Topics
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -224,7 +224,7 @@ class RecurringTaskProcessor:
                 # Create async task for each user
                 task = self.kafka_publisher.publish_event(
                     topic=Topics.NOTIFICATION_EVENTS,
-                    event_type="deadline_overdue",
+                    event_type=EventTypes.DEADLINE_OVERDUE,
                     data=local_event_data,
                 )
                 tasks.append(task)
