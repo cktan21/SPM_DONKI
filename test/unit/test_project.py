@@ -32,18 +32,20 @@ def test_insert_project_success(mock_client, supabase_client):
     uid = "user-123"
     name = "New Project"
     desc = "Project Description"
-    expected = {"id": "project-1", "uid": uid, "name": name, "desc": desc}
+    members = ["user-456", "user-789"]
+    expected = {"id": "project-1", "uid": uid, "name": name, "desc": desc, "members": members}
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.return_value.data = [expected]
 
-    result = supabase_client.insert_project(uid, name, desc)
+    result = supabase_client.insert_project(uid, name, desc, members)
 
     mock_client.table.assert_called_once_with("PROJECT")
     mock_table.insert.assert_called_once_with({
         "uid": uid,
         "name": name,
-        "desc": desc
+        "desc": desc,
+        "members": members
     })
     assert result == expected
 
@@ -53,18 +55,20 @@ def test_insert_project_without_description(mock_client, supabase_client):
     uid = "user-123"
     name = "Simple Project"
     desc = None
+    members = []
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.return_value.data = [
-        {"id": "project-1", "uid": uid, "name": name, "desc": None}
+        {"id": "project-1", "uid": uid, "name": name, "desc": None, "members": members}
     ]
 
-    result = supabase_client.insert_project(uid, name, desc)
+    result = supabase_client.insert_project(uid, name, desc, members)
 
     mock_table.insert.assert_called_once_with({
         "uid": uid,
         "name": name,
-        "desc": desc
+        "desc": desc,
+        "members": members
     })
     assert result["name"] == name
     assert result["desc"] is None
@@ -72,25 +76,25 @@ def test_insert_project_without_description(mock_client, supabase_client):
 
 def test_insert_project_empty_result(mock_client, supabase_client):
     """Test project creation when no data is returned"""
-    uid, name, desc = "user123", "My Project", "Description"
+    uid, name, desc, members = "user123", "My Project", "Description", ["user-456"]
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.return_value.data = []
 
-    result = supabase_client.insert_project(uid, name, desc)
+    result = supabase_client.insert_project(uid, name, desc, members)
 
     assert result is None
 
 
 def test_insert_project_failure_raises(mock_client, supabase_client):
     """Test project creation with database error"""
-    uid, name, desc = "user123", "My Project", "Description"
+    uid, name, desc, members = "user123", "My Project", "Description", ["user-456"]
 
     mock_table = mock_client.table.return_value
     mock_table.insert.return_value.execute.side_effect = Exception("Insert failed")
 
     with pytest.raises(Exception, match="Insert failed"):
-        supabase_client.insert_project(uid, name, desc)
+        supabase_client.insert_project(uid, name, desc, members)
 
 
 # -------------------------------
