@@ -3,11 +3,7 @@ import { ref, computed } from 'vue'
 import type { Row } from '@tanstack/vue-table'
 import type { Task } from '../data/schema'
 import { Check, Loader, AlertTriangle } from 'lucide-vue-next'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -21,53 +17,32 @@ const statuses = [
     value: "to do", 
     label: "To Do", 
     icon: Loader, 
-    bgColor: "bg-orange-50", 
-    textColor: "text-orange-700", 
-    borderColor: "border-orange-200",
-    hoverBg: "hover:bg-orange-100"
+    class: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/20"
   },
   { 
     value: "ongoing", 
     label: "Ongoing", 
     icon: AlertTriangle, 
-    bgColor: "bg-blue-50", 
-    textColor: "text-blue-700", 
-    borderColor: "border-blue-200",
-    hoverBg: "hover:bg-blue-100"
+    class: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
   },
   { 
     value: "done", 
     label: "Done", 
     icon: Check, 
-    bgColor: "bg-emerald-50", 
-    textColor: "text-emerald-700", 
-    borderColor: "border-emerald-200",
-    hoverBg: "hover:bg-emerald-100"
+    class: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 dark:hover:bg-emerald-500/20"
   },
-]
+] as const
 
 const currentStatus = ref(props.row.getValue("status") as string | null)
 const isOpen = ref(false)
 const isUpdating = ref(false)
 
-const getStatusStyle = (statusValue: string | null) => {
-  if (!statusValue) return { 
-    bgColor: "bg-gray-50", 
-    textColor: "text-gray-600", 
-    borderColor: "border-gray-200",
-    hoverBg: "hover:bg-gray-100"
-  }
-  
-  const status = statuses.find(s => s.value === statusValue)
-  return status || { 
-    bgColor: "bg-gray-50", 
-    textColor: "text-gray-600", 
-    borderColor: "border-gray-200",
-    hoverBg: "hover:bg-gray-100"
-  }
-}
-
-const currentStyle = computed(() => getStatusStyle(currentStatus.value))
+const currentStyle = computed(() => {
+  const statusValue = currentStatus.value
+  if (!statusValue) return statuses[0]
+  const found = statuses.find(s => s.value === statusValue)
+  return found ?? statuses[0]
+})
 
 const updateStatus = async (newStatus: string) => {
   if (isUpdating.value || newStatus === currentStatus.value) return
@@ -101,24 +76,29 @@ const updateStatus = async (newStatus: string) => {
     <PopoverTrigger as-child>
       <Button 
         variant="ghost" 
-        :class="`h-5 py-0 px-2 rounded-full border text-xs font-medium ${currentStyle.bgColor} ${currentStyle.textColor} ${currentStyle.borderColor} ${currentStyle.hoverBg} transition-colors`"
+        :class="`h-7 py-0 px-2.5 rounded-md border text-xs font-medium transition-all ${currentStyle.class}`"
         @click.stop
+        :disabled="isUpdating"
       >
         <component 
-          :is="statuses.find(s => s.value === currentStatus)?.icon || Loader" 
-          class="h-3 w-3 mr-1" 
+          :is="currentStyle.icon" 
+          class="h-3 w-3 mr-1.5" 
         />
-        {{ statuses.find(s => s.value === currentStatus)?.label || 'N/A' }}
+        {{ currentStyle.label }}
       </Button>
     </PopoverTrigger>
-    <PopoverContent class="w-40 p-2" align="start" @click.stop>
-      <div class="space-y-1">
+    <PopoverContent class="w-40 p-1.5 shadow-lg border-slate-200 dark:border-slate-800" align="start" @click.stop>
+      <div class="space-y-0.5">
         <Button
           v-for="status in statuses"
           :key="status.value"
           variant="ghost"
           size="sm"
-          :class="`w-full justify-start text-xs h-8 ${status.value === currentStatus ? 'bg-accent' : ''}`"
+          :class="`w-full justify-start text-xs h-8 rounded-md ${
+            status.value === currentStatus 
+              ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100' 
+              : 'hover:bg-slate-50 dark:hover:bg-slate-900'
+          }`"
           :disabled="isUpdating"
           @click="updateStatus(status.value)"
         >
