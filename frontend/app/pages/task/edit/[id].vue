@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, computed } from "vue"
+import { ref, shallowRef, onMounted, computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { parseDate, type DateValue, getLocalTimeZone } from "@internationalized/date"
+import { parseDate, type DateValue, getLocalTimeZone, CalendarDate } from "@internationalized/date"
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button"
@@ -44,9 +44,12 @@ const formEdit = ref({
   priorityLevel: "",
   label: "",
   createdByUid: "", // Store the creator's ID
+  isRecurring: "false", // String "true" or "false"
+  frequency: "",
 })
 
-// Separate ref for deadline to avoid reactivity type issues
+// Separate refs for dates to avoid reactivity type issues
+const startDate = shallowRef<DateValue | undefined>(undefined)
 const deadline = shallowRef<DateValue | undefined>(undefined)
 
 // --- Page State ---
@@ -86,6 +89,81 @@ const removeCollaborator = (id: string) => {
   selectedCollaborators.value = selectedCollaborators.value.filter((x) => x !== id)
   formEdit.value.collaboratorsCsv = selectedCollaborators.value.join(", ")
 }
+
+// Helper function to format date as dd/mm/yyyy
+const formatDate = (dateValue: any): string => {
+  if (!dateValue) return "Pick a date"
+  
+  try {
+    const date = dateValue.toDate(getLocalTimeZone())
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    
+    return `${day}/${month}/${year}`
+  } catch (e) {
+    return "Pick a date"
+  }
+}
+
+// Computed property to check if dates are valid (start must be before deadline)
+const isDateRangeValid = computed(() => {
+  if (!startDate.value || !deadline.value) {
+    return true // If either date is missing, don't show error
+  }
+  
+  const start = startDate.value.toDate(getLocalTimeZone())
+  const end = deadline.value.toDate(getLocalTimeZone())
+  
+  return start < end
+})
+
+// Computed property to auto-calculate next_occurrence based on start date and frequency
+const nextOccurrence = computed(() => {
+  if (
+    formEdit.value.isRecurring !== "true" ||
+    !startDate.value ||
+    !formEdit.value.frequency
+  ) {
+    return undefined
+  }
+
+  const start = startDate.value.toDate(getLocalTimeZone())
+  let nextDate = new Date(start)
+
+  switch (formEdit.value.frequency) {
+    case "daily":
+      nextDate.setDate(nextDate.getDate() + 1)
+      break
+    case "weekly":
+      nextDate.setDate(nextDate.getDate() + 7)
+      break
+    case "monthly":
+      nextDate.setMonth(nextDate.getMonth() + 1)
+      break
+    case "yearly":
+      nextDate.setFullYear(nextDate.getFullYear() + 1)
+      break
+  }
+
+  return new CalendarDate(
+    nextDate.getFullYear(),
+    nextDate.getMonth() + 1,
+    nextDate.getDate()
+  )
+})
+
+// Watch for changes in recurring settings
+watch(
+  () => [
+    formEdit.value.isRecurring,
+    startDate.value,
+    formEdit.value.frequency,
+  ],
+  () => {
+    // This will trigger the computed property to recalculate
+  }
+)
 
 // --- Fetch All Users ---
 const fetchAllUsers = async () => {
@@ -155,7 +233,14 @@ const fetchTaskData = async () => {
     if (!res.ok) throw new Error(`Failed to fetch task details: ${res.statusText}`)
     const data = await res.json()
     const task = data?.task ?? data
+    
+    // Extract schedule data (might be nested under schedule.data)
+    const scheduleData = data?.schedule?.data ?? data?.schedule ?? {}
+    
     if (!task) throw new Error("Task data not found in response.")
+
+    console.log("Fetched task data:", task) // Debug log
+    console.log("Schedule data:", scheduleData) // Debug log
 
     // Fill form fields
     formEdit.value.name = task.name || ""
@@ -163,14 +248,25 @@ const fetchTaskData = async () => {
     formEdit.value.parentTaskId = task.parentTaskId || ""
     formEdit.value.desc = task.desc || ""
     formEdit.value.notes = task.notes || ""
-    formEdit.value.status = task.schedule?.status || task.status || ""
+    // Try task first (flattened), then fall back to scheduleData
+    formEdit.value.status = task.status || scheduleData.status || ""
     formEdit.value.priorityLabel = task.priorityLabel || ""
     formEdit.value.priorityLevel = task.priorityLevel?.toString() || ""
     formEdit.value.label = task.label || ""
     formEdit.value.createdByUid = task.created_by_uid || ""
+    
+    // Recurring task fields - try flattened first, then fall back to scheduleData
+    const isRecurring = task.is_recurring ?? scheduleData.is_recurring ?? false
+    formEdit.value.isRecurring = isRecurring ? "true" : "false"
+    formEdit.value.frequency = task.frequency || scheduleData.frequency || ""
 
-    // Convert ISO string to DateValue
-    const deadlineISO = task.schedule?.deadline || task.deadline
+    // Convert ISO strings to DateValue - try flattened first, then fall back to scheduleData
+    const startISO = task.start || scheduleData.start
+    const deadlineISO = task.deadline || scheduleData.deadline
+    
+    console.log("Start ISO:", startISO, "Deadline ISO:", deadlineISO) // Debug log
+    
+    startDate.value = startISO ? parseDate(startISO.slice(0, 10)) : undefined
     deadline.value = deadlineISO ? parseDate(deadlineISO.slice(0, 10)) : undefined
 
     // Convert collaborators array to CSV string and populate selectedCollaborators
@@ -199,6 +295,16 @@ const updateTask = async () => {
     return
   }
 
+  // Validate date range
+  if (!isDateRangeValid.value) {
+    toast({ 
+      title: "Invalid date range", 
+      description: "Start date must be before the deadline",
+      variant: "destructive" 
+    })
+    return
+  }
+
   try {
     state.value.saving = true
 
@@ -218,22 +324,49 @@ const updateTask = async () => {
       payload.priorityLevel = formEdit.value.priorityLevel ? parseInt(formEdit.value.priorityLevel) : undefined
       payload.label = formEdit.value.label || undefined
       payload.status = formEdit.value.status || undefined
-      payload.deadline = deadline.value
-        ? deadline.value.toDate(getLocalTimeZone()).toISOString()
-        : undefined
       payload.collaborators = collaborators.length > 0 ? collaborators : undefined
+      
+      // Add start date
+      if (startDate.value) {
+        payload.start = startDate.value.toDate(getLocalTimeZone()).toISOString()
+      }
+      
+      // Add deadline
+      if (deadline.value) {
+        payload.deadline = deadline.value.toDate(getLocalTimeZone()).toISOString()
+      }
+      
+      // Add recurring fields
+      payload.is_recurring = formEdit.value.isRecurring === "true"
+      
+      if (formEdit.value.isRecurring === "true") {
+        payload.frequency = formEdit.value.frequency || undefined
+        
+        // Auto-calculate next_occurrence if recurring is enabled
+        if (nextOccurrence.value) {
+          payload.next_occurrence = nextOccurrence.value
+            .toDate(getLocalTimeZone())
+            .toISOString()
+        }
+      }
     }
     // If user can only edit collaborators
     else if (canEditCollaborators.value) {
       payload.collaborators = collaborators.length > 0 ? collaborators : undefined
     }
 
-    const response = await fetch(`${API_BASE_URL}/tasks/${taskId.value}`, {
+    console.log("Sending payload:", payload)
+
+    const response = await fetch(`${API_BASE_URL}/${taskId.value}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
-    if (!response.ok) throw new Error(`Failed: ${response.statusText}`)
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Failed to update task' }))
+      throw new Error(errorData.detail || 'Failed to update task')
+    }
 
     toast({ title: "Task updated successfully!" })
     router.push(`/task/${taskId.value}`)
@@ -286,7 +419,7 @@ onMounted(async () => {
               <AlertDescription>As a manager, you can only modify collaborators for this task.</AlertDescription>
             </Alert>
 
-            <!-- Task Info -->
+            <!-- Task Information Section -->
             <div class="space-y-4">
               <h3 class="text-lg font-semibold">Task Information</h3>
               <div class="grid gap-4 sm:gap-6">
@@ -454,10 +587,10 @@ onMounted(async () => {
 
             <Separator />
 
-            <!-- Schedule & Priority -->
+            <!-- Schedule & Timeline Section -->
             <div class="space-y-4">
-              <h3 class="text-lg font-semibold">Schedule & Priority</h3>
-              <div class="grid gap-4 sm:grid-cols-3">
+              <h3 class="text-lg font-semibold">Schedule & Timeline</h3>
+              <div class="grid gap-4">
                 <div class="space-y-2">
                   <Label for="task-status" class="text-sm font-medium">Status</Label>
                   <Select v-model="formEdit.status" :disabled="!canEditAll">
@@ -465,45 +598,120 @@ onMounted(async () => {
                       <SelectValue placeholder="Select status"/>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="not started">Not Started</SelectItem>
+                      <SelectItem value="to do">To-do</SelectItem>
                       <SelectItem value="ongoing">Ongoing</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="done">Done</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div class="space-y-2">
-                  <Label for="task-priority" class="text-sm font-medium">Priority Label</Label>
-                  <Input 
-                    id="task-priority" 
-                    v-model="formEdit.priorityLabel" 
-                    placeholder="e.g. High, Medium, Low" 
-                    class="w-full"
-                    :disabled="!canEditAll"
-                  />
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <Label for="task-start" class="text-sm font-medium">Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger as-child>
+                        <Button 
+                          variant="outline" 
+                          class="w-full justify-start text-left font-normal"
+                          :class="{ 'border-destructive': !isDateRangeValid }"
+                          :disabled="!canEditAll"
+                          id="task-start"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span class="flex-1 truncate">
+                            {{ formatDate(startDate) }}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent class="w-auto p-0" :align="'start'">
+                        <Calendar
+                          v-model="startDate"
+                          :initial-focus="true"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label for="task-deadline" class="text-sm font-medium">Deadline</Label>
+                    <Popover>
+                      <PopoverTrigger as-child>
+                        <Button 
+                          variant="outline" 
+                          class="w-full justify-start text-left font-normal"
+                          :class="{ 'border-destructive': !isDateRangeValid }"
+                          :disabled="!canEditAll"
+                          id="task-deadline"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span class="flex-1 truncate">
+                            {{ formatDate(deadline) }}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent class="w-auto p-0" :align="'start'">
+                        <Calendar
+                          v-model="deadline"
+                          :initial-focus="true"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
-                <div class="space-y-2">
-                  <Label for="task-deadline" class="text-sm font-medium">Deadline</Label>
-                  <Popover>
-                    <PopoverTrigger as-child>
-                      <Button 
-                        variant="outline" 
-                        class="w-full justify-start text-left font-normal"
-                        :disabled="!canEditAll"
-                      >
-                        <span class="flex-1 truncate">
-                          {{ deadline ? deadline.toDate(getLocalTimeZone()).toLocaleDateString() : "Pick a date" }}
-                        </span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent class="w-auto p-0" :align="'start'">
-                      <Calendar
-                        v-model="deadline"
-                        :initial-focus="true"
-                      />
-                    </PopoverContent>
-                  </Popover>
+                <!-- Date validation warning -->
+                <div v-if="!isDateRangeValid" class="p-3 bg-destructive/10 border border-destructive rounded-md">
+                  <p class="text-sm text-destructive">
+                    ⚠️ Start date must be before the deadline
+                  </p>
+                </div>
+
+                <!-- Recurring Task Section -->
+                <div class="space-y-4 p-4 border rounded-lg">
+                  <div class="space-y-2">
+                    <Label for="task-recurring" class="text-sm font-medium">Is Recurring Task?</Label>
+                    <Select v-model="formEdit.isRecurring" :disabled="!canEditAll">
+                      <SelectTrigger id="task-recurring" class="w-full">
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Yes (Recurring)</SelectItem>
+                        <SelectItem value="false">No (One-time)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div v-if="formEdit.isRecurring === 'true'" class="space-y-4 pt-2">
+                    <div class="space-y-2">
+                      <Label for="task-frequency" class="text-sm font-medium">Frequency</Label>
+                      <Select v-model="formEdit.frequency" :disabled="!canEditAll">
+                        <SelectTrigger id="task-frequency" class="w-full">
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="yearly">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <!-- Display auto-calculated next occurrence -->
+                    <div v-if="nextOccurrence" class="p-3 bg-muted rounded-md">
+                      <p class="text-sm font-medium mb-1">Next Occurrence (Auto-calculated)</p>
+                      <p class="text-sm text-muted-foreground">
+                        {{ formatDate(nextOccurrence) }}
+                      </p>
+                      <p class="text-xs text-muted-foreground mt-1">
+                        Based on start date and {{ formEdit.frequency }} frequency
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

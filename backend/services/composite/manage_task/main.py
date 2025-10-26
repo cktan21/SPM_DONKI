@@ -304,6 +304,10 @@ async def get_task_composite(
             # === 2. Get Schedule ===
             schedule_status = None
             schedule_deadline = None
+            schedule_start = None  # NEW
+            schedule_is_recurring = None  # NEW
+            schedule_frequency = None  # NEW
+            schedule_next_occurrence = None  # NEW
             try:
                 s_resp = await client.get(
                     f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest"
@@ -313,6 +317,10 @@ async def get_task_composite(
                     schedule_data = schedule_resp.get("data", schedule_resp)
                     schedule_status = schedule_data.get("status")
                     schedule_deadline = schedule_data.get("deadline")
+                    schedule_start = schedule_data.get("start")  # NEW
+                    schedule_is_recurring = schedule_data.get("is_recurring")  # NEW
+                    schedule_frequency = schedule_data.get("frequency")  # NEW
+                    schedule_next_occurrence = schedule_data.get("next_occurrence")  # NEW
             except Exception:
                 pass
 
@@ -325,7 +333,6 @@ async def get_task_composite(
                     )
                     if pr_resp.status_code == 200:
                         pr_json = pr_resp.json()
-                        # print(pr_json["project"].get("name") , "project value")
                         project_obj = {
                             "id": pr_json.get("id", task_data["pid"]),
                             "name": pr_json["project"].get("name") or "Unnamed Project",
@@ -350,7 +357,6 @@ async def get_task_composite(
                     )
                     if user_resp.status_code == 200:
                         user_json = user_resp.json()
-                        # print(user_json, "user value")
                         created_by = {
                             "id": user_json.get("id"),
                             "name": user_json.get("name")
@@ -425,6 +431,10 @@ async def get_task_composite(
                     "parent_task": parent_task,
                     "status": schedule_status,
                     "deadline": schedule_deadline,
+                    "start": schedule_start,  # NEW
+                    "is_recurring": schedule_is_recurring,  # NEW
+                    "frequency": schedule_frequency,  # NEW
+                    "next_occurrence": schedule_next_occurrence,  # NEW
                 },
                 "metadata": {
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
