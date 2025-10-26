@@ -9,7 +9,72 @@ class ProjectController:
     
     def __init__(self):
         self.project_service = ProjectService()
-    
+        # 👇 cache Project model fields (works for Pydantic v1 & v2)
+        self._project_fields = set(
+            getattr(Project, "model_fields", getattr(Project, "__fields__", {})).keys()
+        )
+
+    # Get all projects
+    def get_all_projects(self) -> ProjectListResponse:
+        """
+        Retrieve all projects from Supabase.
+        """
+        try:
+            projects_data = self.project_service.get_all_projects() or []
+
+            # Inline fix: replace None members with []
+            projects = [
+                Project(**{**p, "members": p.get("members") or []})
+                for p in projects_data
+            ]
+
+            if not projects:
+                return ProjectListResponse(message="No projects found", project=[])
+
+            return ProjectListResponse(
+                message=f"{len(projects)} project(s) retrieved",
+                project=projects
+            )
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        
+
+    # 👇 ADD THIS HELPER
+    def _project_from_row(self, row: Dict[str, Any]) -> Project:
+        """
+        Build a Project model from an arbitrary DB row, ignoring unknown keys
+        (e.g. owner_department from a view). Ensures members is a list.
+        """
+        safe = {k: v for k, v in row.items() if k in self._project_fields}
+        # normalize members
+        if "members" in self._project_fields:
+            safe["members"] = row.get("members") or []
+        return Project(**safe)
+
+    #Get all projects by Department
+    def get_all_projects_by_dept(self, department: str) -> ProjectListResponse:
+        try:
+            projects_data = self.project_service.get_all_projects_by_dept(department) or []
+            projects = [self._project_from_row(p) for p in projects_data]
+
+            if not projects:
+                return ProjectListResponse(
+                    message=f"No projects found for department '{department}'",
+                    project=[]
+                )
+
+            return ProjectListResponse(
+                    message=f"{len(projects)} project(s) retrieved for department '{department}'",
+                    project=projects
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching projects by department: {str(e)}"
+            )
+
+
     def get_project_by_id(self, project_id: str) -> ProjectResponse:
         """
         Get a project by its ID
@@ -69,7 +134,9 @@ class ProjectController:
             created_data = self.project_service.create_project(
                 uid=project_data["uid"],
                 name=project_data["name"],
-                desc=project_data.get("desc")
+                desc=project_data.get("desc"),
+                members=project_data.get("members", [])
+                
             )
             
             if created_data:
@@ -132,3 +199,10 @@ class ProjectController:
         Get all logs for a project
         """
         return self.project_service.get_all_logs(filter_by)
+    
+    
+    def get_projects_by_department(self, department: str) -> ProjectListResponse:
+        """
+        Get projects by department
+        """
+        return self.project_service.get_projects_by_department(department)

@@ -9,14 +9,21 @@ class SupabaseClient:
         self.client: Client = create_client(self.url, self.key)
     
     # Insert Project
-    def insert_project(self, uid, name, desc):
+    def insert_project(self, uid, name, desc, members):
         response = self.client.table("PROJECT").insert({
             "uid": uid,
             "name": name,
-            "desc": desc
+            "desc": desc,
+            "members": members or []
         }).execute()
         data = response.data
         return data[0] if data else None
+    
+    # Fetch All Projects
+    def fetch_all_projects(self):
+        response = self.client.table("PROJECT").select("*").execute()
+        data = response.data
+        return data if data else None
     
     # Get Project by Project ID
     def fetch_project_by_pid(self, pid):
@@ -49,3 +56,11 @@ class SupabaseClient:
             query = query.eq("record_id", filter_by)
         resp = query.execute()
         return getattr(resp, "data", None) or []
+    
+    def get_projects_by_department(self, department: str):
+        # If you created view unquoted, prefer "v_project_with_dept"
+        response = self.client.table("V_PROJECT_WITH_DEPT") \
+            .select("*") \
+            .eq("owner_department", department) \
+            .execute()
+        return response.data or None
