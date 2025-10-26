@@ -300,6 +300,12 @@ const projectTitle = computed(() =>
     : 'Project Dashboard'
 )
 
+const projectDescription = computed(() =>
+  selectedProject.value
+    ? `${selectedProject.value.desc}`
+    : 'This is a wonderful description for the project'
+)
+
 const handleCreateTask = () => {
   const projectId = route.params.id as string
   router.push(`./createTask/${projectId}`)
@@ -316,7 +322,7 @@ const handleCreateTask = () => {
             {{ projectTitle }}
           </h1>
           <p class="text-muted-foreground w-full sm:w-auto">
-            Manage your tasks and view their details
+            {{ projectDescription }}
           </p>
         </div>
         <!-- Desktop Create Button - Hidden, will be shown below with "Tasks" -->
