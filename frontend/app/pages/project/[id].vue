@@ -182,23 +182,31 @@ const transformedTasks = computed(() => {
       title: sub.name,
       status: sub.status || null,
       deadline: sub.deadline || null,
+      label: sub.label || null,
+      priority: sub.priorityLevel
     })) || []
   }))
 })
 
-// Calculate progress data from MAIN TASKS ONLY (exclude subtasks)
+// Calculate progress data from MAIN TASKS + SUBTASKS
 const progressData = computed(() => {
   if (!selectedProject.value?.tasks) {
     return { done: 0, ongoing: 0, toDo: 0, total: 0 }
   }
 
-  // Only count main tasks that are accessible (tasks without parentTaskId and user has access)
-  const tasks = mainTasks.value
-  console.log(tasks)
-  const done = tasks.filter(t => t.status === 'done').length
-  const ongoing = tasks.filter(t => t.status === 'ongoing').length
-  const toDo = tasks.filter(t => t.status === 'to do').length
-  const total = tasks.length
+  // Get all accessible tasks (main tasks + their subtasks)
+  const allAccessibleTasks: Task[] = []
+  
+  mainTasks.value.forEach(mainTask => {
+    allAccessibleTasks.push(mainTask)
+    const subtasks = subtasksByParentId.value[mainTask.id] || []
+    allAccessibleTasks.push(...subtasks)
+  })
+
+  const done = allAccessibleTasks.filter(t => t.status === 'done').length
+  const ongoing = allAccessibleTasks.filter(t => t.status === 'ongoing').length
+  const toDo = allAccessibleTasks.filter(t => t.status === 'to do').length
+  const total = allAccessibleTasks.length
 
   return { done, ongoing, toDo, total }
 })
@@ -215,13 +223,17 @@ const chartSegments = computed(() => {
   }
 })
 
-// Get unique collaborators from accessible tasks only (including subtasks)
+// Get unique collaborators from accessible tasks only (including subtasks) + current user
 const uniqueCollaborators = computed(() => {
   if (!selectedProject.value?.tasks || !userData.value?.user?.id) return []
 
   const collabMap = new Map<string, { id: string; name: string }>()
   const currentUserId = userData.value.user.id
+  const currentUserName = userData.value.user.name
   const accessibleParentIds = new Set(mainTasks.value.map(t => t.id))
+  
+  // Add current user first
+  collabMap.set(currentUserId, { id: currentUserId, name: currentUserName })
   
   // Iterate through all tasks
   selectedProject.value.tasks.forEach(task => {
@@ -248,7 +260,8 @@ const uniqueCollaborators = computed(() => {
     id: collab.id,
     name: collab.name,
     initials: getInitialsFromName(collab.name),
-    color: getColorForIndex(index)
+    color: getColorForIndex(index),
+    isCurrentUser: collab.id === currentUserId
   }))
 })
 
@@ -450,8 +463,8 @@ const handleCreateTask = () => {
                   <div
                     v-for="collab in uniqueCollaborators.slice(0, 5)"
                     :key="collab.id"
-                    :class="`w-8 h-8 sm:w-10 sm:h-10 rounded-full ${collab.color} flex items-center justify-center text-white text-xs sm:text-sm font-medium border-2 border-white hover:z-10 transition-transform hover:scale-110 cursor-pointer`"
-                    :title="collab.name"
+                    :class="`w-8 h-8 sm:w-10 sm:h-10 rounded-full ${collab.color} flex items-center justify-center text-white text-xs sm:text-sm font-medium border-2 ${collab.isCurrentUser ? 'border-amber-200' : 'border-white'} hover:z-10 transition-transform hover:scale-110 cursor-pointer`"
+                    :title="collab.isCurrentUser ? `${collab.name} (You)` : collab.name"
                   >
                     {{ collab.initials }}
                   </div>
@@ -471,13 +484,15 @@ const handleCreateTask = () => {
                   <div
                     v-for="collab in uniqueCollaborators"
                     :key="collab.id"
-                    class="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-secondary text-xs sm:text-sm"
+                    :class="`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full ${collab.isCurrentUser ? 'bg-amber-50' : 'bg-secondary'} text-xs sm:text-sm`"
                   >
                     <div :class="`w-5 h-5 sm:w-6 sm:h-6 rounded-full ${collab.color} flex items-center justify-center text-white text-xs font-medium shrink-0`">
                       {{ collab.initials }}
                     </div>
                     <!-- Display name instead of ID -->
-                    <span class="text-xs break-all" :title="`${collab.name} (${collab.id})`">{{ collab.name }}</span>
+                    <span class="text-xs break-all" :title="`${collab.name} (${collab.id})`">
+                      {{ collab.name }}{{ collab.isCurrentUser ? ' (You)' : '' }}
+                    </span>
                   </div>
                 </div>
               </div>

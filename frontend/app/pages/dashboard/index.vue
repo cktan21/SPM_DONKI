@@ -80,16 +80,13 @@ const fetchOwnedProjects = async (userId: string): Promise<Project[]> => {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     })
-
     if (!res.ok) {
       console.warn(`No owned projects found for user: ${res.status}`)
       return []
     }
-    
     const data = await res.json()
-    
-    return (data.projects || []).map((p: Project) => ({ 
-      ...p, 
+    return (data.projects || []).map((p: Project) => ({
+      ...p,
       isOwned: true,
       user_name: data.user_name || "",
     }))
@@ -99,74 +96,16 @@ const fetchOwnedProjects = async (userId: string): Promise<Project[]> => {
   }
 }
 
-// Fetch tasks where user is a collaborator and extract their projects
-const fetchCollaboratorProjects = async (userId: string): Promise<Project[]> => {
-  try {
-    const res = await fetch(`http://127.0.0.1:4000/tasks/user/${userId}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    })
-
-    if (!res.ok) {
-      console.warn(`No collaborator tasks found for user: ${res.status}`)
-      return []
-    }
-    
-    const data = await res.json()
-
-    const projectMap = new Map<string, Project>()
-
-    for (const taskEntry of data.tasks || []) {
-      const task = taskEntry.task
-      const collaborators = task?.collaborators || []
-
-      if (!collaborators.includes(userId)) continue
-
-      const projectData = taskEntry.project?.project
-      if (!projectData || !projectData.id) continue
-
-      if (!projectMap.has(projectData.id)) {
-        projectMap.set(projectData.id, {
-          id: projectData.id,
-          uid: projectData.uid || "",
-          name: projectData.name || "Unnamed Project",
-          desc: projectData.desc || null,
-          created_at: projectData.created_at || new Date().toISOString(),
-          updated_at: projectData.updated_at || null,
-          user_name: projectData.user_name || null,
-          department: projectData.department || null,
-          tasks: [],
-          isOwned: false
-        })
-      }
-    }
-
-    return Array.from(projectMap.values())
-  } catch (err) {
-    console.warn("Failed to fetch collaborator projects:", err)
-    return []
-  }
-}
-
 // Main fetch function
 const fetchProjects = async () => {
   if (!user.value?.id) return
-
+  
   loading.value = true
   error.value = null
-
+  
   try {
-    const [ownedProjects, collaboratorProjects] = await Promise.all([
-      fetchOwnedProjects(user.value.id),
-      fetchCollaboratorProjects(user.value.id),
-    ])
-
-    const ownedProjectIds = new Set(ownedProjects.map(p => p.id))
-    const uniqueCollaboratorProjects = collaboratorProjects.filter(
-      p => !ownedProjectIds.has(p.id)
-    )
-
-    projects.value = [...ownedProjects, ...uniqueCollaboratorProjects]
+    const ownedProjects = await fetchOwnedProjects(user.value.id)
+    projects.value = ownedProjects
     
     if (projects.value.length === 0) {
       error.value = null
