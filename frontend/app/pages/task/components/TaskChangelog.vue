@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Stepper, StepperItem, StepperSeparator, StepperTrigger, StepperTitle, StepperDescription } from '@/components/ui/stepper'
-import { Check, Circle, Dot } from 'lucide-vue-next'
+import { Check, Circle, Dot, ChevronDown, ChevronUp } from 'lucide-vue-next'
 
 interface Props {
   changelog: any[]
 }
 
 const props = defineProps<Props>()
+
+const isExpanded = ref(false)
+const MAX_VISIBLE_ITEMS = 5
 
 const formatChangelogDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'N/A'
@@ -98,6 +101,21 @@ const processedChangelog = computed(() => {
       tableName: log.table_name
     }))
 })
+
+const visibleChangelog = computed(() => {
+  if (isExpanded.value || processedChangelog.value.length <= MAX_VISIBLE_ITEMS) {
+    return processedChangelog.value
+  }
+  return processedChangelog.value.slice(0, MAX_VISIBLE_ITEMS)
+})
+
+const hiddenCount = computed(() => {
+  return Math.max(0, processedChangelog.value.length - MAX_VISIBLE_ITEMS)
+})
+
+const toggleExpanded = () => {
+  isExpanded.value = !isExpanded.value
+}
 </script>
 
 <template>
@@ -112,7 +130,7 @@ const processedChangelog = computed(() => {
       <div v-if="processedChangelog.length > 0">
         <Stepper orientation="vertical" class="flex flex-col justify-start gap-6">
           <StepperItem
-            v-for="change in processedChangelog"
+            v-for="change in visibleChangelog"
             :key="change.step"
             v-slot="{ state }"
             class="relative flex items-start gap-4"
@@ -152,6 +170,24 @@ const processedChangelog = computed(() => {
             </div>
           </StepperItem>
         </Stepper>
+
+        <!-- Show More/Less Button -->
+        <div v-if="hiddenCount > 0" class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <Button
+            @click="toggleExpanded"
+            variant="ghost"
+            class="w-full text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            <template v-if="!isExpanded">
+              <ChevronDown class="h-4 w-4 mr-2" />
+              Show {{ hiddenCount }} more {{ hiddenCount === 1 ? 'change' : 'changes' }}
+            </template>
+            <template v-else>
+              <ChevronUp class="h-4 w-4 mr-2" />
+              Show less
+            </template>
+          </Button>
+        </div>
       </div>
       <div v-else class="flex flex-col items-center justify-center py-12 text-center">
         <div class="rounded-full bg-slate-100 p-3 mb-3 dark:bg-slate-800">
