@@ -4,8 +4,10 @@ import httpx
 from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
+import logging
 
 from fastapi.middleware.cors import CORSMiddleware
+
 
 load_dotenv()
 
@@ -59,6 +61,8 @@ def read_root():
         "service": "manage-task-composite",
     }
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Favicon handler
 @app.get("/favicon.ico")
@@ -1011,6 +1015,7 @@ async def delete_task_service(task_id: str):
     summary="Update task via composite service",
     response_description="Updated task with validation",
 )
+
 async def update_task_composite(
     task_id: str = Path(..., description="Primary key of the task (uuid)"),
     updates: Dict[str, Any] = Body(
@@ -1047,6 +1052,8 @@ async def update_task_composite(
     # ===================================================================
     # STEP 0: GET CURRENT TASK DATA TO TRACK CHANGES
     # ===================================================================
+    print(f"[DEBUG] Received updates for task {task_id}:")
+    print(f"[DEBUG] Raw payload: {updates}")
     try:
         async with httpx.AsyncClient() as client:
             current_task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
@@ -1086,6 +1093,9 @@ async def update_task_composite(
             filtered_updates[key] = value
         elif key in schedule_fields:
             schedule_updates[key] = value
+
+    print(f"[DEBUG] Filtered task updates: {filtered_updates}")
+    print(f"[DEBUG] Filtered schedule updates: {schedule_updates}")
 
     try:
         # ===================================================================
@@ -1272,10 +1282,16 @@ async def update_task_composite(
         return response_data
 
     except ValidationError as e:
+        print(f"[ERROR] Validation failed for task {task_id}: {str(e)}")  # ADD THIS
+        logger.error(f"Validation failed for task {task_id}: {str(e)}")   # AND THIS
         raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
     except HTTPException as e:
+        print(f"[ERROR] HTTP exception for task {task_id}: {e.detail}")   # ADD THIS
+        logger.error(f"HTTP exception for task {task_id}: {e.detail}")    # AND THIS
         raise e
     except Exception as e:
+        print(f"[ERROR] Internal error for task {task_id}: {str(e)}")     # ADD THIS
+        logger.error(f"Internal error for task {task_id}: {str(e)}")      # AND THIS
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 

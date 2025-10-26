@@ -245,7 +245,7 @@ const checkAuthorization = () => {
     })
     return navigateTo("/auth/login")
   }
-
+  
   if (formEdit.value.createdByUid === currentUserId) {
     canEditAll.value = true
     canEditCollaborators.value = true
@@ -378,6 +378,11 @@ const updateTask = async () => {
       }
       
       payload.is_recurring = formEdit.value.isRecurring === "true"
+      if (!payload.is_recurring) {
+        // Clear out recurring-only fields
+        payload.frequency = null
+        payload.next_occurrence = null
+      }
       
       if (formEdit.value.isRecurring === "true") {
         payload.frequency = formEdit.value.frequency || undefined
