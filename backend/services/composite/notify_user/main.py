@@ -7,10 +7,14 @@ import uvicorn
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 import logging
+import pytz
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
 
 async def process_overdue_tasks(all_schedules: list):
     """Process any overdue tasks - used for both startup and manual triggers"""
@@ -23,7 +27,7 @@ async def process_overdue_tasks(all_schedules: list):
             logger.error("Failed to initialize Kafka for overdue task processing")
             return
         
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC_PLUS_8)
         overdue_count = 0
         processed_count = 0
         
@@ -38,6 +42,11 @@ async def process_overdue_tasks(all_schedules: list):
             
             try:
                 deadline_dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+                # Ensure deadline is in UTC+8 timezone
+                if deadline_dt.tzinfo is None:
+                    deadline_dt = UTC_PLUS_8.localize(deadline_dt)
+                else:
+                    deadline_dt = deadline_dt.astimezone(UTC_PLUS_8)
                 
                 if deadline_dt < current_time:
                     overdue_count += 1
@@ -106,7 +115,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "notify_user",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now(UTC_PLUS_8).isoformat()
     }
 
 @app.get("/favicon.ico")

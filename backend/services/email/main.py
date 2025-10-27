@@ -2,16 +2,21 @@ import smtplib
 import os
 import asyncio
 import logging
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from kafka_client import KafkaEventConsumer, EventTypes, Topics
+import pytz
 
 load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
 
 class EmailService:
     def __init__(self):
@@ -58,6 +63,10 @@ class EmailService:
                 # Handle deadline overdue event
                 logger.info(f"Handling deadline overdue event: {data}")
                 self._handle_deadline_overdue(data)
+            elif event_type == EventTypes.DEADLINE_APPROACHING:
+                # Handle deadline approaching event
+                logger.info(f"Handling deadline approaching event: {data}")
+                self._handle_deadline_approaching(data)
             else:
                 logger.warning(f"Unknown event type: {event_type}")
                 
@@ -65,7 +74,7 @@ class EmailService:
             logger.error(f"Error handling notification event: {e}")
     
     def _handle_deadline_overdue(self, data: dict):
-        """Handle notification sent events"""
+        """Handle deadline overdue events"""
         # Extract email details from the event data
         to_email = data.get('email')
         name = data.get('name')
@@ -73,6 +82,37 @@ class EmailService:
         department = data.get('department')
         subject = data.get('subject', f"Deadline Overdue for Task {task_id} from Department {department}")
         body = data.get('body', f'Hello {name} of Department {department}, your task {task_id} is Overdue! 🚨🚨🚨🚨 Do it Soon!!')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in notification data")
+    
+    def _handle_deadline_approaching(self, data: dict):
+        """Handle deadline approaching events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        task_id = data.get('tid')
+        department = data.get('department')
+        deadline = data.get('deadline')
+        
+        # Format deadline for display in UTC+8
+        deadline_display = deadline
+        if deadline:
+            try:
+                deadline_dt = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+                # Convert to UTC+8 timezone
+                if deadline_dt.tzinfo is None:
+                    deadline_dt = UTC_PLUS_8.localize(deadline_dt)
+                else:
+                    deadline_dt = deadline_dt.astimezone(UTC_PLUS_8)
+                deadline_display = deadline_dt.strftime('%Y-%m-%d %H:%M:%S UTC+8')
+            except:
+                pass
+        
+        subject = data.get('subject', f"Deadline Approaching for Task {task_id} from Department {department}")
+        body = data.get('body', f'Hello {name} of Department {department}, your task {task_id} deadline is approaching! ⏰⏰⏰ The deadline is on {deadline_display}. Please make sure to complete it on time!')
         
         if to_email:
             self.send_email(to_email, subject, body)

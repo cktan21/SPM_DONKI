@@ -1,3 +1,4 @@
 python-dotenv
 aiokafka
 asyncio
+pytz==2024.1
