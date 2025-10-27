@@ -47,6 +47,7 @@ class EmailService:
     
     def handle_notification_event(self, event: dict):
         """Handle incoming notification events from Kafka"""
+        logger.info(f"Handling notification event: {event}")
         try:
             event_type = event.get('event_type')
             data = event.get('data', {})
@@ -55,6 +56,7 @@ class EmailService:
             
             if event_type == EventTypes.DEADLINE_OVERDUE:
                 # Handle deadline overdue event
+                logger.info(f"Handling deadline overdue event: {data}")
                 self._handle_deadline_overdue(data)
             else:
                 logger.warning(f"Unknown event type: {event_type}")

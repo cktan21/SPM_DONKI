@@ -174,8 +174,13 @@ class RecurringTaskProcessor:
                 logger.error(f"Schedule entry {sid} not found for deadline processing")
                 return False
             
+            logger.info(f"Current schedule entry for {sid}: {current_entry}")
+            
             # Update task status to "overdue" via schedule service
+            logger.info(f"Attempting to update schedule {sid} status to 'overdue'")
             update_success = self.schedule_client.update_schedule(sid, {"status": "overdue"})
+            logger.info(f"Schedule update result for {sid}: {update_success}")
+            
             if not update_success:
                 logger.error(f"Failed to update task status to overdue for {sid}")
                 return False
@@ -202,7 +207,7 @@ class RecurringTaskProcessor:
             logger.error(f"Error processing deadline reached for {sid}: {str(e)}")
             return False
 
-    async def _broadcast_deadline_events(self, user_info: list, event_data: dict) -> bool:
+    async def _broadcast_deadline_events(self, user_info, event_data) -> bool:
         """
         Broadcast deadline overdue events to all users asynchronously
         """
@@ -215,10 +220,10 @@ class RecurringTaskProcessor:
             tasks = []
             for user in user_info:
                 local_event_data = event_data.copy()
-                local_event_data["uid"] = user.get("id")
-                local_event_data["name"] = user.get("name")
-                local_event_data["email"] = user.get("email")
-                local_event_data["role"] = user.get("role")
+                local_event_data["uid"] = user.get("user_id")
+                local_event_data["name"] = user.get("user_name")
+                local_event_data["email"] = user.get("user_email")
+                local_event_data["role"] = user.get("user_role")
                 local_event_data["department"] = user.get("department")
                 
                 # Create async task for each user

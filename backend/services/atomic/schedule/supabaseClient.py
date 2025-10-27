@@ -73,3 +73,9 @@ class SupabaseClient:
     def fetch_recurring_tasks(self):
         response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).not_.is_("next_occurrence", "null").execute()
         return response.data if response.data else []
+    
+    
+    def fetch_schedule_user_info_by_sid(self, sid):
+        response = self.client.table("schedule_participants").select("*").eq("sid", sid).execute()
+        data = response.data
+        return data[0] if data else None

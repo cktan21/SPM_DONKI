@@ -321,6 +321,14 @@ def get_recurring_tasks_for_notify():
         return {"tasks": recurring_tasks}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+    
+@app.get("/user-info/sid/{sid}")
+async def get_schedule_user_info_by_sid(sid: str):
+    data = supabase.fetch_schedule_user_info_by_sid(sid)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
+    return {"message":f"Task Schedule {sid} User Info Retrieved Successfully" ,"data": data}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5300)

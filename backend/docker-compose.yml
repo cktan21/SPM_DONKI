@@ -190,6 +190,7 @@ services:
         depends_on:
             - schedule
             - kafka
+            - email
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
             KAFKA_BOOTSTRAP_SERVERS: kafka:9092

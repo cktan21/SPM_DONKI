@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 class ScheduleClient:
-    def __init__(self, schedule_service_url: str = "http://schedule:5300", task_service_url: str = "http://task:5500", user_service_url: str = "http://user:5100"):
+    def __init__(self, schedule_service_url: str = "http://schedule:5300", task_service_url: str = "http://tasks:5500", user_service_url: str = "http://user:5100"):
         self.schedule_service_url = schedule_service_url
         self.task_service_url = task_service_url
         self.user_service_url = user_service_url
@@ -77,12 +77,21 @@ class ScheduleClient:
             return data.get("data")
         return None
     
-    def update_schedule(self, sid: str, schedule_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_schedule(self, sid: str, schedule_data: Dict[str, Any]) -> bool:
         """Update a schedule entry via schedule service"""
+        logger.info(f"Updating schedule {sid} with data: {schedule_data}")
         response = self._make_request_with_retry("PUT", f"{self.schedule_service_url}/{sid}", json=schedule_data)
         if response:
-            return response.json()
-        return None
+            try:
+                response_data = response.json()
+                logger.info(f"Schedule update response: {response_data}")
+                return response_data is not None
+            except Exception as e:
+                logger.error(f"Error parsing response from schedule service: {e}")
+                return False
+        else:
+            logger.error(f"Failed to get response from schedule service for sid {sid}")
+        return False
     
     def delete_schedule(self, sid: str) -> Optional[Dict[str, Any]]:
         """Delete a schedule entry via schedule service"""
@@ -91,18 +100,69 @@ class ScheduleClient:
             return response.json()
         return None
     
-    def get_user_info(self, sid: str) -> Optional[Dict[str, Any]]:
+    def get_user_info_old(self, sid: str) -> Optional[List[Dict[str, Any]]]:
         """Get task info by SID from schedule service"""
-        schedule_response = self._make_request_with_retry("GET", f"{self.schedule_service_url}/sid/{sid}")
-        tid = schedule_response.json().get("data").get("tid")
-        if not tid:
+        try:
+            schedule_response = self._make_request_with_retry("GET", f"{self.schedule_service_url}/sid/{sid}")
+            if not schedule_response:
+                logger.error(f"Failed to get schedule for sid {sid}")
+                return None
+                
+            schedule_data = schedule_response.json().get("data")
+            if not schedule_data:
+                logger.error(f"No schedule data found for sid {sid}")
+                return None
+                
+            tid = schedule_data.get("tid")
+            if not tid:
+                logger.error(f"No tid found in schedule data for sid {sid}")
+                return None
+                
+            logger.info(f"Getting task info for tid {tid}")
+            task_response = self._make_request_with_retry("GET", f"{self.task_service_url}/tid/{tid}")
+            if not task_response:
+                logger.error(f"Failed to get task info for tid {tid}")
+                return None
+                
+            task_data = task_response.json().get("task")
+            if not task_data:
+                logger.error(f"No task data found for tid {tid}")
+                return None
+                
+            collaborators = task_data.get("collaborators", [])
+            created_by_uid = task_data.get("created_by_uid")
+            
+            # Combine collaborators and creator
+            user_ids = collaborators.copy()
+            if created_by_uid and created_by_uid not in user_ids:
+                user_ids.append(created_by_uid)
+                
+            if not user_ids:
+                logger.error(f"No user IDs found for task {tid}")
+                return None
+                
+            logger.info(f"Getting user info for user IDs: {user_ids}")
+            user_response = self._make_request_with_retry("GET", f"{self.user_service_url}/user", params={"uid": user_ids})
+            if user_response:
+                data = user_response.json()
+                return data.get("users", [])
+            else:
+                logger.error(f"Failed to get user info for user IDs: {user_ids}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting user info for sid {sid}: {str(e)}")
             return None
-        task_response = self._make_request_with_retry("GET", f"{self.task_service_url}/tid/{tid}")
-        user_ids = task_response.json().get("data").get("collaborators")
-        user_ids.append(task_response.json().get("data").get("created_by_uid"))
-        user_response = self._make_request_with_retry("GET", f"{self.user_service_url}/user", params={"uid": user_ids})
-        if user_response:
-            data = user_response.json()
-            return data.get("users")
-        return None
         
+    def get_user_info(self, sid: str) -> Optional[List[Dict[str, Any]]]:
+        """Get task info by SID from schedule service"""
+        try:
+            response = self._make_request_with_retry("GET", f"{self.schedule_service_url}/user-info/sid/{sid}")
+            if response:
+                data = response.json()
+                return data.get("data")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting user info for sid {sid}: {str(e)}")
+            return None

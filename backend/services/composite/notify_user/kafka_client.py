@@ -29,7 +29,6 @@ class KafkaEventPublisher:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 key_serializer=lambda k: k.encode('utf-8') if k else None,
-                retries=3,
                 acks='all',
                 request_timeout_ms=30000
             )
@@ -163,33 +162,33 @@ class KafkaEventConsumer:
 
 # Event type constants
 class EventTypes:
-    # # Task events
-    # TASK_CREATED = "task_created"
-    # TASK_UPDATED = "task_updated"
-    # TASK_DELETED = "task_deleted"
-    # TASK_ASSIGNED = "task_assigned"
-    # TASK_STATUS_CHANGED = "task_status_changed"
+    # Task events
+    TASK_CREATED = "task_created"
+    TASK_UPDATED = "task_updated"
+    TASK_DELETED = "task_deleted"
+    TASK_ASSIGNED = "task_assigned"
+    TASK_STATUS_CHANGED = "task_status_changed"
     
     # # Project events
-    # PROJECT_CREATED = "project_created"
-    # PROJECT_UPDATED = "project_updated"
-    # PROJECT_DELETED = "project_deleted"
-    # PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
-    # PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    PROJECT_DELETED = "project_deleted"
+    PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
+    PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
     
-    # # Schedule events
+    # Schedule Events
     SCHEDULE_CREATED = "schedule_created"
     SCHEDULE_UPDATED = "schedule_updated"
     SCHEDULE_DELETED = "schedule_deleted"
     DEADLINE_APPROACHING = "deadline_approaching"
     DEADLINE_OVERDUE = "deadline_overdue"
     
-    # # User events
-    # USER_CREATED = "user_created"
-    # USER_UPDATED = "user_updated"
-    # USER_DELETED = "user_deleted"
+    # User Events
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_DELETED = "user_deleted"
     
-    # Notification events
+    # Notification Events
     NOTIFICATION_SENT = "notification_sent"
     NOTIFICATION_DELIVERED = "notification_delivered"
     NOTIFICATION_FAILED = "notification_failed"
