@@ -243,7 +243,7 @@ services:
         restart: always
         networks: [spm-net]
         ports:
-            - "9092:9092"   # host-facing listener
+            - "9092:9092" # host-facing listener
         environment:
             # Listeners
             KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
@@ -255,7 +255,7 @@ services:
             KAFKA_PROCESS_ROLES: broker,controller
             KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
             KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9091
-            KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qi  # any 22-char base64-ish string is fine
+            KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qi # any 22-char base64-ish string is fine
 
             # Broker config
             KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
@@ -268,7 +268,6 @@ services:
             timeout: 5s
             retries: 10
             start_period: 30s
-
 
     # kafka:
     #     image: apache/kafka:3.8.0
@@ -298,7 +297,6 @@ services:
     #         timeout: 5s
     #         retries: 15
 
-
     kafka-ui:
         image: provectuslabs/kafka-ui:latest
         container_name: kafka-ui
@@ -311,13 +309,23 @@ services:
             KAFKA_CLUSTERS_0_NAME: spm-cluster
             KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
-    # kafka-setup:
-    #     image: apache/kafka-native:4.0.0
-    #     depends_on:
-    #         kafka:
-    #             condition: service_healthy
-    #     networks: [spm-net]
-    #     volumes:
-    #     - ./kafka/kafka-setup.sh:/kafka-setup.sh
-    #     entrypoint: ["/bin/bash", "-lc"]
-    #     command: "/kafka-setup.sh"
+    kafka-setup:
+        image: apache/kafka-native:4.0.0
+        networks: [spm-net]
+        depends_on:
+            kafka:
+                condition: service_healthy
+        entrypoint:
+            - /bin/sh
+            - -lc
+            - |
+                echo "Waiting for kafka:9092..." ;
+                for i in $(seq 1 10); do
+                /usr/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break ;
+                sleep 2 ;
+                done ;
+                echo "Creating topic notification-events if missing..." ;
+                /usr/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+                --topic notification-events --partitions 1 --replication-factor 1 || true ;
+                echo "Done."
+        restart: "no"

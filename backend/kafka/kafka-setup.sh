@@ -6,7 +6,7 @@ echo "Waiting for Kafka to be ready..."
 
 # Wait for Kafka readiness loop (important for KRaft!)
 for i in {1..30}; do
-  kafka-metadata-quorum.sh --bootstrap-server kafka:9093 --status && break || sleep 2
+  kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break || sleep 2
 done
 
 # Create topics from JSON configuration
