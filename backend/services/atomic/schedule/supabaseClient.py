@@ -78,4 +78,4 @@ class SupabaseClient:
     def fetch_schedule_user_info_by_sid(self, sid):
         response = self.client.table("schedule_participants").select("*").eq("sid", sid).execute()
         data = response.data
-        return data[0] if data else None
+        return data if data else None
