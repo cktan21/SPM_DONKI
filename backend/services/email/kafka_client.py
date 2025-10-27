@@ -1,18 +1,21 @@
 """
-Shared Kafka client utilities for SPM microservices
+Shared Kafka client utilities for SPM microservices using kafka-python
 """
 import json
 import logging
-import asyncio
 from typing import Dict, Any, Optional, Callable
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from aiokafka.errors import KafkaError
+from kafka import KafkaProducer, KafkaConsumer
+from kafka.errors import KafkaError
 import os
 from datetime import datetime, timezone
+import pytz
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
 
 class KafkaEventPublisher:
     """Kafka event publisher for sending events to topics"""
@@ -20,25 +23,25 @@ class KafkaEventPublisher:
     def __init__(self, bootstrap_servers: str = None):
         self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
         self.producer = None
-        self._loop = None
     
-    async def _connect(self):
+    def _connect(self):
         """Initialize Kafka producer connection"""
         try:
-            self.producer = AIOKafkaProducer(
+            self.producer = KafkaProducer(
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 key_serializer=lambda k: k.encode('utf-8') if k else None,
                 acks='all',
-                request_timeout_ms=30000
+                request_timeout_ms=30000,
+                retries=3,
+                retry_backoff_ms=100
             )
-            await self.producer.start()
             logger.info(f"Connected to Kafka at {self.bootstrap_servers}")
         except Exception as e:
             logger.error(f"Failed to connect to Kafka: {e}")
             raise
     
-    async def publish_event(self, topic: str, event_type: str, data: Dict[str, Any], 
+    def publish_event(self, topic: str, event_type: str, data: Dict[str, Any], 
                      key: Optional[str] = None, partition: Optional[int] = None):
         """
         Publish an event to a Kafka topic
@@ -52,7 +55,7 @@ class KafkaEventPublisher:
         """
         if not self.producer:
             logger.warning("Producer not initialized, attempting to connect...")
-            await self._connect()
+            self._connect()
             if not self.producer:
                 logger.error("Failed to initialize producer")
                 return False
@@ -64,12 +67,15 @@ class KafkaEventPublisher:
                 'data': data
             }
             
-            record_metadata = await self.producer.send_and_wait(
+            future = self.producer.send(
                 topic, 
                 value=event, 
                 key=key,
                 partition=partition
             )
+            
+            # Wait for the message to be sent
+            record_metadata = future.get(timeout=10)
             
             logger.info(f"Event published to {topic}: {event_type} at partition {record_metadata.partition}")
             return True
@@ -81,39 +87,42 @@ class KafkaEventPublisher:
             logger.error(f"Unexpected error publishing event: {e}")
             return False
     
-    async def close(self):
+    def close(self):
         """Close the producer connection"""
         if self.producer:
-            await self.producer.stop()
+            self.producer.close()
             logger.info("Kafka producer closed")
 
 class KafkaEventConsumer:
     """Kafka event consumer for receiving events from topics"""
     
     def __init__(self, bootstrap_servers: str = None, group_id: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
         self.group_id = group_id or os.getenv('KAFKA_GROUP_ID', 'spm-consumer-group')
         self.consumer = None
     
-    async def _connect(self):
+    def _connect(self):
         """Initialize Kafka consumer connection"""
         try:
-            self.consumer = AIOKafkaConsumer(
+            self.consumer = KafkaConsumer(
                 bootstrap_servers=self.bootstrap_servers,
                 group_id=self.group_id,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                 key_deserializer=lambda k: k.decode('utf-8') if k else None,
                 auto_offset_reset='latest',
                 enable_auto_commit=True,
-                auto_commit_interval_ms=1000
+                auto_commit_interval_ms=1000,
+                consumer_timeout_ms=1000,
+                # Wait for topic creation instead of failing
+                api_version_auto_timeout_ms=30000,
+                metadata_max_age_ms=30000
             )
-            await self.consumer.start()
             logger.info(f"Connected to Kafka consumer at {self.bootstrap_servers}")
         except Exception as e:
             logger.error(f"Failed to connect to Kafka consumer: {e}")
             raise
     
-    async def subscribe_to_topics(self, topics: list):
+    def subscribe_to_topics(self, topics: list):
         """Subscribe to multiple topics"""
         if not self.consumer:
             logger.error("Consumer not initialized")
@@ -127,7 +136,7 @@ class KafkaEventConsumer:
             logger.error(f"Failed to subscribe to topics: {e}")
             return False
     
-    async def consume_events(self, handler: Callable[[Dict[str, Any]], None], 
+    def consume_events(self, handler: Callable[[Dict[str, Any]], None], 
                       timeout_ms: int = 1000):
         """
         Consume events and call handler for each message
@@ -141,23 +150,44 @@ class KafkaEventConsumer:
             return
         
         try:
-            async for message in self.consumer:
+            logger.info("Starting to consume events...")
+            logger.info("⏳ Waiting for topic 'notification-events' to be created...")
+            
+            # Poll for messages - this will wait until topic exists
+            while True:
                 try:
-                    event = message.value
-                    logger.info(f"Received event: {event.get('event_type')} from {message.topic}")
-                    handler(event)
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    message_batch = self.consumer.poll(timeout_ms=timeout_ms)
+                    
+                    if not message_batch:
+                        logger.debug("No messages received, continuing to poll...")
+                        continue
+                    
+                    # Process messages
+                    for topic_partition, messages in message_batch.items():
+                        logger.info(f"📨 Received {len(messages)} messages from {topic_partition.topic}")
+                        
+                        for message in messages:
+                            try:
+                                event = message.value
+                                logger.info(f"📧 Processing event: {event.get('event_type')} from {message.topic}")
+                                handler(event)
+                            except Exception as e:
+                                logger.error(f"❌ Error processing message: {e}")
+                                
+                except Exception as poll_error:
+                    logger.error(f"❌ Error polling for messages: {poll_error}")
+                    # Continue polling even if there's an error
+                    continue
                             
         except KeyboardInterrupt:
-            logger.info("Consumer interrupted by user")
+            logger.info("🛑 Consumer interrupted by user")
         except Exception as e:
-            logger.error(f"Error consuming events: {e}")
+            logger.error(f"❌ Error consuming events: {e}")
     
-    async def close(self):
+    def close(self):
         """Close the consumer connection"""
         if self.consumer:
-            await self.consumer.stop()
+            self.consumer.close()
             logger.info("Kafka consumer closed")
 
 # Event type constants

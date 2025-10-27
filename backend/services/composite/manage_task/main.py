@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 import logging
-import asyncio
 import pytz
 
 from fastapi.middleware.cors import CORSMiddleware

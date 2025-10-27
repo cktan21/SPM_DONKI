@@ -1,4 +1,3 @@
 python-dotenv
-aiokafka
-asyncio
+kafka-python
 pytz==2024.1

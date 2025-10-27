@@ -1,6 +1,5 @@
 import smtplib
 import os
-import asyncio
 import logging
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -8,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from kafka_client import KafkaEventConsumer, EventTypes, Topics
 import pytz
+import time
 
 load_dotenv()
 
@@ -52,30 +52,33 @@ class EmailService:
     
     def handle_notification_event(self, event: dict):
         """Handle incoming notification events from Kafka"""
-        logger.info(f"Handling notification event: {event}")
+        logger.info(f"📧 Handling notification event: {event}")
         try:
             event_type = event.get('event_type')
             data = event.get('data', {})
             
-            logger.info(f"Processing notification event: {event_type}")
+            logger.info(f"📋 Processing notification event: {event_type}")
+            logger.info(f"📊 Event data: {data}")
             
             if event_type == EventTypes.DEADLINE_OVERDUE:
                 # Handle deadline overdue event
-                logger.info(f"Handling deadline overdue event: {data}")
+                logger.info(f"⏰ Handling deadline overdue event: {data}")
                 self._handle_deadline_overdue(data)
             elif event_type == EventTypes.DEADLINE_APPROACHING:
                 # Handle deadline approaching event
-                logger.info(f"Handling deadline approaching event: {data}")
+                logger.info(f"⏰ Handling deadline approaching event: {data}")
                 self._handle_deadline_approaching(data)
             elif event_type == EventTypes.TASK_ASSIGNED:
                 # Handle task assigned event
-                logger.info(f"Handling task assigned event: {data}")
+                logger.info(f"📝 Handling task assigned event: {data}")
                 self._handle_task_assigned(data)
             else:
-                logger.warning(f"Unknown event type: {event_type}")
+                logger.warning(f"❓ Unknown event type: {event_type}")
                 
         except Exception as e:
-            logger.error(f"Error handling notification event: {e}")
+            logger.error(f"❌ Error handling notification event: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
     
     def _handle_deadline_overdue(self, data: dict):
         """Handle deadline overdue events"""
@@ -163,7 +166,7 @@ class EmailService:
         logger.error(f"Notification failed: {data}")
         # You can add logic here to retry or log failures
 
-async def main():
+def main():
     """Main function to run the email service as a Kafka consumer"""
     email_service = EmailService()
     consumer = KafkaEventConsumer(
@@ -172,23 +175,32 @@ async def main():
     
     try:
         # Connect to Kafka
-        await consumer._connect()
+        logger.info("🔌 Connecting to Kafka...")
+        consumer._connect()
         
         # Subscribe to notification events topic
-        await consumer.subscribe_to_topics([Topics.NOTIFICATION_EVENTS])
+        logger.info(f"📡 Subscribing to topic: {Topics.NOTIFICATION_EVENTS}")
+        success = consumer.subscribe_to_topics([Topics.NOTIFICATION_EVENTS])
         
-        logger.info("Email service started, listening for notification events...")
+        if not success:
+            logger.error("❌ Failed to subscribe to topics")
+            return
         
-        # Start consuming events
-        await consumer.consume_events(email_service.handle_notification_event)
+        logger.info("✅ Email service started, waiting for notification events...")
+        logger.info("⏳ Topic will be created automatically when first message is published")
+        
+        # Start consuming events (will wait for topic creation)
+        consumer.consume_events(email_service.handle_notification_event)
         
     except KeyboardInterrupt:
-        logger.info("Email service stopped by user")
+        logger.info("🛑 Email service stopped by user")
     except Exception as e:
-        logger.error(f"Email service error: {e}")
+        logger.error(f"❌ Email service error: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
     finally:
-        await consumer.close()
+        consumer.close()
 
 if __name__ == "__main__":
-    # Run the async main function
-    asyncio.run(main())
+    # Run the main function
+    main()
