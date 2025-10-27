@@ -67,6 +67,10 @@ class EmailService:
                 # Handle deadline approaching event
                 logger.info(f"Handling deadline approaching event: {data}")
                 self._handle_deadline_approaching(data)
+            elif event_type == EventTypes.TASK_ASSIGNED:
+                # Handle task assigned event
+                logger.info(f"Handling task assigned event: {data}")
+                self._handle_task_assigned(data)
             else:
                 logger.warning(f"Unknown event type: {event_type}")
                 
@@ -113,6 +117,36 @@ class EmailService:
         
         subject = data.get('subject', f"Deadline Approaching for Task {task_id} from Department {department}")
         body = data.get('body', f'Hello {name} of Department {department}, your task {task_id} deadline is approaching! ⏰⏰⏰ The deadline is on {deadline_display}. Please make sure to complete it on time!')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in notification data")
+    
+    def _handle_task_assigned(self, data: dict):
+        """Handle task assigned events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        task_id = data.get('tid')
+        task_name = data.get('task_name', 'Unknown Task')
+        department = data.get('department')
+        is_creator = data.get('is_creator', False)
+        is_collaborator = data.get('is_collaborator', False)
+        
+        # Determine role and message
+        if is_creator:
+            role_text = "You have been assigned as the creator"
+            action_text = "created"
+        elif is_collaborator:
+            role_text = "You have been assigned as a collaborator"
+            action_text = "assigned to collaborate on"
+        else:
+            role_text = "You have been assigned to"
+            action_text = "assigned to"
+        
+        subject = data.get('subject', f"New Task Assignment: {task_name}")
+        body = data.get('body', f'Hello {name} of Department {department}, {role_text} for task "{task_name}" (ID: {task_id}). You have been {action_text} this task. Please check your dashboard for more details.')
         
         if to_email:
             self.send_email(to_email, subject, body)

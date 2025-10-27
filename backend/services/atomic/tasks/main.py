@@ -276,6 +276,16 @@ async def delete_task(
 
 #     return {"message": "Task deleted successfully", "task": rows[0]}
 
+
+@app.get("/task-participants/{task_id}", summary="Get all participants for a task")
+async def get_task_participants(
+    task_id: str = Path(..., description="Task ID")
+):
+    participants = supabase.get_task_participants(task_id)
+    if not participants:
+        return {"message": "No participants found for this task", "participants": []}
+    return {"message": f"{len(participants)} participant(s) retrieved", "participants": participants}
+
 @app.get("/logs", summary="Get all logs")
 async def get_all_logs():
     logs = supabase.get_all_logs()

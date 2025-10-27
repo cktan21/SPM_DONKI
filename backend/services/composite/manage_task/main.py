@@ -5,11 +5,24 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 import logging
+import asyncio
+import pytz
 
 from fastapi.middleware.cors import CORSMiddleware
+from kafka_client import KafkaEventPublisher, EventTypes, Topics
 
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
+
+# Initialize Kafka publisher
+kafka_publisher = KafkaEventPublisher()
 
 app = FastAPI(title="Composite Microservice: manage-task Service")
 
@@ -51,6 +64,169 @@ SCHEDULE_SERVICE_URL = "http://schedule:5300"
 
 # for validating user
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
+
+async def get_task_participants(task_id) -> List[Dict[str, Any]]:
+    """
+    Get all participants (creator + collaborators) for a task using the task_participants view
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Query the schedule_participants view to get all participants for this task
+            response = await client.get(
+                f"{TASK_SERVICE_URL}/task-participants/{task_id}",
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if response.status_code == 200:
+                participants_data = response.json()
+                participants_data = participants_data.get("participants", [])
+                logger.info(f"Retrieved participants for task {task_id}: {participants_data}")
+                return participants_data
+            else:
+                logger.error(f"Failed to get participants for task {task_id}: {response.status_code}")
+                return []
+    except Exception as e:
+        logger.error(f"Error getting participants for task {task_id}: {str(e)}")
+        return []
+
+def test_kafka_connectivity() -> bool:
+    """
+    Test Kafka connectivity and topic existence
+    """
+    try:
+        logger.info("🔍 Testing Kafka connectivity...")
+        
+        # Test producer connection
+        if not kafka_publisher.producer:
+            kafka_publisher._connect()
+        
+        if not kafka_publisher.producer:
+            logger.error("❌ Failed to create Kafka producer")
+            return False
+        
+        logger.info("✅ Kafka producer created successfully")
+        
+        # Test sending a simple message
+        test_event = {
+            'event_type': 'test_connectivity',
+            'timestamp': datetime.now(UTC_PLUS_8).isoformat(),
+            'data': {'test': True, 'message': 'Kafka connectivity test'}
+        }
+        
+        logger.info("📤 Sending test message to Kafka...")
+        success = kafka_publisher.publish_event(
+            topic=Topics.NOTIFICATION_EVENTS,
+            event_type="test_connectivity",
+            data={'test': True, 'message': 'Kafka connectivity test'}
+        )
+        
+        if success:
+            logger.info("✅ Kafka connectivity test successful!")
+            return True
+        else:
+            logger.error("❌ Kafka connectivity test failed!")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Kafka connectivity test error: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return False
+
+async def notify_task_participants(task_id, task_data: Dict[str, Any]) -> bool:
+    """
+    Notify all task participants (creator + collaborators) about task assignment via Kafka
+    """
+    try:
+        logger.info(f"🚀 Starting notification process for task {task_id}")
+        
+        # Ensure Kafka producer is connected
+        if not kafka_publisher.producer:
+            logger.info("📡 Connecting to Kafka producer...")
+            kafka_publisher._connect()
+            if not kafka_publisher.producer:
+                logger.error("❌ Failed to initialize Kafka producer")
+                return False
+        
+        # Get all participants for this task
+        logger.info(f"👥 Fetching participants for task {task_id}")
+        participants = await get_task_participants(task_id)
+        
+        if not participants:
+            logger.warning(f"⚠️ No participants found for task {task_id}")
+            return False
+        
+        logger.info(f"✅ Found {len(participants)} participants for task {task_id}")
+        
+        # Prepare event data
+        event_data = {
+            "tid": task_id,
+            "task_name": task_data.get("name", "Unknown Task"),
+            "description": task_data.get("desc", ""),
+            "priority_level": task_data.get("priorityLevel", 0),
+            "label": task_data.get("label", ""),
+            "project_id": task_data.get("pid"),
+            "created_by_uid": task_data.get("created_by_uid"),
+            "collaborators": task_data.get("collaborators", []),
+            "status": "assigned",
+            "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+        }
+        
+        logger.info(f"📝 Prepared event data: {event_data}")
+        
+        # Send events to all participants
+        failed_count = 0
+        success_count = 0
+        
+        for i, participant in enumerate(participants):
+            logger.info(f"📤 Sending notification {i+1}/{len(participants)} to participant {participant.get('user_id')}")
+            
+            local_event_data = event_data.copy()
+            local_event_data["uid"] = participant.get("user_id")
+            local_event_data["name"] = participant.get("user_name")
+            local_event_data["email"] = participant.get("user_email")
+            local_event_data["role"] = participant.get("user_role")
+            local_event_data["department"] = participant.get("department")
+            local_event_data["phone"] = participant.get("phone")
+            local_event_data["is_creator"] = participant.get("is_creator", False)
+            local_event_data["is_collaborator"] = participant.get("is_collaborator", False)
+            
+            logger.debug(f"📋 Participant data: {local_event_data}")
+            
+            # Publish event for each participant
+            success = kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type=EventTypes.TASK_ASSIGNED,
+                data=local_event_data,
+            )
+            
+            if success:
+                success_count += 1
+                logger.info(f"✅ Successfully sent notification to participant {participant.get('user_id')}")
+            else:
+                failed_count += 1
+                logger.error(f"❌ Failed to send notification to participant {participant.get('user_id')}")
+        
+        # Final flush to ensure all messages are sent
+        try:
+            logger.info("🔄 Flushing remaining Kafka messages...")
+            kafka_publisher.producer.flush(timeout=10)
+            logger.info("✅ Kafka flush completed")
+        except Exception as e:
+            logger.error(f"❌ Error during Kafka flush: {e}")
+        
+        if failed_count > 0:
+            logger.error(f"❌ Failed to broadcast {failed_count} out of {len(participants)} task assignment events")
+            return False
+        
+        logger.info(f"🎉 Successfully broadcasted task assignment events for {success_count} participants")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error notifying task participants: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return False
 
 
 # Root endpoint
@@ -932,7 +1108,21 @@ async def create_task_composite(
                     print(f"Warning: Failed to fetch collaborator info: {e}")
 
         # ===================================================================
-        # STEP 6: COMPOSE FINAL RESPONSE
+        # STEP 6: NOTIFY TASK PARTICIPANTS VIA KAFKA
+        # ===================================================================
+        notification_success = False
+        try:
+            logger.info(f"Notifying participants about new task {task_id}")
+            notification_success = await notify_task_participants(task_id, task_json)
+            if notification_success:
+                logger.info(f"Successfully notified participants about task {task_id}")
+            else:
+                logger.warning(f"Failed to notify participants about task {task_id}")
+        except Exception as e:
+            logger.error(f"Error notifying participants about task {task_id}: {str(e)}")
+
+        # ===================================================================
+        # STEP 7: COMPOSE FINAL RESPONSE
         # ===================================================================
         return {
             "message": "Task created successfully via composite service",
@@ -942,14 +1132,16 @@ async def create_task_composite(
             "project_info": project_info,
             "collaborator_info": collaborator_info,
             "members_synced": members_synced,  # List of users added to project
+            "notification_sent": notification_success,  # Kafka notification status
             "validations_passed": validation_results,
             "services_used": {
                 "task_service": True,
                 "schedule_service": schedule_response is not None,
                 "project_service": project_info is not None,
                 "users_service": len(collaborator_info) > 0,
+                "kafka_notification": notification_success,
             },
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC_PLUS_8).isoformat(),
         }
 
     except ValidationError as e:
