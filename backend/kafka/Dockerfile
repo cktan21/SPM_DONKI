@@ -1,7 +1,7 @@
-FROM confluentinc/cp-kafka:7.4.0
+FROM apache/kafka-native
 
 # Copy the setup script with executable permissions
-COPY --chmod=755 kafka-setup.sh /usr/bin/kafka-setup.sh
+COPY --chmod=+x kafka-setup.sh /kafka-setup.sh
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/bin/kafka-setup.sh"]
+ENTRYPOINT ["/kafka-setup.sh"]

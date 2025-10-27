@@ -1,1 +1,3 @@
 python-dotenv
+kafka-python
+pytz==2024.1

@@ -35,10 +35,15 @@ class SupabaseClient:
         data = response.data
         return data[0] if data else None
     
+    # All Schedules
+    def fetch_all_schedules(self, latest=False):
+        response = self.client.rpc("latest_schedule_per_task").execute()
+        return response.data if response.data else []
+    
     # Get Schedule by Task ID
     def fetch_schedule_by_tid(self, tid, latest=False):
         if latest:
-            response = self.client.table("SCHEDULE").select("*").eq("tid", tid).order("created_at", desc=True).limit(1).execute()
+            response = self.client.table("SCHEDULE").select("*").eq("tid", tid).order("start", desc=True).limit(1).execute()
             return response.data[0] if response.data else None
         response = self.client.table("SCHEDULE").select("*").eq("tid", tid).execute()
         return response.data if response.data else None
@@ -68,3 +73,9 @@ class SupabaseClient:
     def fetch_recurring_tasks(self):
         response = self.client.table("SCHEDULE").select("*").eq("is_recurring", True).not_.is_("next_occurrence", "null").execute()
         return response.data if response.data else []
+    
+    
+    def fetch_schedule_user_info_by_sid(self, sid):
+        response = self.client.table("schedule_participants").select("*").eq("sid", sid).execute()
+        data = response.data
+        return data if data else None

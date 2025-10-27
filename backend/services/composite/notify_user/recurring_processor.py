@@ -5,22 +5,52 @@ from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
+import asyncio
+import pytz
+from kafka_client import EventTypes, KafkaEventPublisher, Topics
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
+
 class RecurringTaskProcessor:
     def __init__(self):
-        self.scheduler = BackgroundScheduler()
+        self.scheduler = BackgroundScheduler(timezone=UTC_PLUS_8)
         self.schedule_client = ScheduleClient()
+        self.kafka_publisher = KafkaEventPublisher()
         self.scheduler.start()
-        logger.info("RecurringTaskProcessor initialized and scheduler started")
+        logger.info("RecurringTaskProcessor initialized and scheduler started with UTC+8 timezone")
+    
+    async def initialize_kafka(self):
+        """
+        Initialize Kafka producer connection
+        """
+        try:
+            await self.kafka_publisher._connect()
+            logger.info("Kafka producer initialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize Kafka producer: {e}")
+            return False
 
     def calculate_next_occurrence(self, frequency: str, current_start: datetime, current_deadline: datetime) -> datetime:
         """
         Calculate the next occurrence based on frequency and the gap between start and deadline
         """
+        # Ensure both datetimes are in UTC+8 timezone
+        if current_start.tzinfo is None:
+            current_start = UTC_PLUS_8.localize(current_start)
+        else:
+            current_start = current_start.astimezone(UTC_PLUS_8)
+            
+        if current_deadline.tzinfo is None:
+            current_deadline = UTC_PLUS_8.localize(current_deadline)
+        else:
+            current_deadline = current_deadline.astimezone(UTC_PLUS_8)
+        
         # Calculate the gap between start and deadline
         gap = current_deadline - current_start
         
@@ -114,6 +144,246 @@ class RecurringTaskProcessor:
             logger.error(f"Error scheduling recurring task {sid}: {str(e)}")
             return False
 
+    def schedule_deadline_monitoring(self, task_data: Dict[str, Any]):
+        """
+        Schedule deadline monitoring jobs for a task (approaching and overdue)
+        """
+        try:
+            sid = task_data.get("sid")
+            deadline_str = task_data.get("deadline")
+            
+            if not all([sid, deadline_str]):
+                logger.error(f"Missing required fields for deadline monitoring {sid}")
+                return False
+            
+            # Parse the deadline datetime and ensure it's in UTC+8
+            deadline_dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+            if deadline_dt.tzinfo is None:
+                deadline_dt = UTC_PLUS_8.localize(deadline_dt)
+            else:
+                deadline_dt = deadline_dt.astimezone(UTC_PLUS_8)
+            
+            # Calculate approaching notification time (3 days before deadline)
+            approaching_dt = deadline_dt - timedelta(days=3)
+            
+            # Get current time in UTC+8
+            current_time = datetime.now(UTC_PLUS_8)
+            
+            # Only schedule approaching notification if it's in the future
+            if approaching_dt > current_time:
+                # Schedule the deadline approaching job
+                approaching_job_id = f"deadline_approaching_{sid}"
+                self.scheduler.add_job(
+                    func=self.process_deadline_approaching,
+                    trigger=DateTrigger(run_date=approaching_dt),
+                    args=[sid],
+                    id=approaching_job_id,
+                    replace_existing=True
+                )
+                logger.info(f"Scheduled deadline approaching notification for task {sid} at {approaching_dt} (UTC+8)")
+            
+            # Schedule the deadline overdue job
+            overdue_job_id = f"deadline_{sid}"
+            self.scheduler.add_job(
+                func=self.process_deadline_reached,
+                trigger=DateTrigger(run_date=deadline_dt),
+                args=[sid],
+                id=overdue_job_id,
+                replace_existing=True
+            )
+            
+            logger.info(f"Scheduled deadline monitoring for task {sid} at {deadline_dt} (UTC+8)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error scheduling deadline monitoring for {sid}: {str(e)}")
+            return False
+
+    def process_deadline_approaching(self, sid: str):
+        """
+        Process when a task deadline is approaching (3 days before) - broadcast to Kafka
+        """
+        try:
+            logger.info(f"Processing deadline approaching for task {sid}")
+            
+            # Get the current schedule entry
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
+            if not current_entry:
+                logger.error(f"Schedule entry {sid} not found for deadline approaching processing")
+                return False
+            
+            logger.info(f"Current schedule entry for {sid}: {current_entry}")
+            
+            # Broadcast deadline approaching event to Kafka
+            event_data = {
+                "sid": sid,
+                "tid": current_entry.get("tid"),
+                "deadline": current_entry.get("deadline"),
+                "status": "approaching",
+                "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+            }
+            
+            # Call sid and then task to get the user info
+            user_info = self.schedule_client.get_user_info(sid)
+            if not user_info:
+                logger.error(f"Task info not found for {sid}")
+                return False
+            
+            # Use asyncio.run for proper async handling
+            return asyncio.run(self._broadcast_deadline_approaching_events(user_info, event_data))
+                
+        except Exception as e:
+            logger.error(f"Error processing deadline approaching for {sid}: {str(e)}")
+            return False
+
+    def process_deadline_reached(self, sid: str):
+        """
+        Process when a task deadline is reached - broadcast to Kafka and update status
+        """
+        try:
+            logger.info(f"Processing deadline reached for task {sid}")
+            
+            # Get the current schedule entry
+            current_entry = self.schedule_client.fetch_schedule_by_sid(sid)
+            if not current_entry:
+                logger.error(f"Schedule entry {sid} not found for deadline processing")
+                return False
+            
+            logger.info(f"Current schedule entry for {sid}: {current_entry}")
+            
+            # Update task status to "overdue" via schedule service
+            logger.info(f"Attempting to update schedule {sid} status to 'overdue'")
+            update_success = self.schedule_client.update_schedule(sid, {"status": "overdue"})
+            logger.info(f"Schedule update result for {sid}: {update_success}")
+            
+            if not update_success:
+                logger.error(f"Failed to update task status to overdue for {sid}")
+                return False
+            
+            # Broadcast deadline overdue event to Kafka
+            event_data = {
+                "sid": sid,
+                "tid": current_entry.get("tid"),
+                "deadline": current_entry.get("deadline"),
+                "status": "overdue",
+                "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+            }
+            
+            # Call sid and then task to get the user info
+            user_info = self.schedule_client.get_user_info(sid)
+            if not user_info:
+                logger.error(f"Task info not found for {sid}")
+                return False
+            
+            # Use asyncio.run for proper async handling
+            return asyncio.run(self._broadcast_deadline_events(user_info, event_data))
+                
+        except Exception as e:
+            logger.error(f"Error processing deadline reached for {sid}: {str(e)}")
+            return False
+
+    async def _broadcast_deadline_approaching_events(self, user_info, event_data) -> bool:
+        """
+        Broadcast deadline approaching events to all users asynchronously
+        """
+        try:
+            # Ensure Kafka producer is connected
+            if not self.kafka_publisher.producer:
+                await self.kafka_publisher._connect()
+            
+            # Send events to all users concurrently
+            tasks = []
+            for user in user_info:
+                local_event_data = event_data.copy()
+                local_event_data["uid"] = user.get("user_id")
+                local_event_data["name"] = user.get("user_name")
+                local_event_data["email"] = user.get("user_email")
+                local_event_data["role"] = user.get("user_role")
+                local_event_data["department"] = user.get("department")
+                
+                # Create async task for each user
+                task = self.kafka_publisher.publish_event(
+                    topic=Topics.NOTIFICATION_EVENTS,
+                    event_type=EventTypes.DEADLINE_APPROACHING,
+                    data=local_event_data,
+                )
+                tasks.append(task)
+            
+            # Wait for all events to be published
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Check results
+            failed_count = 0
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to broadcast deadline approaching event for user {user_info[i].get('id')}: {result}")
+                    failed_count += 1
+                elif not result:
+                    logger.error(f"Failed to broadcast deadline approaching event for user {user_info[i].get('id')}")
+                    failed_count += 1
+            
+            if failed_count > 0:
+                logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} deadline approaching events")
+                return False
+            
+            logger.info(f"Successfully broadcasted deadline approaching events for {len(user_info)} users")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error broadcasting deadline approaching events: {str(e)}")
+            return False
+
+    async def _broadcast_deadline_events(self, user_info, event_data) -> bool:
+        """
+        Broadcast deadline overdue events to all users asynchronously
+        """
+        try:
+            # Ensure Kafka producer is connected
+            if not self.kafka_publisher.producer:
+                await self.kafka_publisher._connect()
+            
+            # Send events to all users concurrently
+            tasks = []
+            for user in user_info:
+                local_event_data = event_data.copy()
+                local_event_data["uid"] = user.get("user_id")
+                local_event_data["name"] = user.get("user_name")
+                local_event_data["email"] = user.get("user_email")
+                local_event_data["role"] = user.get("user_role")
+                local_event_data["department"] = user.get("department")
+                
+                # Create async task for each user
+                task = self.kafka_publisher.publish_event(
+                    topic=Topics.NOTIFICATION_EVENTS,
+                    event_type=EventTypes.DEADLINE_OVERDUE,
+                    data=local_event_data,
+                )
+                tasks.append(task)
+            
+            # Wait for all events to be published
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Check results
+            failed_count = 0
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}: {result}")
+                    failed_count += 1
+                elif not result:
+                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}")
+                    failed_count += 1
+            
+            if failed_count > 0:
+                logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} deadline overdue events")
+                return False
+            
+            logger.info(f"Successfully broadcasted deadline overdue events for {len(user_info)} users")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error broadcasting deadline events: {str(e)}")
+            return False
+
     def process_recurring_task(self, sid: str, frequency: str):
         """
         Process a recurring task when its next occurrence time is reached
@@ -135,7 +405,14 @@ class RecurringTaskProcessor:
                 # Schedule the next occurrence for the new entry
                 new_sid = new_entry["sid"]
                 new_next_occurrence = datetime.fromisoformat(new_entry["next_occurrence"].replace('Z', '+00:00'))
-                self.schedule_recurring_task(new_sid, frequency, new_next_occurrence)
+                self.schedule_recurring_task({
+                    "sid": new_sid,
+                    "frequency": frequency,
+                    "next_occurrence": new_entry["next_occurrence"]
+                })
+                
+                # Also schedule deadline monitoring for the new entry
+                self.schedule_deadline_monitoring(new_entry)
             else:
                 logger.error(f"Failed to create new recurring entry for task {current_entry['tid']}")
                 
@@ -159,6 +436,45 @@ class RecurringTaskProcessor:
             return True
         except Exception as e:
             logger.error(f"Error cancelling recurring task {sid}: {str(e)}")
+            return False
+
+    def cancel_deadline_monitoring(self, sid: str):
+        """
+        Cancel scheduled deadline monitoring jobs (both approaching and overdue)
+        """
+        try:
+            # Cancel approaching notification job
+            approaching_job_id = f"deadline_approaching_{sid}"
+            if self.scheduler.get_job(approaching_job_id):
+                self.scheduler.remove_job(approaching_job_id)
+                logger.info(f"Cancelled deadline approaching notification for {sid}")
+            else:
+                logger.info(f"Deadline approaching notification for {sid} was not scheduled (no job found)")
+            
+            # Cancel overdue notification job
+            overdue_job_id = f"deadline_{sid}"
+            if self.scheduler.get_job(overdue_job_id):
+                self.scheduler.remove_job(overdue_job_id)
+                logger.info(f"Cancelled deadline overdue notification for {sid}")
+            else:
+                logger.info(f"Deadline overdue notification for {sid} was not scheduled (no job found)")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling deadline monitoring for {sid}: {str(e)}")
+            return False
+
+    def cancel_all_task_jobs(self, sid: str):
+        """
+        Cancel both recurring and deadline monitoring jobs for a task
+        """
+        try:
+            recurring_cancelled = self.cancel_recurring_task(sid)
+            deadline_cancelled = self.cancel_deadline_monitoring(sid)
+            
+            return recurring_cancelled and deadline_cancelled
+        except Exception as e:
+            logger.error(f"Error cancelling all jobs for {sid}: {str(e)}")
             return False
 
     def get_scheduled_jobs(self):

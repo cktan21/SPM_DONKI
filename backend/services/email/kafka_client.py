@@ -1,5 +1,5 @@
 """
-Shared Kafka client utilities for SPM microservices
+Shared Kafka client utilities for SPM microservices using kafka-python
 """
 import json
 import logging
@@ -8,18 +8,21 @@ from kafka import KafkaProducer, KafkaConsumer
 from kafka.errors import KafkaError
 import os
 from datetime import datetime, timezone
+import pytz
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
+
 class KafkaEventPublisher:
     """Kafka event publisher for sending events to topics"""
     
     def __init__(self, bootstrap_servers: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
         self.producer = None
-        self._connect()
     
     def _connect(self):
         """Initialize Kafka producer connection"""
@@ -28,9 +31,10 @@ class KafkaEventPublisher:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 key_serializer=lambda k: k.encode('utf-8') if k else None,
-                retries=3,
                 acks='all',
-                request_timeout_ms=30000
+                request_timeout_ms=30000,
+                retries=3,
+                retry_backoff_ms=100
             )
             logger.info(f"Connected to Kafka at {self.bootstrap_servers}")
         except Exception as e:
@@ -50,8 +54,11 @@ class KafkaEventPublisher:
             partition: Optional partition number
         """
         if not self.producer:
-            logger.error("Producer not initialized")
-            return False
+            logger.warning("Producer not initialized, attempting to connect...")
+            self._connect()
+            if not self.producer:
+                logger.error("Failed to initialize producer")
+                return False
         
         try:
             event = {
@@ -67,8 +74,9 @@ class KafkaEventPublisher:
                 partition=partition
             )
             
-            # Wait for confirmation
+            # Wait for the message to be sent
             record_metadata = future.get(timeout=10)
+            
             logger.info(f"Event published to {topic}: {event_type} at partition {record_metadata.partition}")
             return True
             
@@ -89,10 +97,9 @@ class KafkaEventConsumer:
     """Kafka event consumer for receiving events from topics"""
     
     def __init__(self, bootstrap_servers: str = None, group_id: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
         self.group_id = group_id or os.getenv('KAFKA_GROUP_ID', 'spm-consumer-group')
         self.consumer = None
-        self._connect()
     
     def _connect(self):
         """Initialize Kafka consumer connection"""
@@ -104,7 +111,11 @@ class KafkaEventConsumer:
                 key_deserializer=lambda k: k.decode('utf-8') if k else None,
                 auto_offset_reset='latest',
                 enable_auto_commit=True,
-                auto_commit_interval_ms=1000
+                auto_commit_interval_ms=1000,
+                consumer_timeout_ms=1000,
+                # Wait for topic creation instead of failing
+                api_version_auto_timeout_ms=30000,
+                metadata_max_age_ms=30000
             )
             logger.info(f"Connected to Kafka consumer at {self.bootstrap_servers}")
         except Exception as e:
@@ -139,22 +150,39 @@ class KafkaEventConsumer:
             return
         
         try:
+            logger.info("Starting to consume events...")
+            logger.info("⏳ Waiting for topic 'notification-events' to be created...")
+            
+            # Poll for messages - this will wait until topic exists
             while True:
-                message_pack = self.consumer.poll(timeout_ms=timeout_ms)
-                
-                for topic_partition, messages in message_pack.items():
-                    for message in messages:
-                        try:
-                            event = message.value
-                            logger.info(f"Received event: {event.get('event_type')} from {topic_partition.topic}")
-                            handler(event)
-                        except Exception as e:
-                            logger.error(f"Error processing message: {e}")
+                try:
+                    message_batch = self.consumer.poll(timeout_ms=timeout_ms)
+                    
+                    if not message_batch:
+                        logger.debug("No messages received, continuing to poll...")
+                        continue
+                    
+                    # Process messages
+                    for topic_partition, messages in message_batch.items():
+                        logger.info(f"📨 Received {len(messages)} messages from {topic_partition.topic}")
+                        
+                        for message in messages:
+                            try:
+                                event = message.value
+                                logger.info(f"📧 Processing event: {event.get('event_type')} from {message.topic}")
+                                handler(event)
+                            except Exception as e:
+                                logger.error(f"❌ Error processing message: {e}")
+                                
+                except Exception as poll_error:
+                    logger.error(f"❌ Error polling for messages: {poll_error}")
+                    # Continue polling even if there's an error
+                    continue
                             
         except KeyboardInterrupt:
-            logger.info("Consumer interrupted by user")
+            logger.info("🛑 Consumer interrupted by user")
         except Exception as e:
-            logger.error(f"Error consuming events: {e}")
+            logger.error(f"❌ Error consuming events: {e}")
     
     def close(self):
         """Close the consumer connection"""
@@ -164,33 +192,33 @@ class KafkaEventConsumer:
 
 # Event type constants
 class EventTypes:
-    # # Task events
-    # TASK_CREATED = "task_created"
-    # TASK_UPDATED = "task_updated"
-    # TASK_DELETED = "task_deleted"
-    # TASK_ASSIGNED = "task_assigned"
-    # TASK_STATUS_CHANGED = "task_status_changed"
+    # Task events
+    TASK_CREATED = "task_created"
+    TASK_UPDATED = "task_updated"
+    TASK_DELETED = "task_deleted"
+    TASK_ASSIGNED = "task_assigned"
+    TASK_STATUS_CHANGED = "task_status_changed"
     
     # # Project events
-    # PROJECT_CREATED = "project_created"
-    # PROJECT_UPDATED = "project_updated"
-    # PROJECT_DELETED = "project_deleted"
-    # PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
-    # PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
+    PROJECT_CREATED = "project_created"
+    PROJECT_UPDATED = "project_updated"
+    PROJECT_DELETED = "project_deleted"
+    PROJECT_COLLABORATOR_ADDED = "project_collaborator_added"
+    PROJECT_COLLABORATOR_REMOVED = "project_collaborator_removed"
     
-    # # Schedule events
-    # SCHEDULE_CREATED = "schedule_created"
-    # SCHEDULE_UPDATED = "schedule_updated"
-    # SCHEDULE_DELETED = "schedule_deleted"
-    # DEADLINE_APPROACHING = "deadline_approaching"
-    # DEADLINE_OVERDUE = "deadline_overdue"
+    # Schedule Events
+    SCHEDULE_CREATED = "schedule_created"
+    SCHEDULE_UPDATED = "schedule_updated"
+    SCHEDULE_DELETED = "schedule_deleted"
+    DEADLINE_APPROACHING = "deadline_approaching"
+    DEADLINE_OVERDUE = "deadline_overdue"
     
-    # # User events
-    # USER_CREATED = "user_created"
-    # USER_UPDATED = "user_updated"
-    # USER_DELETED = "user_deleted"
+    # User Events
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_DELETED = "user_deleted"
     
-    # Notification events
+    # Notification Events
     NOTIFICATION_SENT = "notification_sent"
     NOTIFICATION_DELIVERED = "notification_delivered"
     NOTIFICATION_FAILED = "notification_failed"

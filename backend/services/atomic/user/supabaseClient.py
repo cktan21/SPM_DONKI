@@ -56,10 +56,13 @@ class SupabaseClient:
     
     def get_user_by_id(self, user_id: str):
         """Get user data by user ID"""
-        response = self.client.table("USER").select(
-            "id, auth_id, email, role, name, created_at", "department"
-        ).eq("id", user_id).execute()
+        response = self.client.table("USER").select("*").eq("id", user_id).execute()
         return response
+    
+    def get_user_by_id_mass(self, user_ids: list[str]):
+        """Get user data by user IDs"""
+        response = self.client.table("USER").select("*").in_("id", user_ids).execute()
+        return response.data if response.data else []
     
     def get_all_users(self):
         """Get all users"""

@@ -20,7 +20,7 @@ supabase = SupabaseClient()
 # Notify User Service URL
 NOTIFY_USER_SERVICE_URL = "http://notify_user:4500"
 
-async def notify_recurring_task_added(schedule_data: Dict[str, Any]):
+async def notify_schedule_added(schedule_data: Dict[str, Any]):
     """Notify the notify_user service when a new recurring task is added"""
     import asyncio
     
@@ -37,7 +37,7 @@ async def notify_recurring_task_added(schedule_data: Dict[str, Any]):
                 async with httpx.AsyncClient() as client:
                     logger.info(f"Attempting to notify notify_user service at {url} (attempt {attempt + 1})")
                     response = await client.post(
-                        f"{url}/task/recurring/schedule",
+                        f"{url}/schedule/update",
                         json=schedule_data,
                         timeout=10.0
                     )
@@ -56,6 +56,43 @@ async def notify_recurring_task_added(schedule_data: Dict[str, Any]):
     
     # If all attempts failed, log the error but don't crash the main operation
     logger.error(f"Failed to notify notify_user service after all attempts for task {schedule_data.get('sid')}")
+
+async def notify_deadline_monitoring_added(deadline_data: Dict[str, Any]):
+    """Notify the notify_user service when deadline monitoring should be set up"""
+    import asyncio
+    
+    # Try multiple connection methods with retries
+    urls_to_try = [
+        NOTIFY_USER_SERVICE_URL,  # Original hostname
+        "http://172.18.0.10:4500",  # Direct IP address
+        "http://notify-user:4500",  # Alternative hostname format
+    ]
+    
+    for attempt in range(3):  # 3 attempts
+        for url in urls_to_try:
+            try:
+                async with httpx.AsyncClient() as client:
+                    logger.info(f"Attempting to notify notify_user service about deadline monitoring at {url} (attempt {attempt + 1})")
+                    response = await client.post(
+                        f"{url}/task/deadline/schedule",
+                        json=deadline_data,
+                        timeout=10.0
+                    )
+                    if response.status_code == 200:
+                        logger.info(f"Successfully notified notify_user service about deadline monitoring for task {deadline_data.get('sid')}")
+                        return  # Success, exit function
+                    else:
+                        logger.warning(f"Failed to notify notify_user service at {url}: {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error connecting to {url}: {str(e)}")
+                continue
+        
+        # Wait before retry
+        if attempt < 2:  # Don't wait after the last attempt
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+    
+    # If all attempts failed, log the error but don't crash the main operation
+    logger.error(f"Failed to notify notify_user service about deadline monitoring after all attempts for task {deadline_data.get('sid')}")
 
 async def notify_recurring_task_updated(schedule_data: Dict[str, Any]):
     """Notify the notify_user service when a recurring task is updated"""
@@ -121,6 +158,11 @@ def get_schedule_by_tid(tid: str):
         raise HTTPException(status_code=404, detail=f"Task {tid} not found")
     return {"message":f"Task {tid} Schedule Retrieved Successfully" ,"data": data}
 
+@app.get("/all")
+def get_all_schedules():
+    data = supabase.fetch_all_schedules()
+    return {"message":f"All Schedules Retrieved Successfully" ,"data": data}
+
 # Retrieve TID Latest
 @app.get("/tid/{tid}/latest")
 def get_schedule_by_tid(tid: str):
@@ -154,20 +196,9 @@ async def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
         data = supabase.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
         
         # If this is a recurring task, notify the notify_user service
-        if is_recurring and data:
-            # Prepare the data to send to notify_user service
-            notify_data = {
-                "sid": data.get("sid"),
-                "tid": data.get("tid"),
-                "frequency": frequency,
-                "next_occurrence": next_occurrence,
-                "start": start,
-                "deadline": deadline,
-                "status": status
-            }
-            # Notify asynchronously (don't wait for response)
+        if data:
             import asyncio
-            asyncio.create_task(notify_recurring_task_added(notify_data))
+            asyncio.create_task(notify_schedule_added(data))
         
         return {"message":f"Task {tid} Schedule Inserted Successfully" ,"data": data}
     except Exception as e:
@@ -215,7 +246,6 @@ async def update_schedule(sid: str, new_data: Dict[str, Any] = Body(...)):
     
 
 # Update up task id
-# Update your schedule service endpoint
 @app.put("/tid/{tid}")
 async def update_schedule_by_tid(tid: str, new_data: Dict[str, Any] = Body(...)):
     """Update schedule using task ID instead of schedule ID"""
@@ -291,6 +321,14 @@ def get_recurring_tasks_for_notify():
         return {"tasks": recurring_tasks}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+    
+@app.get("/user-info/sid/{sid}")
+async def get_schedule_user_info_by_sid(sid: str):
+    data = supabase.fetch_schedule_user_info_by_sid(sid)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"Task Schedule {sid} not found")
+    return {"message":f"Task Schedule {sid} User Info Retrieved Successfully" ,"data": data}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5300)
