@@ -142,7 +142,7 @@ services:
         ports: ["4000:4000"]
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
         develop:
             watch:
                 - action: sync
@@ -166,7 +166,7 @@ services:
         ports: ["4100:4100"]
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
         develop:
             watch:
                 - action: sync
@@ -192,7 +192,7 @@ services:
             - kafka
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
         develop:
             watch:
                 - action: sync
@@ -213,9 +213,10 @@ services:
         container_name: email
         networks: [spm-net]
         depends_on:
-            - kafka
+            kafka:
+                condition: service_healthy
         environment:
-            KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
             SMTP_SERVER: ${SMTP_SERVER}
             SMTP_PORT: ${SMTP_PORT}
             SMTP_USER: ${SMTP_USER}
@@ -235,48 +236,67 @@ services:
                 - action: rebuild
                   path: ./services/email/requirements.txt
 
-    zookeeper:
-        image: confluentinc/cp-zookeeper:7.4.0
-        container_name: zookeeper
-        restart: always
-        networks: [spm-net]
-        environment:
-            ZOOKEEPER_CLIENT_PORT: 2181
-            ZOOKEEPER_TICK_TIME: 2000
-        ports: ["2181:2181"]
-
     kafka:
-        image: confluentinc/cp-kafka:7.4.0
+        image: apache/kafka-native:4.0.0
         container_name: kafka
         restart: always
-        depends_on:
-            - zookeeper
         networks: [spm-net]
         ports:
-            - "9092:9092"
-            - "9101:9101"
+            - "9092:9092"   # host-facing listener
         environment:
-            KAFKA_BROKER_ID: 1
-            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+            # Listeners
+            KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
+            KAFKA_ADVERTISED_LISTENERS: HOST://kafka:9092,DOCKER://kafka:9093
+            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
+
+            # KRaft
+            KAFKA_NODE_ID: 1
+            KAFKA_PROCESS_ROLES: broker,controller
+            KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+            KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9091
+            KAFKA_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qi  # any 22-char base64-ish string is fine
+
+            # Broker config
+            KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
             KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-            KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-            KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-            KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-            KAFKA_JMX_PORT: 9101
-            KAFKA_JMX_HOSTNAME: localhost
+            KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true" # auto create topics if they don't exist
+
         healthcheck:
-            test:
-                [
-                    "CMD",
-                    "kafka-broker-api-versions",
-                    "--bootstrap-server",
-                    "kafka:9092",
-                ]
+            test: ["CMD", "nc", "-z", "localhost", "9092"]
             interval: 10s
             timeout: 5s
-            retries: 5
+            retries: 10
+            start_period: 30s
+
+
+    # kafka:
+    #     image: apache/kafka:3.8.0
+    #     container_name: kafka
+    #     restart: unless-stopped
+    #     networks: [spm-net]
+    #     ports:
+    #     - "9092:9092"
+    #     environment:
+    #         # Single-node KRaft config
+    #         KAFKA_NODE_ID: 1
+    #         KAFKA_PROCESS_ROLES: "broker,controller"
+    #         KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+    #         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+    #         KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+    #         KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+    #         KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+    #         KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    #         KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+    #         # Cluster format ID – any stable string works for single broker
+    #         KAFKA_CLUSTER_ID: "6nK1kC3xT8e2fQk1kP9kYA"
+    #     volumes:
+    #     - kafka-data:/var/lib/kafka/data
+    #     healthcheck:
+    #         test: ["CMD", "bash", "-lc", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+    #         interval: 10s
+    #         timeout: 5s
+    #         retries: 15
+
 
     kafka-ui:
         image: provectuslabs/kafka-ui:latest
@@ -286,14 +306,17 @@ services:
         networks: [spm-net]
         ports: ["8080:8080"]
         environment:
+            DYNAMIC_CONFIG_ENABLED: "true"
             KAFKA_CLUSTERS_0_NAME: spm-cluster
-            KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-            KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+            KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
-    kafka-setup:
-        build: ./kafka
-        container_name: kafka-setup
-        depends_on:
-            kafka:
-                condition: service_healthy
-        networks: [spm-net]
+    # kafka-setup:
+    #     image: apache/kafka-native:4.0.0
+    #     depends_on:
+    #         kafka:
+    #             condition: service_healthy
+    #     networks: [spm-net]
+    #     volumes:
+    #     - ./kafka/kafka-setup.sh:/kafka-setup.sh
+    #     entrypoint: ["/bin/bash", "-lc"]
+    #     command: "/kafka-setup.sh"
