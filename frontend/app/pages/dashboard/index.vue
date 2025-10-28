@@ -53,10 +53,13 @@ interface Project {
   created_at: string
   updated_at?: string | null
   user_name?: string | null
+  owner_name?: string | null
   department?: string | null
   tasks: any[]
   isOwned?: boolean
 }
+
+type HealthStatus = "on-track" | "at-risk" | "delayed"
 
 // User data
 const userData = useState<{ user: User }>("userData")
@@ -71,7 +74,41 @@ const error = ref<string | null>(null)
 const selectedStatus = ref<string>("all")
 const selectedLabel = ref<string>("all")
 const selectedDepartment = ref<string>("all")
-const sortBy = ref<string>("deadline")
+const selectedHealth = ref<string>("all")
+const sortBy = ref<string>("health")
+
+// Cache for user names to avoid redundant API calls
+const userNameCache = new Map<string, string>()
+
+// Fetch user name from internal API
+const fetchUserName = async (userId: string): Promise<string> => {
+  // Check cache first
+  if (userNameCache.has(userId)) {
+    return userNameCache.get(userId)!
+  }
+
+  try {
+    const res = await fetch(`http://127.0.0.1:5100/internal/${userId}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    })
+    
+    if (!res.ok) {
+      console.warn(`Failed to fetch user name for ${userId}: ${res.status}`)
+      return "Unknown User"
+    }
+    
+    const data = await res.json()
+    const userName = data.name || "Unknown User"
+    
+    // Cache the result
+    userNameCache.set(userId, userName)
+    return userName
+  } catch (err) {
+    console.warn(`Error fetching user name for ${userId}:`, err)
+    return "Unknown User"
+  }
+}
 
 // Fetch projects created by the user
 const fetchOwnedProjects = async (userId: string): Promise<Project[]> => {
@@ -96,7 +133,7 @@ const fetchOwnedProjects = async (userId: string): Promise<Project[]> => {
   }
 }
 
-// Main fetch function
+// Main fetch function - OPTIMIZED with parallel fetching
 const fetchProjects = async () => {
   if (!user.value?.id) return
   
@@ -104,8 +141,29 @@ const fetchProjects = async () => {
   error.value = null
   
   try {
+    // Fetch projects
     const ownedProjects = await fetchOwnedProjects(user.value.id)
-    projects.value = ownedProjects
+    
+    // Extract unique user IDs that need names
+    const userIds = new Set<string>()
+    ownedProjects.forEach(project => {
+      if (project.uid && !userNameCache.has(project.uid)) {
+        userIds.add(project.uid)
+      }
+    })
+    
+    // Fetch all user names in parallel
+    if (userIds.size > 0) {
+      await Promise.all(
+        Array.from(userIds).map(uid => fetchUserName(uid))
+      )
+    }
+    
+    // Assign owner names from cache
+    projects.value = ownedProjects.map(project => ({
+      ...project,
+      owner_name: userNameCache.get(project.uid) || project.user_name
+    }))
     
     if (projects.value.length === 0) {
       error.value = null
@@ -132,6 +190,14 @@ function getTaskDeadline(task: any): string | null {
     return task.schedule.deadline
   }
   return task.deadline || null
+}
+
+// Helper: Get task start
+function getTaskStart(task: any): string | null {
+  if (task.schedule && 'start' in task.schedule) {
+    return task.schedule.start
+  }
+  return task.start || null
 }
 
 // Helper: Get most common label from project
@@ -172,6 +238,52 @@ function getEarliestDeadline(project: Project): Date | null {
   
   if (deadlines.length === 0) return null
   return new Date(Math.min(...deadlines.map(d => d.getTime())))
+}
+
+// Helper: Calculate completion percentage
+function getCompletionPercentage(project: Project): number {
+  const tasks = project.tasks || []
+  if (tasks.length === 0) return 0
+  
+  const completedTasks = tasks.filter(t => getTaskStatus(t) === "done").length
+  return Math.round((completedTasks / tasks.length) * 100)
+}
+
+// Helper: Get project health status
+function getProjectHealth(project: Project): HealthStatus {
+  const tasks = project.tasks || []
+  
+  if (tasks.length === 0) return "on-track"
+  
+  const now = new Date()
+  const completionPercentage = getCompletionPercentage(project)
+  const earliestDeadline = getEarliestDeadline(project)
+  
+  // Delayed: deadline passed and not 100% complete
+  if (earliestDeadline && earliestDeadline < now && completionPercentage < 100) {
+    return "delayed"
+  }
+  
+  // At Risk: < 50% complete and > 75% of time elapsed
+  if (earliestDeadline) {
+    const startDates = tasks
+      .map(task => getTaskStart(task))
+      .filter(d => d !== null)
+      .map(d => new Date(d!))
+    
+    if (startDates.length > 0) {
+      const earliestStart = new Date(Math.min(...startDates.map(d => d.getTime())))
+      const totalTime = earliestDeadline.getTime() - earliestStart.getTime()
+      const elapsedTime = now.getTime() - earliestStart.getTime()
+      const timeProgress = totalTime > 0 ? (elapsedTime / totalTime) * 100 : 0
+      
+      if (completionPercentage < 50 && timeProgress > 75) {
+        return "at-risk"
+      }
+    }
+  }
+  
+  return "on-track"
 }
 
 // Computed: Available filter options
@@ -217,6 +329,13 @@ const filteredAndSortedProjects = computed(() => {
     )
   }
   
+  // Apply health filter
+  if (selectedHealth.value !== "all") {
+    filtered = filtered.filter(project => 
+      getProjectHealth(project) === selectedHealth.value
+    )
+  }
+  
   // Apply sorting
   filtered.sort((a, b) => {
     switch (sortBy.value) {
@@ -251,6 +370,10 @@ const filteredAndSortedProjects = computed(() => {
         const avgPriorityB = (b.tasks || []).reduce((sum, t) => sum + (t.priorityLevel || 0), 0) / (b.tasks?.length || 1)
         return avgPriorityB - avgPriorityA
         
+      case "health":
+        const healthOrder = { delayed: 0, "at-risk": 1, "on-track": 2 }
+        return healthOrder[getProjectHealth(a)] - healthOrder[getProjectHealth(b)]
+        
       default:
         return 0
     }
@@ -265,6 +388,7 @@ const activeFiltersCount = computed(() => {
   if (selectedStatus.value !== "all") count++
   if (selectedLabel.value !== "all") count++
   if (selectedDepartment.value !== "all") count++
+  if (selectedHealth.value !== "all") count++
   return count
 })
 
@@ -273,6 +397,7 @@ function clearFilters() {
   selectedStatus.value = "all"
   selectedLabel.value = "all"
   selectedDepartment.value = "all"
+  selectedHealth.value = "all"
 }
 
 // Fetch on mount
@@ -314,6 +439,19 @@ onMounted(() => {
             </div>
             
             <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+              <!-- Health Status Filter -->
+              <Select v-model="selectedHealth">
+                <SelectTrigger class="w-[140px] h-9 text-sm">
+                  <SelectValue placeholder="Health" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Health</SelectItem>
+                  <SelectItem value="on-track">On Track</SelectItem>
+                  <SelectItem value="at-risk">At Risk</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
+                </SelectContent>
+              </Select>
+
               <!-- Status Filter -->
               <Select v-model="selectedStatus">
                 <SelectTrigger class="w-[140px] h-9 text-sm">
@@ -383,6 +521,7 @@ onMounted(() => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="health">Health Status</SelectItem>
                 <SelectItem value="deadline">Nearest Deadline</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
                 <SelectItem value="most-todo">Most To Do</SelectItem>
