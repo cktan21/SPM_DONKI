@@ -28,8 +28,6 @@ from backend.services.composite.notify_user.schedule_client import ScheduleClien
 # Import main after setting up mocks
 from backend.services.composite.notify_user import main
 
-# pytestmark = pytest.mark.asyncio  # Not needed for synchronous tests
-
 
 # -------------------------------
 # Test ScheduleClient
