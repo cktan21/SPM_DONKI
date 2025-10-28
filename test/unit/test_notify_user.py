@@ -9,6 +9,10 @@ from dateutil.relativedelta import relativedelta
 backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, backend_path)
 
+# Add the service directory to Python path so kafka_client and schedule_client can be found
+service_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/services/composite/notify_user"))
+sys.path.insert(0, service_path)
+
 # Mock the problematic modules before any imports
 mock_recurring_processor = MagicMock()
 mock_schedule_client = MagicMock()
