@@ -34,7 +34,7 @@ interface JWTPayload {
 
 // Mapping of routes → allowed roles
 const routeAccess: Record<string, string[]> = {
-    "/generatereport": ["hr"],               // Only HR
+    "/generatereport": ["hr", "manager", "admin"],               // Only HR
     "/settings": ["admin"],                  // Only Admin
     "/profile": ["hr", "admin", "user"],    // Multiple roles allowed
     "/auth/signup": ["hr"],                  // Only HR can access signup
