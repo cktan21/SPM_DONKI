@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp } from "lucide-vue-next"
+import { AlertTriangle, CheckCircle2, Clock } from "lucide-vue-next"
 
 interface Schedule {
   tid: string
@@ -48,8 +48,11 @@ interface Project {
   desc?: string | null
   created_at: string
   user_name?: string | null
+  owner_name?: string | null
   tasks?: Task[]
 }
+
+type HealthStatus = "on-track" | "at-risk" | "delayed"
 
 const props = defineProps<{
   projects: Project[]
@@ -60,31 +63,7 @@ const props = defineProps<{
 const router = useRouter()
 const selectedProject = useState<Project | null>("selectedProject")
 
-// Helper: Get most common label from project tasks
-function getProjectLabel(project: Project): string | null {
-  const tasks = project.tasks || []
-  if (tasks.length === 0) return null
-  
-  const labelCounts: Record<string, number> = {}
-  tasks.forEach(task => {
-    if (task.label) {
-      labelCounts[task.label] = (labelCounts[task.label] || 0) + 1
-    }
-  })
-  
-  const mostCommonLabel = Object.entries(labelCounts)
-    .sort((a, b) => b[1] - a[1])[0]
-  
-  return mostCommonLabel ? mostCommonLabel[0] : null
-}
-
-// Helper: Format project ID
-function formatProjectId(id: string): string {
-  if (id.length <= 14) return id
-  return `${id.slice(0, 7)}...${id.slice(-7)}`
-}
-
-// Helper: Get task status from schedule object
+// Helper: Get task status
 function getTaskStatus(task: Task): string | null {
   if (task.schedule && 'status' in task.schedule) {
     return task.schedule.status
@@ -98,6 +77,103 @@ function getTaskDeadline(task: Task): string | null {
     return task.schedule.deadline
   }
   return task.deadline || null
+}
+
+// Helper: Get task start date
+function getTaskStart(task: Task): string | null {
+  if (task.schedule && 'start' in task.schedule) {
+    return task.schedule.start
+  }
+  return task.start || null
+}
+
+// Helper: Get earliest deadline
+function getEarliestDeadline(project: Project): Date | null {
+  const tasks = project.tasks || []
+  const deadlines = tasks
+    .map(task => getTaskDeadline(task))
+    .filter(d => d !== null)
+    .map(d => new Date(d!))
+  
+  if (deadlines.length === 0) return null
+  return new Date(Math.min(...deadlines.map(d => d.getTime())))
+}
+
+// Helper: Get project health status
+function getProjectHealth(project: Project): HealthStatus {
+  const metrics = calculateMetrics(project)
+  const tasks = project.tasks || []
+  
+  if (tasks.length === 0) return "on-track"
+  
+  const now = new Date()
+  const earliestDeadline = getEarliestDeadline(project)
+  
+  // Check for delayed: deadline passed and not 100% complete
+  if (earliestDeadline && earliestDeadline < now && metrics.completionPercentage < 100) {
+    return "delayed"
+  }
+  
+  // Check for at-risk: < 50% complete and > 75% of time elapsed
+  if (earliestDeadline) {
+    // Find the earliest start date
+    const startDates = tasks
+      .map(task => getTaskStart(task))
+      .filter(d => d !== null)
+      .map(d => new Date(d!))
+    
+    if (startDates.length > 0) {
+      const earliestStart = new Date(Math.min(...startDates.map(d => d.getTime())))
+      const totalTime = earliestDeadline.getTime() - earliestStart.getTime()
+      const elapsedTime = now.getTime() - earliestStart.getTime()
+      const timeProgress = totalTime > 0 ? (elapsedTime / totalTime) * 100 : 0
+      
+      if (metrics.completionPercentage < 50 && timeProgress > 75) {
+        return "at-risk"
+      }
+    }
+  }
+  
+  return "on-track"
+}
+
+// Helper: Get health badge config
+function getHealthConfig(health: HealthStatus) {
+  switch (health) {
+    case "on-track":
+      return {
+        label: "On Track",
+        icon: CheckCircle2,
+        bgClass: "bg-emerald-50",
+        textClass: "text-emerald-700",
+        borderClass: "border-emerald-200",
+        dotClass: "bg-emerald-500"
+      }
+    case "at-risk":
+      return {
+        label: "At Risk",
+        icon: Clock,
+        bgClass: "bg-amber-50",
+        textClass: "text-amber-700",
+        borderClass: "border-amber-200",
+        dotClass: "bg-amber-500"
+      }
+    case "delayed":
+      return {
+        label: "Delayed",
+        icon: AlertTriangle,
+        bgClass: "bg-red-50",
+        textClass: "text-red-700",
+        borderClass: "border-red-200",
+        dotClass: "bg-red-500"
+      }
+  }
+}
+
+// Helper: Format project ID
+function formatProjectId(id: string): string {
+  if (id.length <= 14) return id
+  return `${id.slice(0, 7)}...${id.slice(-7)}`
 }
 
 // Helper: Check if task is overdue
@@ -118,21 +194,22 @@ function getPriorityColor(level: number): string {
   return "bg-green-500"
 }
 
-// Helper: Get status badge variant
-function getStatusBadgeClass(status: string | null): string {
-  if (!status) return "bg-gray-100 text-gray-600 border-gray-200"
+// Helper: Get most common label
+function getProjectLabel(project: Project): string | null {
+  const tasks = project.tasks || []
+  if (tasks.length === 0) return null
   
-  switch (status.toLowerCase()) {
-    case "done":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200"
-    case "ongoing":
-      return "bg-blue-50 text-blue-700 border-blue-200"
-    case "todo":
-    case "to do":
-      return "bg-orange-50 text-orange-700 border-orange-200"
-    default:
-      return "bg-gray-100 text-gray-600 border-gray-200"
-  }
+  const labelCounts: Record<string, number> = {}
+  tasks.forEach(task => {
+    if (task.label) {
+      labelCounts[task.label] = (labelCounts[task.label] || 0) + 1
+    }
+  })
+  
+  const mostCommonLabel = Object.entries(labelCounts)
+    .sort((a, b) => b[1] - a[1])[0]
+  
+  return mostCommonLabel ? mostCommonLabel[0] : null
 }
 
 // Calculate project metrics
@@ -229,11 +306,21 @@ function openProject(project: Project) {
               </CardDescription>
             </div>
             
-            <!-- Risk Indicator -->
-            <AlertTriangle 
-              v-if="calculateMetrics(project).hasRisks"
-              class="h-5 w-5 text-red-500 flex-shrink-0"
-            />
+            <!-- Health Status Badge -->
+            <Badge 
+              :class="[
+                'flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border',
+                getHealthConfig(getProjectHealth(project)).bgClass,
+                getHealthConfig(getProjectHealth(project)).textClass,
+                getHealthConfig(getProjectHealth(project)).borderClass
+              ]"
+            >
+              <component 
+                :is="getHealthConfig(getProjectHealth(project)).icon" 
+                class="h-3.5 w-3.5"
+              />
+              {{ getHealthConfig(getProjectHealth(project)).label }}
+            </Badge>
           </div>
         </CardHeader>
 
@@ -326,7 +413,7 @@ function openProject(project: Project) {
           <div class="pt-3 border-t border-gray-100 space-y-1.5">
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Created By:</span>
-              <span class="text-gray-700 font-bold">{{ project.user_name || "Null" }}</span>
+              <span class="text-gray-700 font-bold">{{ project.owner_name || project.user_name || "Loading..." }}</span>
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Project ID:</span>
