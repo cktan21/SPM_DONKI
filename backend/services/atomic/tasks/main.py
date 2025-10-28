@@ -6,7 +6,6 @@ import uvicorn
 from postgrest.exceptions import APIError
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from uuid import UUID
 import os
 import logging
 import pytz
@@ -398,7 +397,7 @@ async def update_task(
 #Delete Task
 @app.delete("/{task_id}", summary="Delete a task")
 async def delete_task(
-    task_id: UUID = Path(..., description="ID of the task to delete"),
+    task_id: str = Path(..., description="ID of the task to delete"),
 ):
     """
     Delete a task by its ID only.
