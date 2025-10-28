@@ -105,9 +105,9 @@ const projects = computed(() => data.value?.projects || [])
 
 const users = computed(() => {
   if (!data.value) return []
-  
+
   const userMap = new Map<string, User>()
-  
+
   data.value.projects.forEach((project) => {
     project.tasks.forEach((task) => {
       userMap.set(task.created_by.id, task.created_by)
@@ -122,7 +122,7 @@ const users = computed(() => {
 
 const statsCards = computed(() => {
   if (!currentReport.value) return []
-  
+
   return [
     { label: 'Completed', value: currentReport.value.stats.completed, color: 'bg-green-500', icon: '✓' },
     { label: 'In Progress', value: currentReport.value.stats.inProgress, color: 'bg-blue-500', icon: '◐' },
@@ -135,7 +135,7 @@ const statsCards = computed(() => {
 const fetchData = async () => {
   try {
     loading.value = true
-    
+
     if (!user.value?.id) {
       throw new Error('User not authenticated')
     }
@@ -146,7 +146,7 @@ const fetchData = async () => {
     })
 
     data.value = response
-    
+
     // Load saved report from sessionStorage
     const savedReport = sessionStorage.getItem('currentReport')
     if (savedReport) {
@@ -211,11 +211,11 @@ const handleGenerateReport = () => {
       }
     } else {
       const allTasks = data.value!.projects.flatMap((p) => p.tasks)
-      tasks = allTasks.filter((task) => 
-        task.created_by.id === selectedFilter.value || 
+      tasks = allTasks.filter((task) =>
+        task.created_by.id === selectedFilter.value ||
         task.collaborators.some((c) => c.id === selectedFilter.value)
       )
-      
+
       const foundUser = users.value.find((u) => u.id === selectedFilter.value)
       filterName = foundUser?.name || 'Unknown User'
     }
@@ -238,23 +238,23 @@ const handleGenerateReport = () => {
 const exportToPDF = () => {
   if (!process.client || !currentReport.value || !jsPDF || !autoTable) return
   const doc = new jsPDF()
-  
+
   // Header
   doc.setFontSize(20)
   doc.setTextColor(31, 41, 55)
   doc.text('Task Completion Report', 14, 20)
-  
+
   doc.setFontSize(10)
   doc.setTextColor(107, 114, 128)
   doc.text(`Report ID: ${currentReport.value.id}`, 14, 28)
   doc.text(`Generated: ${new Date(currentReport.value.timestamp).toLocaleString()}`, 14, 34)
   doc.text(`Filter: ${currentReport.value.filterType === 'user' ? 'By User' : 'By Project'} - ${currentReport.value.filterName}`, 14, 40)
-  
+
   // Summary Stats
   doc.setFontSize(14)
   doc.setTextColor(31, 41, 55)
   doc.text('Summary', 14, 52)
-  
+
   const summaryData = [
     ['Metric', 'Count', 'Percentage'],
     ['Completed', currentReport.value.stats.completed.toString(), `${Math.round((currentReport.value.stats.completed / currentReport.value.stats.total) * 100)}%`],
@@ -263,7 +263,7 @@ const exportToPDF = () => {
     ['Overdue', currentReport.value.stats.overdue.toString(), `${Math.round((currentReport.value.stats.overdue / currentReport.value.stats.total) * 100)}%`],
     ['Total Tasks', currentReport.value.stats.total.toString(), '100%'],
   ]
-  
+
   autoTable(doc, {
     startY: 56,
     head: [summaryData[0]],
@@ -271,16 +271,16 @@ const exportToPDF = () => {
     theme: 'grid',
     headStyles: { fillColor: [59, 130, 246] },
   })
-  
+
   // Task Details
   const finalY = (doc as any).lastAutoTable.finalY || 56
   doc.setFontSize(14)
   doc.text('Task Details', 14, finalY + 10)
-  
+
   // Build task data based on filter type
   let taskHeaders: string[]
   let taskData: any[][]
-  
+
   if (currentReport.value.filterType === 'user') {
     taskHeaders = ['Project', 'Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To']
     taskData = currentReport.value.tasks.map((task) => [
@@ -301,7 +301,7 @@ const exportToPDF = () => {
       task.collaborators.map((c) => c.name).join(', ') || 'None',
     ])
   }
-  
+
   autoTable(doc, {
     startY: finalY + 14,
     head: [taskHeaders],
@@ -309,14 +309,14 @@ const exportToPDF = () => {
     theme: 'striped',
     headStyles: { fillColor: [59, 130, 246] },
   })
-  
+
   doc.save(`report-${currentReport.value.id}.pdf`)
 }
 
 const exportToExcel = () => {
   if (!process.client || !currentReport.value || !XLSX) return
   const wb = XLSX.utils.book_new()
-  
+
   // Summary sheet
   const summaryData = [
     ['Task Completion Report'],
@@ -333,13 +333,13 @@ const exportToExcel = () => {
     ['Overdue', currentReport.value.stats.overdue, `${Math.round((currentReport.value.stats.overdue / currentReport.value.stats.total) * 100)}%`],
     ['Total Tasks', currentReport.value.stats.total, '100%'],
   ]
-  
+
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData)
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary')
-  
+
   // Tasks sheet
   let taskData: any[][]
-  
+
   if (currentReport.value.filterType === 'user') {
     taskData = [
       ['Project', 'Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To', 'Created By', 'Description'],
@@ -368,10 +368,10 @@ const exportToExcel = () => {
       ]),
     ]
   }
-  
+
   const taskSheet = XLSX.utils.aoa_to_sheet(taskData)
   XLSX.utils.book_append_sheet(wb, taskSheet, 'Tasks')
-  
+
   XLSX.writeFile(wb, `report-${currentReport.value.id}.xlsx`)
 }
 
@@ -401,10 +401,10 @@ const formatDate = (dateString: string) => {
 }
 
 const formatDeadline = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
   })
 }
 
@@ -515,11 +515,8 @@ onMounted(() => {
 
             <Separator />
 
-            <Button 
-              @click="handleGenerateReport" 
-              :disabled="!selectedFilter || generating"
-              class="w-full md:w-auto h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            >
+            <Button @click="handleGenerateReport" :disabled="!selectedFilter || generating"
+              class="w-full md:w-auto h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium">
               <template v-if="generating">
                 <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
                 Generating...
@@ -544,28 +541,24 @@ onMounted(() => {
                     <h2 class="text-2xl font-bold">Report #{{ currentReport.id }}</h2>
                   </div>
                   <p class="text-blue-100">
-                    {{ currentReport.filterType === 'user' ? 'User Report' : 'Project Report' }} • {{ currentReport.filterName }}
+                    {{ currentReport.filterType === 'user' ? 'User Report' : 'Project Report' }} • {{
+                    currentReport.filterName
+                    }}
                   </p>
                   <p class="text-sm text-blue-200 mt-1 flex items-center gap-1">
                     <Calendar class="w-4 h-4" />
                     Generated on {{ formatDate(currentReport.timestamp) }}
                   </p>
                 </div>
-                
+
                 <div class="flex gap-3">
-                  <Button 
-                    @click="exportToPDF"
-                    variant="secondary"
-                    class="h-11 bg-white text-blue-600 hover:bg-blue-50 font-medium"
-                  >
+                  <Button @click="exportToPDF" variant="secondary"
+                    class="h-11 bg-white text-blue-600 hover:bg-blue-50 font-medium">
                     <Download class="w-4 h-4 mr-2" />
                     Export PDF
                   </Button>
-                  <Button 
-                    @click="exportToExcel"
-                    variant="secondary"
-                    class="h-11 bg-white text-blue-600 hover:bg-blue-50 font-medium"
-                  >
+                  <Button @click="exportToExcel" variant="secondary"
+                    class="h-11 bg-white text-blue-600 hover:bg-blue-50 font-medium">
                     <Download class="w-4 h-4 mr-2" />
                     Export Excel
                   </Button>
@@ -576,15 +569,13 @@ onMounted(() => {
 
           <!-- Statistics -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <Card 
-              v-for="stat in statsCards" 
-              :key="stat.label" 
-              class="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50"
-            >
+            <Card v-for="stat in statsCards" :key="stat.label"
+              class="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50">
               <CardContent class="p-6">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-sm font-medium text-gray-600">{{ stat.label }}</span>
-                  <div :class="`w-8 h-8 rounded-full ${stat.color} flex items-center justify-center text-white text-sm font-bold`">
+                  <div
+                    :class="`w-8 h-8 rounded-full ${stat.color} flex items-center justify-center text-white text-sm font-bold`">
                     {{ stat.icon }}
                   </div>
                 </div>
@@ -600,14 +591,16 @@ onMounted(() => {
           <Card v-if="currentReport.tasks.length > 0" class="border-0 shadow-sm">
             <CardHeader>
               <CardTitle class="text-lg">Task Details</CardTitle>
-              <CardDescription>Showing {{ currentReport.tasks.length }} tasks for {{ currentReport.filterName }}</CardDescription>
+              <CardDescription>Showing {{ currentReport.tasks.length }} tasks for {{ currentReport.filterName }}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div class="overflow-x-auto">
                 <table class="w-full">
                   <thead>
                     <tr class="border-b border-gray-200">
-                      <th v-if="currentReport.filterType === 'user'" class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
+                      <th v-if="currentReport.filterType === 'user'"
+                        class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Project</th>
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Task Name</th>
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Priority</th>
@@ -616,11 +609,8 @@ onMounted(() => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr 
-                      v-for="task in currentReport.tasks" 
-                      :key="task.id" 
-                      class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                    >
+                    <tr v-for="task in currentReport.tasks" :key="task.id"
+                      class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td v-if="currentReport.filterType === 'user'" class="py-3 px-4">
                         <div class="font-medium text-gray-900">{{ task.project.name }}</div>
                       </td>
@@ -629,9 +619,10 @@ onMounted(() => {
                         <div v-if="task.desc" class="text-sm text-gray-500 mt-1">{{ task.desc }}</div>
                       </td>
                       <td class="py-3 px-4">
-                        <Badge :class="`${getStatusBadge(task.status)} border`">
+                        <div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+                          :class="getStatusBadge(task.status)">
                           {{ task.status }}
-                        </Badge>
+                        </div>
                       </td>
                       <td class="py-3 px-4">
                         <span :class="`font-semibold ${getPriorityColor(task.priorityLevel)}`">
@@ -643,12 +634,8 @@ onMounted(() => {
                       </td>
                       <td class="py-3 px-4">
                         <div class="flex flex-wrap gap-1">
-                          <Badge 
-                            v-for="collab in task.collaborators" 
-                            :key="collab.id" 
-                            variant="outline" 
-                            class="text-xs"
-                          >
+                          <Badge v-for="collab in task.collaborators" :key="collab.id" variant="outline"
+                            class="text-xs">
                             {{ collab.name }}
                           </Badge>
                         </div>
@@ -677,7 +664,9 @@ onMounted(() => {
               <div>
                 <h3 class="text-xl font-semibold text-gray-900 mb-2">No Report Generated</h3>
                 <p class="text-gray-600 max-w-md">
-                  Select your filter criteria above and click "Generate Report" to create a comprehensive task completion report.
+                  Select your filter criteria above and click "Generate Report" to create a comprehensive task
+                  completion
+                  report.
                 </p>
               </div>
             </div>
