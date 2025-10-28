@@ -102,17 +102,25 @@ watch(() => route.params.id, async (newId) => {
   }
 })
 
-// Filtered main + sub tasks for current user
+// Filtered main + sub tasks for current user (role-based)
 const mainTasks = computed(() => {
   if (!selectedProject.value?.tasks || !userData.value?.user?.id) return []
 
   const currentUserId = userData.value.user.id
+  const userRole = userData.value.user.role?.toLowerCase() || 'staff'
   const allTasks = selectedProject.value.tasks
+
+  // Admin, Manager, and HR can see ALL tasks
+  const hasFullAccess = ['admin', 'manager', 'hr'].includes(userRole)
 
   // Step 1️⃣: Get only the main tasks that the user can access
   const visibleMainTasks = allTasks.filter(task => {
     if (task.parentTaskId) return false // only main tasks
 
+    // Full access roles see everything
+    if (hasFullAccess) return true
+
+    // Staff only see tasks they created or collaborate on
     const isCreator = task.created_by_uid === currentUserId
     const collaborators = Array.isArray(task.collaborators) ? task.collaborators : []
     const isCollaborator = collaborators.some(
