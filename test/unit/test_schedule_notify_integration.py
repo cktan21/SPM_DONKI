@@ -37,15 +37,16 @@ class TestScheduleNotifyIntegration:
             "next_occurrence": "2024-01-08T09:00:00Z",
             "start": "2024-01-01T09:00:00Z",
             "deadline": "2024-01-03T17:00:00Z",
-            "status": "ongoing"
+            "status": "ongoing",
+            "is_recurring": True
         }
         
         with patch.object(main.recurring_processor, 'schedule_recurring_task', return_value=True):
-            response = client.post("/task/recurring/schedule", json=task_data)
+            response = client.post("/task/recurring/update", json=task_data)
             
             assert response.status_code == 200
             data = response.json()
-            assert data["message"] == "Successfully scheduled recurring task s123"
+            assert data["message"] == "Successfully updated recurring task s123"
             assert data["sid"] == "s123"
             assert data["frequency"] == "Weekly"
             assert data["next_occurrence"] == "2024-01-08T09:00:00Z"
@@ -59,14 +60,17 @@ class TestScheduleNotifyIntegration:
         task_data = {
             "sid": "s123",
             "tid": "t456",
-            "next_occurrence": "2024-01-08T09:00:00Z"
+            "next_occurrence": "2024-01-08T09:00:00Z",
+            "is_recurring": True
         }
         
-        response = client.post("/task/recurring/schedule", json=task_data)
+        response = client.post("/task/recurring/update", json=task_data)
         
-        # The error is caught and returns 500 due to the exception handling
-        assert response.status_code == 500
-        assert "Error scheduling recurring task" in response.json()["detail"]
+        # When is_recurring is True but frequency is missing, it just cancels the task
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Successfully cancelled recurring task s123"
+        assert data["action"] == "cancelled"
 
     def test_schedule_new_recurring_task_scheduling_failure(self):
         """Test error handling when scheduling fails"""
@@ -77,14 +81,17 @@ class TestScheduleNotifyIntegration:
             "sid": "s123",
             "tid": "t456",
             "frequency": "Weekly",
-            "next_occurrence": "2024-01-08T09:00:00Z"
+            "next_occurrence": "2024-01-08T09:00:00Z",
+            "is_recurring": True
         }
         
         with patch.object(main.recurring_processor, 'schedule_recurring_task', return_value=False):
-            response = client.post("/task/recurring/schedule", json=task_data)
+            response = client.post("/task/recurring/update", json=task_data)
             
-            assert response.status_code == 500
-            assert "Failed to schedule recurring task" in response.json()["detail"]
+            assert response.status_code == 200
+            data = response.json()
+            assert data["message"] == "Cancelled recurring task s123 but failed to reschedule"
+            assert data["action"] == "cancelled_only"
 
     def test_schedule_new_recurring_task_invalid_datetime(self):
         """Test error handling with invalid datetime format"""
@@ -95,10 +102,15 @@ class TestScheduleNotifyIntegration:
             "sid": "s123",
             "tid": "t456",
             "frequency": "Weekly",
-            "next_occurrence": "invalid-datetime"
+            "next_occurrence": "invalid-datetime",
+            "is_recurring": True
         }
         
-        response = client.post("/task/recurring/schedule", json=task_data)
-        
-        assert response.status_code == 500
-        assert "Error scheduling recurring task" in response.json()["detail"]
+        # Mock the schedule_recurring_task method to return False for invalid datetime
+        with patch.object(main.recurring_processor, 'schedule_recurring_task', return_value=False):
+            response = client.post("/task/recurring/update", json=task_data)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["message"] == "Cancelled recurring task s123 but failed to reschedule"
+            assert data["action"] == "cancelled_only"

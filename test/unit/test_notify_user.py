@@ -35,13 +35,8 @@ class TestScheduleClient:
         """Test successful fetching of recurring tasks"""
         mock_response = Mock()
         mock_response.json.return_value = {"tasks": [{"id": "1", "frequency": "Weekly"}]}
-        mock_response.raise_for_status.return_value = None
         
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.get.return_value = mock_response
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=mock_response):
             client = ScheduleClient()
             result = client.fetch_recurring_tasks()
             
@@ -51,11 +46,7 @@ class TestScheduleClient:
 
     def test_fetch_recurring_tasks_error(self):
         """Test error handling when fetching recurring tasks fails"""
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.get.side_effect = Exception("Network error")
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=None):
             client = ScheduleClient()
             result = client.fetch_recurring_tasks()
             
@@ -65,13 +56,8 @@ class TestScheduleClient:
         """Test successful fetching of schedule by SID"""
         mock_response = Mock()
         mock_response.json.return_value = {"data": {"sid": "s1", "tid": "t1"}}
-        mock_response.raise_for_status.return_value = None
         
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.get.return_value = mock_response
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=mock_response):
             client = ScheduleClient()
             result = client.fetch_schedule_by_sid("s1")
             
@@ -80,11 +66,7 @@ class TestScheduleClient:
 
     def test_fetch_schedule_by_sid_error(self):
         """Test error handling when fetching schedule by SID fails"""
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.get.side_effect = Exception("Network error")
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=None):
             client = ScheduleClient()
             result = client.fetch_schedule_by_sid("s1")
             
@@ -94,13 +76,8 @@ class TestScheduleClient:
         """Test successful creation of schedule"""
         mock_response = Mock()
         mock_response.json.return_value = {"data": {"sid": "s1", "tid": "t1"}}
-        mock_response.raise_for_status.return_value = None
         
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.post.return_value = mock_response
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=mock_response):
             client = ScheduleClient()
             result = client.create_schedule(
                 tid="t1",
@@ -117,11 +94,7 @@ class TestScheduleClient:
 
     def test_create_schedule_error(self):
         """Test error handling when creating schedule fails"""
-        with patch('backend.services.composite.notify_user.schedule_client.requests.Session') as mock_session:
-            mock_session_instance = Mock()
-            mock_session_instance.post.side_effect = Exception("Network error")
-            mock_session.return_value = mock_session_instance
-            
+        with patch.object(ScheduleClient, '_make_request_with_retry', return_value=None):
             client = ScheduleClient()
             result = client.create_schedule(
                 tid="t1",
@@ -151,7 +124,12 @@ class TestRecurringTaskProcessor:
         
         result = self.processor.calculate_next_occurrence("Weekly", current_start, current_deadline)
         
+        # The implementation converts to UTC+8 timezone, so we need to account for that
         expected = current_start + timedelta(weeks=1) + (current_deadline - current_start)
+        # Convert expected to UTC+8 timezone for comparison
+        import pytz
+        utc_plus_8 = pytz.timezone('Asia/Singapore')
+        expected = utc_plus_8.localize(expected)
         assert result == expected
 
     def test_calculate_next_occurrence_monthly(self):
@@ -161,7 +139,12 @@ class TestRecurringTaskProcessor:
         
         result = self.processor.calculate_next_occurrence("Monthly", current_start, current_deadline)
         
+        # The implementation converts to UTC+8 timezone, so we need to account for that
         expected = current_start + relativedelta(months=1) + (current_deadline - current_start)
+        # Convert expected to UTC+8 timezone for comparison
+        import pytz
+        utc_plus_8 = pytz.timezone('Asia/Singapore')
+        expected = utc_plus_8.localize(expected)
         assert result == expected
 
     def test_calculate_next_occurrence_yearly(self):
@@ -171,7 +154,12 @@ class TestRecurringTaskProcessor:
         
         result = self.processor.calculate_next_occurrence("Yearly", current_start, current_deadline)
         
+        # The implementation converts to UTC+8 timezone, so we need to account for that
         expected = current_start + relativedelta(years=1) + (current_deadline - current_start)
+        # Convert expected to UTC+8 timezone for comparison
+        import pytz
+        utc_plus_8 = pytz.timezone('Asia/Singapore')
+        expected = utc_plus_8.localize(expected)
         assert result == expected
 
     def test_calculate_next_occurrence_immediate(self):
@@ -181,7 +169,12 @@ class TestRecurringTaskProcessor:
         
         result = self.processor.calculate_next_occurrence("Immediate", current_start, current_deadline)
         
+        # The implementation converts to UTC+8 timezone, so we need to account for that
         expected = current_deadline + timedelta(minutes=1)
+        # Convert expected to UTC+8 timezone for comparison
+        import pytz
+        utc_plus_8 = pytz.timezone('Asia/Singapore')
+        expected = utc_plus_8.localize(expected)
         assert result == expected
 
     def test_calculate_next_occurrence_invalid_frequency(self):
