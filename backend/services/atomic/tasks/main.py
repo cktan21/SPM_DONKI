@@ -4,9 +4,9 @@ from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
 import uvicorn
 from postgrest.exceptions import APIError
-
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+from uuid import UUID
 import os
 import logging
 import pytz
@@ -58,22 +58,9 @@ app.add_middleware(
     max_age=600,
 )
 
-# Helper function to get task participants
-async def get_task_participants(task_id: str) -> List[Dict[str, Any]]:
-    """
-    Get all participants (creator + collaborators) for a task using the task_participants view
-    """
-    try:
-        participants = supabase.get_task_participants(task_id)
-        logger.info(f"Retrieved participants for task {task_id}: {participants}")
-        return participants
-    except Exception as e:
-        logger.error(f"Error getting participants for task {task_id}: {str(e)}")
-        return []
-
 # Helper function to notify task participants
-async def notify_task_participants(task_id: str, event_type: str, task_data: Dict[str, Any], 
-                                 updated_fields: List[str] = None) -> bool:
+def notify_task_participants(task_id, event_type: str, task_data: Dict[str, Any], 
+                                 updated_fields: List[str] = None, participants: List[Dict[str, Any]] = None) -> bool:
     """
     Notify all task participants about task events via Kafka
     """
@@ -90,7 +77,8 @@ async def notify_task_participants(task_id: str, event_type: str, task_data: Dic
         
         # Get all participants for this task
         logger.info(f"👥 Fetching participants for task {task_id}")
-        participants = await get_task_participants(task_id)
+        
+        logger.info(f"Participants data: {participants}")
         
         if not participants:
             logger.warning(f"⚠️ No participants found for task {task_id}")
@@ -334,7 +322,7 @@ async def create_task(
 # Update task details
 @app.put("/{task_id}", summary="Update a task", response_description="Updated task row")
 async def update_task(
-    task_id: str = Path(..., description="Primary key of the task (uuid)"),
+    task_id = Path(..., description="Primary key of the task (UUID)"),
     updates: Dict[str, Any] = Body(
         ...,
         example={
@@ -355,7 +343,7 @@ async def update_task(
     # Get current task data before update for notifications
     current_task = None
     try:
-        current_resp = supabase.get_task_by_id(task_id)
+        current_resp = supabase.get_task_participants(task_id)
         if current_resp and hasattr(current_resp, 'data') and current_resp.data:
             current_task = current_resp.data[0] if isinstance(current_resp.data, list) else current_resp.data
     except Exception as e:
@@ -383,13 +371,14 @@ async def update_task(
             updated_fields = list(updates.keys())
             if "updated_timestamp" in updated_fields:
                 updated_fields.remove("updated_timestamp")
-            
+            participants = supabase.get_task_participants(task_id)
             # Send notification
-            notification_success = await notify_task_participants(
+            notification_success = notify_task_participants(
                 task_id=task_id,
                 event_type=EventTypes.TASK_UPDATED,
                 task_data=updated_task,
-                updated_fields=updated_fields
+                updated_fields=updated_fields,
+                participants=participants
             )
             
             if notification_success:
@@ -409,7 +398,7 @@ async def update_task(
 #Delete Task
 @app.delete("/{task_id}", summary="Delete a task")
 async def delete_task(
-    task_id: str = Path(..., description="ID of the task to delete"),
+    task_id: UUID = Path(..., description="ID of the task to delete"),
 ):
     """
     Delete a task by its ID only.
@@ -417,11 +406,15 @@ async def delete_task(
     # Get task data before deletion for notifications
     task_data = None
     try:
-        current_resp = supabase.get_task_by_id(task_id)
-        if current_resp and hasattr(current_resp, 'data') and current_resp.data:
-            task_data = current_resp.data[0] if isinstance(current_resp.data, list) else current_resp.data
+        task_data = supabase.get_task(task_id)
+        if task_data:
+            logger.info(f"Retrieved task data for deletion notifications: {task_data.get('name', 'Unknown')}")
+        else:
+            logger.warning(f"No task data found for task {task_id}")
     except Exception as e:
         logger.warning(f"Could not fetch task data for notifications: {e}")
+        
+    participants = supabase.get_task_participants(task_id)
     
     # Call Supabase delete by task_id
     resp = supabase.delete_task(task_id)
@@ -435,10 +428,11 @@ async def delete_task(
     # Send notifications to all task participants
     try:
         if task_data:
-            notification_success = await notify_task_participants(
+            notification_success = notify_task_participants(
                 task_id=task_id,
                 event_type=EventTypes.TASK_DELETED,
-                task_data=task_data
+                task_data=task_data,
+                participants=participants
             )
             
             if notification_success:
