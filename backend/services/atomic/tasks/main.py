@@ -6,15 +6,28 @@ import uvicorn
 from postgrest.exceptions import APIError
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 import os
+import logging
+import pytz
 from fastapi.middleware.cors import CORSMiddleware
+from kafka_client import KafkaEventPublisher, EventTypes, Topics
 
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Define UTC+8 timezone (Singapore time)
+UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
+
 app = FastAPI(title="Atomic Microservice: Task Service")
 supabase = SupabaseClient()
+
+# Initialize Kafka publisher
+kafka_publisher = KafkaEventPublisher()
 
 # CORS
 DEFAULT_ORIGINS = [
@@ -44,6 +57,119 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600,
 )
+
+# Helper function to get task participants
+async def get_task_participants(task_id: str) -> List[Dict[str, Any]]:
+    """
+    Get all participants (creator + collaborators) for a task using the task_participants view
+    """
+    try:
+        participants = supabase.get_task_participants(task_id)
+        logger.info(f"Retrieved participants for task {task_id}: {participants}")
+        return participants
+    except Exception as e:
+        logger.error(f"Error getting participants for task {task_id}: {str(e)}")
+        return []
+
+# Helper function to notify task participants
+async def notify_task_participants(task_id: str, event_type: str, task_data: Dict[str, Any], 
+                                 updated_fields: List[str] = None) -> bool:
+    """
+    Notify all task participants about task events via Kafka
+    """
+    try:
+        logger.info(f"🚀 Starting notification process for task {task_id}, event: {event_type}")
+        
+        # Ensure Kafka producer is connected
+        if not kafka_publisher.producer:
+            logger.info("📡 Connecting to Kafka producer...")
+            kafka_publisher._connect()
+            if not kafka_publisher.producer:
+                logger.error("❌ Failed to initialize Kafka producer")
+                return False
+        
+        # Get all participants for this task
+        logger.info(f"👥 Fetching participants for task {task_id}")
+        participants = await get_task_participants(task_id)
+        
+        if not participants:
+            logger.warning(f"⚠️ No participants found for task {task_id}")
+            return False
+        
+        logger.info(f"✅ Found {len(participants)} participants for task {task_id}")
+        
+        # Prepare event data
+        event_data = {
+            "tid": task_id,
+            "task_name": task_data.get("name", "Unknown Task"),
+            "description": task_data.get("desc", ""),
+            "priority_level": task_data.get("priorityLevel", 0),
+            "label": task_data.get("label", ""),
+            "project_id": task_data.get("pid"),
+            "created_by_uid": task_data.get("created_by_uid"),
+            "collaborators": task_data.get("collaborators", []),
+            "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+        }
+        
+        # Add updated fields for update events
+        if updated_fields:
+            event_data["updated_fields"] = updated_fields
+        
+        logger.info(f"📝 Prepared event data: {event_data}")
+        
+        # Send events to all participants
+        failed_count = 0
+        success_count = 0
+        
+        for i, participant in enumerate(participants):
+            logger.info(f"📤 Sending notification {i+1}/{len(participants)} to participant {participant.get('user_id')}")
+            
+            local_event_data = event_data.copy()
+            local_event_data["uid"] = participant.get("user_id")
+            local_event_data["name"] = participant.get("user_name")
+            local_event_data["email"] = participant.get("user_email")
+            local_event_data["role"] = participant.get("user_role")
+            local_event_data["department"] = participant.get("department")
+            local_event_data["phone"] = participant.get("phone")
+            local_event_data["is_creator"] = participant.get("is_creator", False)
+            local_event_data["is_collaborator"] = participant.get("is_collaborator", False)
+            
+            logger.debug(f"📋 Participant data: {local_event_data}")
+            
+            # Publish event for each participant
+            success = kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type=event_type,
+                data=local_event_data,
+            )
+            
+            if success:
+                success_count += 1
+                logger.info(f"✅ Successfully sent notification to participant {participant.get('user_id')}")
+            else:
+                failed_count += 1
+                logger.error(f"❌ Failed to send notification to participant {participant.get('user_id')}")
+        
+        # Final flush to ensure all messages are sent
+        try:
+            logger.info("🔄 Flushing remaining Kafka messages...")
+            kafka_publisher.producer.flush(timeout=10)
+            logger.info("✅ Kafka flush completed")
+        except Exception as e:
+            logger.error(f"❌ Error during Kafka flush: {e}")
+        
+        if failed_count > 0:
+            logger.error(f"❌ Failed to broadcast {failed_count} out of {len(participants)} task events")
+            return False
+        
+        logger.info(f"🎉 Successfully broadcasted task events for {success_count} participants")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error notifying task participants: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return False
 
 @app.get("/")
 def read_root():
@@ -226,6 +352,15 @@ async def update_task(
     # Add server-side timestamp
     updates["updated_timestamp"] = datetime.now(timezone.utc).isoformat()
     
+    # Get current task data before update for notifications
+    current_task = None
+    try:
+        current_resp = supabase.get_task_by_id(task_id)
+        if current_resp and hasattr(current_resp, 'data') and current_resp.data:
+            current_task = current_resp.data[0] if isinstance(current_resp.data, list) else current_resp.data
+    except Exception as e:
+        logger.warning(f"Could not fetch current task data for notifications: {e}")
+    
     # Use supabaseClient's update_task method
     resp = supabase.update_task(task_id, updates)
     rows = getattr(resp, "data", None) or []
@@ -233,7 +368,42 @@ async def update_task(
     if not rows:
         raise HTTPException(status_code=404, detail="Task not updated")
     
-    return {"message": "Task updated successfully", "task": rows[0]}
+    updated_task = rows[0]
+    
+    # Send notifications to all task participants (excluding collaborator-only changes)
+    try:
+        # Check if only collaborators field was updated
+        only_collaborators_changed = (
+            "collaborators" in updates and 
+            len(updates.keys()) == 1
+        )
+        
+        if not only_collaborators_changed:
+            # Get updated fields for notification
+            updated_fields = list(updates.keys())
+            if "updated_timestamp" in updated_fields:
+                updated_fields.remove("updated_timestamp")
+            
+            # Send notification
+            notification_success = await notify_task_participants(
+                task_id=task_id,
+                event_type=EventTypes.TASK_UPDATED,
+                task_data=updated_task,
+                updated_fields=updated_fields
+            )
+            
+            if notification_success:
+                logger.info(f"✅ Successfully notified participants about task {task_id} update")
+            else:
+                logger.warning(f"⚠️ Failed to notify some participants about task {task_id} update")
+        else:
+            logger.info(f"ℹ️ Skipping notification for task {task_id} - only collaborators field updated")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending task update notifications: {str(e)}")
+        # Don't fail the update if notifications fail
+    
+    return {"message": "Task updated successfully", "task": updated_task}
 
 
 #Delete Task
@@ -244,6 +414,15 @@ async def delete_task(
     """
     Delete a task by its ID only.
     """
+    # Get task data before deletion for notifications
+    task_data = None
+    try:
+        current_resp = supabase.get_task_by_id(task_id)
+        if current_resp and hasattr(current_resp, 'data') and current_resp.data:
+            task_data = current_resp.data[0] if isinstance(current_resp.data, list) else current_resp.data
+    except Exception as e:
+        logger.warning(f"Could not fetch task data for notifications: {e}")
+    
     # Call Supabase delete by task_id
     resp = supabase.delete_task(task_id)
     rows = getattr(resp, "data", None) or []
@@ -251,30 +430,30 @@ async def delete_task(
     if not rows:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    return {"message": "Task deleted successfully", "task": rows[0]}
-
-# @app.delete("/{task_id}", summary="Delete a task")
-# async def delete_task(
-#     task_id: str = Path(..., description="ID of the task to delete"),
-#     request: Request = None
-# ):
-#     """
-#     Delete a task. User ID must be passed as a query parameter:
-#     /{task_id}?user_id=<current_user_id>
-#     """
-#     # Get user_id from query params
-#     user_id = request.query_params.get("user_id")
+    deleted_task = rows[0]
     
-#     if not user_id:
-#         raise HTTPException(status_code=400, detail="User ID is required")  
-    
-#     resp = supabase.delete_task(task_id, user_id)
-#     rows = getattr(resp, "data", None) or []
+    # Send notifications to all task participants
+    try:
+        if task_data:
+            notification_success = await notify_task_participants(
+                task_id=task_id,
+                event_type=EventTypes.TASK_DELETED,
+                task_data=task_data
+            )
+            
+            if notification_success:
+                logger.info(f"✅ Successfully notified participants about task {task_id} deletion")
+            else:
+                logger.warning(f"⚠️ Failed to notify some participants about task {task_id} deletion")
+        else:
+            logger.warning(f"⚠️ Could not send deletion notifications for task {task_id} - no task data available")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending task deletion notifications: {str(e)}")
+        # Don't fail the deletion if notifications fail
 
-#     if not rows:
-#         raise HTTPException(status_code=404, detail="Task not found or not permitted")
+    return {"message": "Task deleted successfully", "task": deleted_task}
 
-#     return {"message": "Task deleted successfully", "task": rows[0]}
 
 
 @app.get("/task-participants/{task_id}", summary="Get all participants for a task")

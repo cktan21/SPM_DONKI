@@ -72,6 +72,10 @@ class EmailService:
                 # Handle task assigned event
                 logger.info(f"📝 Handling task assigned event: {data}")
                 self._handle_task_assigned(data)
+            elif event_type == EventTypes.PROJECT_COLLABORATOR_ADDED:
+                # Handle project collaborator added event
+                logger.info(f"👥 Handling project collaborator added event: {data}")
+                self._handle_project_collaborator_added(data)
             else:
                 logger.warning(f"❓ Unknown event type: {event_type}")
                 
@@ -155,6 +159,25 @@ class EmailService:
             self.send_email(to_email, subject, body)
         else:
             logger.warning("No email address provided in notification data")
+    
+    def _handle_project_collaborator_added(self, data: dict):
+        """Handle project collaborator added events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        project_id = data.get('project_id')
+        project_name = data.get('project_name', 'Unknown Project')
+        department = data.get('department')
+        added_by_name = data.get('added_by_name', 'System')
+        task_name = data.get('task_name', 'Unknown Task')
+        
+        subject = data.get('subject', f"Added to Project: {project_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nYou have been added as a member to the project "{project_name}" (ID: {project_id}) because you are involved in the task "{task_name}".\n\nThis means you now have access to all project resources and will receive updates about project activities.\n\nAdded by: {added_by_name}\n\nPlease check your dashboard for more project details.\n\nBest regards,\nProject Management System')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in project collaborator notification data")
     
     def _handle_notification_delivered(self, data: dict):
         """Handle notification delivered events"""

@@ -1056,6 +1056,40 @@ async def create_task_composite(
                                         if set(verify_members) == set(updated_members):
                                             members_synced["added"] = to_add
                                             print(f"[MEMBERS_SYNC] ✅ DATABASE VERIFIED: All members present")
+                                            
+                                            # ===================================================================
+                                            # STEP 4.5: NOTIFY NEWLY ADDED PROJECT MEMBERS
+                                            # ===================================================================
+                                            if to_add:
+                                                print(f"[MEMBERS_SYNC] 📧 Notifying {len(to_add)} newly added project members...")
+                                                try:
+                                                    # Get project name for notification
+                                                    project_name = "Unknown Project"
+                                                    if proj_data.get("project") and isinstance(proj_data.get("project"), dict):
+                                                        project_name = proj_data["project"].get("name", "Unknown Project")
+                                                    elif proj_data.get("data") and isinstance(proj_data.get("data"), dict):
+                                                        project_name = proj_data["data"].get("name", "Unknown Project")
+                                                    else:
+                                                        project_name = proj_data.get("name", "Unknown Project")
+                                                    
+                                                    # Notify newly added members
+                                                    notification_success = await notify_project_members_added(
+                                                        project_id=project_id,
+                                                        project_name=project_name,
+                                                        added_member_ids=to_add,
+                                                        task_name=task_json.get("name", "Unknown Task"),
+                                                        added_by_user_id=task_json.get("created_by_uid")
+                                                    )
+                                                    
+                                                    if notification_success:
+                                                        print(f"[MEMBERS_SYNC] ✅ Project member notifications sent successfully")
+                                                    else:
+                                                        print(f"[MEMBERS_SYNC] ⚠️ Some project member notifications failed")
+                                                        
+                                                except Exception as e:
+                                                    print(f"[MEMBERS_SYNC] ❌ Error sending project member notifications: {str(e)}")
+                                                    import traceback
+                                                    traceback.print_exc()
                                         else:
                                             print(f"[MEMBERS_SYNC] ⚠️ DATABASE MISMATCH!")
                                             print(f"[MEMBERS_SYNC] ⚠️ Missing: {set(updated_members) - set(verify_members)}")
@@ -1512,6 +1546,120 @@ async def validate_user_exists(user_id: str):
             raise HTTPException(
                 status_code=503, detail=f"Failed to connect to Users service: {str(e)}"
             )
+
+
+async def fetch_user_details(user_id: str) -> Dict[str, Any]:
+    """
+    Fetch user details from the Users microservice.
+    Returns a dictionary with user information or None if user not found.
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(f"{USERS_SERVICE_URL}/internal/{user_id}")
+            if response.status_code == 200:
+                user_data = response.json()
+                return {
+                    "user_id": user_data.get("id", user_id),
+                    "name": user_data.get("name") or (user_data.get("email") or "").split("@")[0],
+                    "email": user_data.get("email"),
+                    "role": user_data.get("role"),
+                    "department": user_data.get("department"),
+                    "phone": user_data.get("phone")
+                }
+            else:
+                logger.warning(f"Failed to fetch user details for {user_id}: {response.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Error fetching user details for {user_id}: {str(e)}")
+            return None
+
+
+async def notify_project_members_added(
+    project_id, 
+    project_name: str, 
+    added_member_ids: list, 
+    task_name: str,
+    added_by_user_id: str = None
+) -> bool:
+    """
+    Notify newly added project members via Kafka events.
+    """
+    try:
+        logger.info(f"🚀 Starting project member notification for project {project_id}")
+        
+        # Ensure Kafka producer is connected
+        if not kafka_publisher.producer:
+            logger.info("📡 Connecting to Kafka producer...")
+            kafka_publisher._connect()
+            if not kafka_publisher.producer:
+                logger.error("❌ Failed to initialize Kafka producer")
+                return False
+        
+        # Fetch details for the user who added the members (if provided)
+        added_by_name = "System"
+        if added_by_user_id:
+            added_by_details = await fetch_user_details(added_by_user_id)
+            if added_by_details:
+                added_by_name = added_by_details.get("name", "Unknown User")
+        
+        success_count = 0
+        
+        # Send notification to each newly added member
+        for member_id in added_member_ids:
+            logger.info(f"📤 Sending project member notification to user {member_id}")
+            
+            # Fetch user details for the member
+            user_details = await fetch_user_details(member_id)
+            if not user_details:
+                logger.warning(f"⚠️ Could not fetch details for user {member_id}, skipping notification")
+                continue
+            
+            # Prepare event data
+            event_data = {
+                "project_id": project_id,
+                "project_name": project_name,
+                "task_name": task_name,
+                "added_by_name": added_by_name,
+                "uid": user_details.get("user_id"),
+                "name": user_details.get("name"),
+                "email": user_details.get("email"),
+                "role": user_details.get("role"),
+                "department": user_details.get("department"),
+                "phone": user_details.get("phone"),
+                "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+            }
+            
+            logger.debug(f"📋 Project member notification data: {event_data}")
+            
+            # Publish event
+            success = kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type=EventTypes.PROJECT_COLLABORATOR_ADDED,
+                data=event_data,
+            )
+            
+            if success:
+                success_count += 1
+                logger.info(f"✅ Successfully sent project member notification to user {member_id}")
+            else:
+                logger.error(f"❌ Failed to send project member notification to user {member_id}")
+        
+        # Final flush to ensure all messages are sent
+        try:
+            logger.info("🔄 Flushing remaining Kafka messages...")
+            kafka_publisher.producer.flush(timeout=10)
+            logger.info("✅ Kafka flush completed")
+        except Exception as e:
+            logger.error(f"❌ Error during Kafka flush: {e}")
+        
+        logger.info(f"📊 Project member notifications sent: {success_count}/{len(added_member_ids)}")
+        return success_count > 0
+        
+    except Exception as e:
+        logger.error(f"❌ Error in project member notification: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 # Helper functions for validations -- for update
