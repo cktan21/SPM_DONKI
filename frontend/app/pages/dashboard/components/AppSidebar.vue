@@ -47,105 +47,43 @@ const data = {
   },
   teams: [
     {
-      name: "Acme Inc",
+      name: "Don Donki",
       logo: GalleryVerticalEnd,
       plan: "Enterprise",
     },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
+    // {
+    //   name: "Acme Corp.",
+    //   logo: AudioWaveform,
+    //   plan: "Startup",
+    // },
+    // {
+    //   name: "Evil Corp.",
+    //   logo: Command,
+    //   plan: "Free",
+    // },
   ],
   navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
     {
       title: "Report",
       url: "#",
       icon: BookOpen,
       items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
+        // {
+        //   title: "Introduction",
+        //   url: "#",
+        // },
+        // {
+        //   title: "Get Started",
+        //   url: "#",
+        // },
  // ✅ Show this only if role === "hr"
-        ...(["hr", "admin"].includes(userData.value?.user?.role)
-          ? [{ title: "Generate Report", url: "/generateReports" }]
+        ...(["hr","manager", "admin"].includes(userData.value?.user?.role)
+          ? [{ title: "Generate Report", url: "/generatereport" }]
           : []),
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
+        // {
+        //   title: "Changelog",
+        //   url: "#",
+        // },
       ],
     },
   ],
@@ -159,11 +97,6 @@ const data = {
     ...(["hr"].includes(userData.value?.user?.role)
       ? [{ name: "Create Signup", url: "/auth/signup", icon: ClipboardList }]
       : []),
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
   ],
 }
 </script>

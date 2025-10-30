@@ -69,6 +69,12 @@ const statuses = [
     class: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
   },
   { 
+    value: "overdue", 
+    label: "Blocked", 
+    icon: AlertTriangle, 
+    class: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
+  },
+  { 
     value: "done", 
     label: "Done", 
     icon: Check, 
