@@ -34,6 +34,7 @@ Install dependencies:
 bun install
 npm install @iconify/vue
 npm install lucide-vue-next
+npm install jspdf
 bunx shadcn-vue@latest add badge
 ```
 
