@@ -199,7 +199,7 @@ const transformedTasks = computed(() => {
 // Calculate progress data from MAIN TASKS + SUBTASKS
 const progressData = computed(() => {
   if (!selectedProject.value?.tasks) {
-    return { done: 0, ongoing: 0, toDo: 0, total: 0 }
+    return { done: 0, ongoing: 0, overdue:0, toDo: 0, total: 0 }
   }
 
   // Get all accessible tasks (main tasks + their subtasks)
@@ -213,20 +213,22 @@ const progressData = computed(() => {
 
   const done = allAccessibleTasks.filter(t => t.status === 'done').length
   const ongoing = allAccessibleTasks.filter(t => t.status === 'ongoing').length
+  const overdue = allAccessibleTasks.filter(t => t.status === 'overdue').length
   const toDo = allAccessibleTasks.filter(t => t.status === 'to do').length
   const total = allAccessibleTasks.length
 
-  return { done, ongoing, toDo, total }
+  return { done, ongoing,overdue, toDo, total }
 })
 
 // Calculate donut chart segments
 const chartSegments = computed(() => {
-  const { done, ongoing, toDo, total } = progressData.value
-  if (total === 0) return { donePercent: 0, ongoingPercent: 0, toDoPercent: 0 }
+  const { done, ongoing, overdue, toDo, total } = progressData.value
+  if (total === 0) return { donePercent: 0, ongoingPercent: 0, overduePercent: 0, toDoPercent: 0 }
 
   return {
     donePercent: (done / total) * 100,
     ongoingPercent: (ongoing / total) * 100,
+    overduePercent: (overdue / total) * 100,
     toDoPercent: (toDo / total) * 100,
   }
 })
@@ -404,17 +406,29 @@ const handleCreateTask = () => {
                   :stroke-dashoffset="getCircleProps(chartSegments.ongoingPercent, getCircleProps(chartSegments.donePercent, 0).length).offset"
                   stroke-linecap="round"
                 />
+
+                <circle
+                  v-if="progressData.overdue > 0"
+                  cx="96"
+                  cy="96"
+                  :r="getCircleProps(chartSegments.overduePercent, getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length).radius"
+                  class="fill-none stroke-red-500 transition-all duration-500"
+                  stroke-width="28"
+                  :stroke-dasharray="`${getCircleProps(chartSegments.overduePercent, 0).length} ${getCircleProps(chartSegments.overduePercent, 0).circumference - getCircleProps(chartSegments.overduePercent, 0).length}`"
+                  :stroke-dashoffset="-(getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length)"
+                  stroke-linecap="round"
+                />
                 
                 <!-- To Do segment (orange) -->
                 <circle
                   v-if="progressData.toDo > 0"
                   cx="96"
                   cy="96"
-                  :r="getCircleProps(chartSegments.toDoPercent, getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length).radius"
+                  :r="getCircleProps(chartSegments.toDoPercent, getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length + getCircleProps(chartSegments.overduePercent, 0).length).radius"
                   class="fill-none stroke-orange-500 transition-all duration-500"
                   stroke-width="28"
                   :stroke-dasharray="`${getCircleProps(chartSegments.toDoPercent, 0).length} ${getCircleProps(chartSegments.toDoPercent, 0).circumference - getCircleProps(chartSegments.toDoPercent, 0).length}`"
-                  :stroke-dashoffset="-(getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length)"
+                  :stroke-dashoffset="-(getCircleProps(chartSegments.donePercent, 0).length + getCircleProps(chartSegments.ongoingPercent, 0).length + getCircleProps(chartSegments.overduePercent, 0).length)"
                   stroke-linecap="round"
                 />
               </svg>
@@ -444,6 +458,14 @@ const handleCreateTask = () => {
                   <span class="text-xs sm:text-sm">Ongoing</span>
                 </div>
                 <span class="text-xs sm:text-sm font-medium">{{ progressData.ongoing }}</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-red-500 shrink-0"></div>
+                  <span class="text-xs sm:text-sm">Overdue</span>
+                </div>
+                <span class="text-xs sm:text-sm font-medium">{{ progressData.overdue }}</span>
               </div>
               
               <div class="flex items-center justify-between">
