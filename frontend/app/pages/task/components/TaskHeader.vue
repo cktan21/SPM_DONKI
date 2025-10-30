@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { FilePenLine, Trash2, Clock, User, Check, Loader, AlertTriangle } from 'lucide-vue-next'
+import { FilePenLine, Trash2, Clock, User, Check, Loader, AlertTriangle, AlertCircle } from 'lucide-vue-next'
 
 interface Props {
   task: any
@@ -28,7 +28,13 @@ const formatDateShort = (dateStr: string | null | undefined) => {
 
 const getStatusConfig = (status: string) => {
   const normalized = (status || '').toLowerCase()
-  
+  if (normalized === 'overdue' || normalized === 'Blocked') {
+    return {
+      label: 'Blocked',
+      icon: AlertCircle,
+      class: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
+    }
+  }
   if (normalized === 'done' || normalized === 'completed') {
     return {
       label: 'Done',
