@@ -336,9 +336,13 @@ const getFileIcon = (type: string) => {
 
 // Scroll to bottom
 const scrollToBottom = () => {
-  if (messagesContainerRef.value) {
-    messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight
-  }
+  nextTick(() => {
+    setTimeout(() => {
+      if (messagesContainerRef.value) {
+        messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight + 1000
+      }
+    }, 100)
+  })
 }
 
 // Mention autocomplete logic
@@ -385,8 +389,8 @@ onMounted(() => {
   fetchMessages()
   fetchCollaborators()
   
-  // Poll for new messages every 5 seconds
-  setInterval(fetchMessages, 5000)
+  // Poll for new messages every 10 seconds
+  setInterval(fetchMessages, 10000)
 })
 </script>
 
