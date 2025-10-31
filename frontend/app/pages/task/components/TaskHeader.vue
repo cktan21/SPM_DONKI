@@ -30,7 +30,7 @@ const getStatusConfig = (status: string) => {
   const normalized = (status || '').toLowerCase()
   if (normalized === 'overdue' || normalized === 'Blocked') {
     return {
-      label: 'Blocked',
+      label: 'Overdue',
       icon: AlertCircle,
       class: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
     }

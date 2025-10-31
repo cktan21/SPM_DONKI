@@ -70,9 +70,9 @@ const statuses = [
   },
   { 
     value: "overdue", 
-    label: "Blocked", 
+    label: "Overdue", 
     icon: AlertTriangle, 
-    class: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
+    class: "bg-red-50 text-red-700 border-red-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
   },
   { 
     value: "done", 
