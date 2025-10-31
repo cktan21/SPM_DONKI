@@ -38,6 +38,6 @@ export const priorities: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 export const statuses = [
   { value: "todo", label: "To Do", icon: Loader },
   { value: "ongoing", label: "Ongoing", icon: AlertTriangle },
-  { value: "overdue", label: "Blocked", icon: AlertCircle },
+  { value: "overdue", label: "Overdue", icon: AlertCircle },
   { value: "done", label: "Done", icon: Check },
 ]

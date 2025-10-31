@@ -724,6 +724,7 @@ onMounted(async () => {
                     <SelectContent>
                       <SelectItem value="to do">To-do</SelectItem>
                       <SelectItem value="ongoing">Ongoing</SelectItem>
+                      <SelectItem value="blocked">Blocked</SelectItem>
                       <SelectItem value="done">Done</SelectItem>
                     </SelectContent>
                   </Select>

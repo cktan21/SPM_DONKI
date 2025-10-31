@@ -595,6 +595,7 @@ const createTask = async () => {
                       <SelectItem value="to do">To-do</SelectItem>
                       <SelectItem value="ongoing">Ongoing</SelectItem>
                       <SelectItem value="done">Done</SelectItem>
+                      <SelectItem value="blocked">Blocked</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
