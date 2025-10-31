@@ -390,7 +390,7 @@ onMounted(() => {
   fetchCollaborators()
   
   // Poll for new messages every 10 seconds
-  setInterval(fetchMessages, 10000)
+  setInterval(fetchMessages, 60000)
 })
 </script>
 
