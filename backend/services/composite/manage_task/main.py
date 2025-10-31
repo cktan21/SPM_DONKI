@@ -6,6 +6,8 @@ import os
 from dotenv import load_dotenv
 import logging
 import pytz
+import uuid
+from pydantic import BaseModel
 
 from fastapi.middleware.cors import CORSMiddleware
 from kafka_client import KafkaEventPublisher, EventTypes, Topics
@@ -63,6 +65,22 @@ SCHEDULE_SERVICE_URL = "http://schedule:5300"
 
 # for validating user
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
+
+class MessageAttachment(BaseModel):
+    name: str
+    url: str
+    type: str
+    size: int
+
+class ChatMessage(BaseModel):
+    message: str
+    mentions: Optional[List[str]] = []
+    attachments: Optional[List[MessageAttachment]] = []
+    sender_id: str
+
+class MessageUpdate(BaseModel):
+    message: str
+
 
 async def get_task_participants(task_id) -> List[Dict[str, Any]]:
     """
@@ -1769,6 +1787,394 @@ async def delete_task_composite(
         # Catch-all for unexpected errors
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
+@app.get(
+    "/tasks/{task_id}/messages",
+    summary="Get all chat messages for a task",
+    response_description="List of chat messages with sender details"
+)
+async def get_task_messages(
+    task_id: str = Path(..., description="UUID of the task")
+):
+    """
+    Fetch all chat messages for a specific task.
+    Returns messages with enriched user data (names, avatars).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Get task data (includes messages array)
+            task_resp = await client.get(
+                f"{TASK_SERVICE_URL}/tid/{task_id}",
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if task_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            task_resp.raise_for_status()
+            task_data = task_resp.json().get("task", {})
+            messages = task_data.get("messages", [])
+            
+            # Enrich messages with user data
+            enriched_messages = []
+            user_cache = {}  # Cache to avoid duplicate user fetches
+            
+            for msg in messages:
+                sender_id = msg.get("sender_id")
+                
+                # Fetch user data if not cached
+                if sender_id and sender_id not in user_cache:
+                    try:
+                        user_resp = await client.get(
+                            f"{USERS_SERVICE_URL}/internal/{sender_id}",
+                            headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+                        )
+                        if user_resp.status_code == 200:
+                            user_data = user_resp.json()
+                            user_cache[sender_id] = {
+                                "name": user_data.get("name") or user_data.get("email", "").split("@")[0],
+                                "email": user_data.get("email"),
+                                "avatar": user_data.get("avatar")
+                            }
+                    except Exception as e:
+                        logger.error(f"Failed to fetch user {sender_id}: {e}")
+                        user_cache[sender_id] = {
+                            "name": "Unknown User",
+                            "email": None,
+                            "avatar": None
+                        }
+                
+                # Add user data to message
+                enriched_msg = {
+                    **msg,
+                    "sender": user_cache.get(sender_id, {
+                        "name": "Unknown User",
+                        "email": None,
+                        "avatar": None
+                    })
+                }
+                enriched_messages.append(enriched_msg)
+            
+            return {
+                "task_id": task_id,
+                "messages": enriched_messages,
+                "count": len(enriched_messages)
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.post(
+    "/tasks/{task_id}/messages",
+    summary="Send a new message to task chat",
+    response_description="Created message with enriched data"
+)
+async def send_task_message(
+    task_id: str = Path(..., description="UUID of the task"),
+    message_data: ChatMessage = Body(...)
+):
+    """
+    Send a new chat message to a task.
+    Supports mentions (@username) and file attachments.
+    
+    If users are mentioned, they will receive notifications (future enhancement).
+    """
+    try:
+        sender_id = message_data.sender_id
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Validate task exists and get current messages
+            print(f"[CHAT] Fetching task {task_id}")
+            task_resp = await client.get(
+                f"{TASK_SERVICE_URL}/tid/{task_id}",
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if task_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            task_resp.raise_for_status()
+            task_json = task_resp.json()
+            print(f"[CHAT] Task response: {task_json}")
+            
+            # Handle nested structure
+            task_data = task_json.get("task", task_json)
+            current_messages = task_data.get("messages", [])
+            print(f"[CHAT] Current messages count: {len(current_messages)}")
+            
+            # 2. Get sender info
+            sender_info = {"name": "Unknown User", "email": None}
+            try:
+                print(f"[CHAT] Fetching sender info for {sender_id}")
+                user_resp = await client.get(
+                    f"{USERS_SERVICE_URL}/internal/{sender_id}",
+                    headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+                )
+                if user_resp.status_code == 200:
+                    user_data = user_resp.json()
+                    sender_info = {
+                        "name": user_data.get("name") or user_data.get("email", "").split("@")[0],
+                        "email": user_data.get("email")
+                    }
+                    print(f"[CHAT] Sender info: {sender_info}")
+            except Exception as e:
+                logger.warning(f"Could not fetch sender info: {e}")
+            
+            # 3. Create new message object
+            new_message = {
+                "id": str(uuid.uuid4()),
+                "sender_id": sender_id,
+                "sender_name": sender_info["name"],
+                "message": message_data.message,
+                "mentions": message_data.mentions or [],
+                "attachments": [att.dict() for att in (message_data.attachments or [])],
+                "timestamp": datetime.now(UTC_PLUS_8).isoformat(),
+                "edited": False,
+                "edited_at": None
+            }
+            print(f"[CHAT] New message created: {new_message}")
+            
+            # 4. Append to messages array
+            updated_messages = current_messages + [new_message]
+            print(f"[CHAT] Updated messages count: {len(updated_messages)}")
+            
+            # 5. Update task with new messages array
+            print(f"[CHAT] Updating task at: {TASK_SERVICE_URL}/{task_id}")
+            update_payload = {"messages": updated_messages}
+            print(f"[CHAT] Update payload: {update_payload}")
+            
+            update_resp = await client.put(
+                f"{TASK_SERVICE_URL}/{task_id}",
+                json=update_payload,
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            print(f"[CHAT] Update response status: {update_resp.status_code}")
+            print(f"[CHAT] Update response body: {update_resp.text}")
+            
+            if update_resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to update task messages: {update_resp.text}"
+                )
+            
+            # 6. Send notifications to mentioned users via Kafka
+            if message_data.mentions:
+                try:
+                    notification_data = {
+                        "task_id": task_id,
+                        "task_name": task_data.get("name", "Unknown Task"),
+                        "message": message_data.message,
+                        "sender_id": sender_id,
+                        "sender_name": sender_info["name"],
+                        "mentioned_users": message_data.mentions,
+                        "timestamp": new_message["timestamp"]
+                    }
+                    
+                    # Publish to Kafka
+                    for mentioned_user_id in message_data.mentions:
+                        kafka_publisher.publish_event(
+                            topic=Topics.NOTIFICATION_EVENTS,
+                            event_type="task_mention",
+                            data={**notification_data, "uid": mentioned_user_id}
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to send mention notifications: {e}")
+            
+            print(f"[CHAT] Message sent successfully!")
+            return {
+                "message": "Chat message sent successfully",
+                "data": {
+                    **new_message,
+                    "sender": sender_info
+                }
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.put(
+    "/tasks/{task_id}/messages/{message_id}",
+    summary="Edit a chat message",
+    response_description="Updated message"
+)
+async def edit_task_message(
+    task_id: str = Path(..., description="UUID of the task"),
+    message_id: str = Path(..., description="UUID of the message"),
+    update_data: MessageUpdate = Body(...),
+    user_id: str = Body(..., embed=True, description="ID of user editing (must be sender)")
+):
+    """
+    Edit an existing chat message.
+    Only the original sender can edit their message.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Get task and messages
+            task_resp = await client.get(
+                f"{TASK_SERVICE_URL}/tid/{task_id}",
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if task_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            task_resp.raise_for_status()
+            task_data = task_resp.json().get("task", {})
+            messages = task_data.get("messages", [])
+            
+            # 2. Find and validate message
+            message_found = False
+            updated_messages = []
+            
+            for msg in messages:
+                if msg.get("id") == message_id:
+                    message_found = True
+                    
+                    # Check if user is the sender
+                    if msg.get("sender_id") != user_id:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="You can only edit your own messages"
+                        )
+                    
+                    # Update message
+                    msg["message"] = update_data.message
+                    msg["edited"] = True
+                    msg["edited_at"] = datetime.now(UTC_PLUS_8).isoformat()
+                
+                updated_messages.append(msg)
+            
+            if not message_found:
+                raise HTTPException(status_code=404, detail="Message not found")
+            
+            # 3. Update task
+            update_resp = await client.put(
+                f"{TASK_SERVICE_URL}/{task_id}",
+                json={"messages": updated_messages},
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if update_resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to update message: {update_resp.text}"
+                )
+            
+            return {
+                "message": "Message updated successfully",
+                "message_id": message_id
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.delete(
+    "/tasks/{task_id}/messages/{message_id}",
+    summary="Delete a chat message",
+    response_description="Confirmation of deletion"
+)
+async def delete_task_message(
+    task_id: str = Path(..., description="UUID of the task"),
+    message_id: str = Path(..., description="UUID of the message"),
+    user_id: str = Body(..., embed=True, description="ID of user deleting (must be sender)")
+):
+    """
+    Delete a chat message.
+    Only the original sender can delete their message.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Get task and messages
+            task_resp = await client.get(
+                f"{TASK_SERVICE_URL}/tid/{task_id}",
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if task_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            task_resp.raise_for_status()
+            task_data = task_resp.json().get("task", {})
+            messages = task_data.get("messages", [])
+            
+            # 2. Find and validate message
+            message_found = False
+            updated_messages = []
+            
+            for msg in messages:
+                if msg.get("id") == message_id:
+                    message_found = True
+                    
+                    # Check if user is the sender
+                    if msg.get("sender_id") != user_id:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="You can only delete your own messages"
+                        )
+                    # Skip this message (delete it)
+                    continue
+                
+                updated_messages.append(msg)
+            
+            if not message_found:
+                raise HTTPException(status_code=404, detail="Message not found")
+            
+            # 3. Update task
+            update_resp = await client.put(
+                f"{TASK_SERVICE_URL}/{task_id}",
+                json={"messages": updated_messages},
+                headers={"X-Internal-API-Key": INTERNAL_API_KEY}
+            )
+            
+            if update_resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to delete message: {update_resp.text}"
+                )
+            
+            return {
+                "message": "Message deleted successfully",
+                "message_id": message_id
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 def _safe_json(resp: httpx.Response):
     """

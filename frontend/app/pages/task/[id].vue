@@ -279,7 +279,7 @@ onMounted(async () => {
           />
 
           <!-- Chat -->
-          <TaskChat />
+          <TaskChat :task-id="taskId" />
 
           <!-- Changelog -->
           <TaskChangelog :changelog="changelog" />
