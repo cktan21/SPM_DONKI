@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import type { Row } from '@tanstack/vue-table'
 import type { Task } from '../data/schema'
-import { Check, Loader, AlertTriangle } from 'lucide-vue-next'
+import { Check, Loader, AlertTriangle, AlertCircle } from 'lucide-vue-next'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 
@@ -27,9 +27,9 @@ const statuses = [
   },
   { 
     value: "overdue", 
-    label: "Blocked", 
-    icon: AlertTriangle, 
-    class: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 dark:hover:bg-blue-500/20"
+    label: "Overdue", 
+    icon: AlertCircle, 
+    class: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/20"
   },
   { 
     value: "done", 
