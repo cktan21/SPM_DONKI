@@ -15,7 +15,8 @@ import {
   X,
   File,
   Image as ImageIcon,
-  FileText
+  FileText,
+  Download
 } from 'lucide-vue-next'
 import { useToast } from '@/components/ui/toast'
 
@@ -35,7 +36,7 @@ interface MessageSender {
 
 interface MessageAttachment {
   name: string
-  url: string
+  url: string  // Will be base64 data URL
   type: string
   size: number
 }
@@ -90,6 +91,7 @@ const collaborators = ref<Collaborator[]>([])
 // File attachments
 const attachments = ref<MessageAttachment[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const uploadingFiles = ref(false)
 
 // Format timestamp helper
 const formatTimestamp = (timestamp: string) => {
@@ -152,6 +154,23 @@ const getInitials = (name: string) => {
     .slice(0, 2)
 }
 
+// Convert file to Base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = error => reject(error)
+  })
+}
+
+// Format file size
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
 // Fetch messages
 const fetchMessages = async () => {
   loading.value = true
@@ -174,6 +193,58 @@ const fetchMessages = async () => {
   }
 }
 
+// Handle file selection
+const handleFileSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  
+  // Limit file size to 2MB for demo purposes (base64 makes files larger)
+  const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+  
+  uploadingFiles.value = true
+  
+  try {
+    for (const file of Array.from(input.files)) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: 'File too large',
+          description: `${file.name} exceeds 2MB limit`,
+          variant: 'destructive'
+        })
+        continue
+      }
+      
+      // Convert to base64
+      const base64 = await fileToBase64(file)
+      
+      const attachment: MessageAttachment = {
+        name: file.name,
+        url: base64, // Store base64 data URL
+        type: file.type,
+        size: file.size
+      }
+      
+      attachments.value.push(attachment)
+    }
+    
+    // Reset input
+    input.value = ''
+  } catch (error) {
+    console.error('Failed to process files:', error)
+    toast({
+      title: 'Error',
+      description: 'Failed to process files',
+      variant: 'destructive'
+    })
+  } finally {
+    uploadingFiles.value = false
+  }
+}
+
+const removeAttachment = (index: number) => {
+  attachments.value.splice(index, 1)
+}
+
 // Send message
 const sendMessage = async () => {
   if (!messageInput.value.trim() && attachments.value.length === 0) return
@@ -186,7 +257,6 @@ const sendMessage = async () => {
     let match
     
     while ((match = mentionRegex.exec(messageInput.value)) !== null) {
-      // Find user ID from username
       const username = match[1]
       if (username) {
         const foundUser = collaborators.value.find(c => 
@@ -198,15 +268,18 @@ const sendMessage = async () => {
       }
     }
     
-    // Construct the request body to match backend expectations
+    // Construct the request body
     const requestBody = {
       message: messageInput.value,
       mentions: mentions,
-      attachments: attachments.value,
+      attachments: attachments.value, // Contains base64 URLs
       sender_id: user.value.id
     }
     
-    console.log('[CHAT] Sending message:', requestBody)
+    console.log('[CHAT] Sending message with attachments:', {
+      message: requestBody.message,
+      attachmentCount: requestBody.attachments.length
+    })
     
     await $fetch(`http://localhost:4000/tasks/${props.taskId}/messages`, {
       method: 'POST',
@@ -224,7 +297,6 @@ const sendMessage = async () => {
     })
   } catch (error: any) {
     console.error('Failed to send message:', error)
-    console.error('Error details:', error.data)
     toast({
       title: 'Error',
       description: error.data?.detail || 'Failed to send message',
@@ -305,26 +377,14 @@ const deleteMessage = async (messageId: string) => {
   }
 }
 
-// Handle file upload
-const handleFileSelect = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (!input.files) return
-  
-  Array.from(input.files).forEach(file => {
-    // In production, upload to S3/storage and get URL
-    // For now, we'll use a mock URL
-    const attachment = {
-      name: file.name,
-      url: `https://trubpdneyfrgddhaipgw.storage.supabase.co/storage/v1/s3${file.name}`, // Replace with actual upload
-      type: file.type,
-      size: file.size
-    }
-    attachments.value.push(attachment)
-  })
-}
-
-const removeAttachment = (index: number) => {
-  attachments.value.splice(index, 1)
+// Download attachment
+const downloadAttachment = (attachment: MessageAttachment) => {
+  const link = document.createElement('a')
+  link.href = attachment.url // Base64 data URL
+  link.download = attachment.name
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 // Get file icon based on type
@@ -389,7 +449,7 @@ onMounted(() => {
   fetchMessages()
   fetchCollaborators()
   
-  // Poll for new messages every 10 seconds
+  // Poll for new messages every 60 seconds
   setInterval(fetchMessages, 60000)
 })
 </script>
@@ -406,7 +466,7 @@ onMounted(() => {
     </CardHeader>
 
     <CardContent class="flex-1 flex flex-col overflow-hidden p-0">
-      <!-- Messages Area - Now with proper scrolling -->
+      <!-- Messages Area -->
       <div 
         ref="messagesContainerRef"
         class="flex-1 overflow-y-auto px-6 py-4"
@@ -478,24 +538,57 @@ onMounted(() => {
 
                   <!-- Display mode -->
                   <div v-else>
-                    <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.message }}</p>
+                    <p v-if="msg.message" class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.message }}</p>
 
                     <!-- Attachments -->
-                    <div v-if="msg.attachments && msg.attachments.length > 0" class="mt-2 space-y-1">
-                      <a
+                    <div v-if="msg.attachments && msg.attachments.length > 0" class="mt-3 space-y-2">
+                      <div
                         v-for="(att, idx) in msg.attachments"
                         :key="idx"
-                        :href="att.url"
-                        target="_blank"
-                        :class="`flex items-center gap-2 p-2 rounded ${
+                        :class="`rounded-lg overflow-hidden ${
                           msg.sender_id === user?.id
-                            ? 'bg-blue-700 hover:bg-blue-800'
-                            : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
+                            ? 'bg-blue-700'
+                            : 'bg-white dark:bg-slate-700'
                         }`"
                       >
-                        <component :is="getFileIcon(att.type)" class="w-4 h-4" />
-                        <span class="text-xs truncate">{{ att.name }}</span>
-                      </a>
+                        <!-- Image attachment -->
+                        <div v-if="att.type.startsWith('image/')" class="relative group">
+                          <img
+                            :src="att.url"
+                            :alt="att.name"
+                            class="max-w-xs rounded cursor-pointer hover:opacity-90"
+                            @click="downloadAttachment(att)"
+                          />
+                          <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              class="h-8 w-8 p-0"
+                              @click="downloadAttachment(att)"
+                            >
+                              <Download class="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <!-- Document attachment -->
+                        <button
+                          v-else
+                          @click="downloadAttachment(att)"
+                          :class="`flex items-center gap-2 p-3 w-full text-left hover:opacity-80 transition ${
+                            msg.sender_id === user?.id
+                              ? 'text-white'
+                              : 'text-slate-900 dark:text-slate-100'
+                          }`"
+                        >
+                          <component :is="getFileIcon(att.type)" class="w-5 h-5 flex-shrink-0" />
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium truncate">{{ att.name }}</p>
+                            <p class="text-xs opacity-75">{{ formatFileSize(att.size) }}</p>
+                          </div>
+                          <Download class="w-4 h-4 flex-shrink-0" />
+                        </button>
+                      </div>
                     </div>
 
                     <!-- Timestamp and actions -->
@@ -561,19 +654,39 @@ onMounted(() => {
       </div>
 
       <!-- Attachment preview -->
-      <div v-if="attachments.length > 0" class="flex flex-wrap gap-2 px-6 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
-        <Badge
-          v-for="(att, idx) in attachments"
-          :key="idx"
-          variant="secondary"
-          class="flex items-center gap-1"
-        >
-          <component :is="getFileIcon(att.type)" class="w-3 h-3" />
-          <span class="text-xs">{{ att.name }}</span>
-          <button @click="removeAttachment(idx)">
-            <X class="w-3 h-3" />
-          </button>
-        </Badge>
+      <div v-if="attachments.length > 0" class="px-6 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
+        <div class="flex flex-wrap gap-2">
+          <div
+            v-for="(att, idx) in attachments"
+            :key="idx"
+            class="relative group"
+          >
+            <!-- Image preview -->
+            <div v-if="att.type.startsWith('image/')" class="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-slate-200 dark:border-slate-600">
+              <img :src="att.url" :alt="att.name" class="w-full h-full object-cover" />
+              <button
+                @click="removeAttachment(idx)"
+                class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+
+            <!-- Document preview -->
+            <Badge v-else variant="secondary" class="flex items-center gap-1 pr-1">
+              <component :is="getFileIcon(att.type)" class="w-3 h-3" />
+              <span class="text-xs max-w-[100px] truncate">{{ att.name }}</span>
+              <button @click="removeAttachment(idx)" class="hover:bg-slate-300 rounded p-0.5">
+                <X class="w-3 h-3" />
+              </button>
+            </Badge>
+          </div>
+        </div>
+        
+        <!-- File size warning -->
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+          {{ attachments.length }} file(s) attached • Max 2MB per file
+        </p>
       </div>
 
       <!-- Message Input -->
@@ -582,6 +695,7 @@ onMounted(() => {
           ref="fileInput"
           type="file"
           multiple
+          accept="image/*,.pdf,.doc,.docx,.txt"
           class="hidden"
           @change="handleFileSelect"
         />
@@ -590,8 +704,9 @@ onMounted(() => {
           size="icon"
           class="h-10 w-10 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
           @click="fileInput?.click()"
+          :disabled="uploadingFiles"
         >
-          <Paperclip class="w-5 h-5" />
+          <Paperclip class="w-5 h-5" :class="{ 'animate-pulse': uploadingFiles }" />
         </Button>
         <Input
           v-model="messageInput"
@@ -603,11 +718,12 @@ onMounted(() => {
             mentionCursorPosition = target.selectionStart || 0
           }"
           class="flex-1 text-sm border-slate-200 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
+          :disabled="uploadingFiles"
         />
         <Button
           @click="sendMessage"
           size="icon"
-          :disabled="!messageInput.trim() && attachments.length === 0"
+          :disabled="(!messageInput.trim() && attachments.length === 0) || uploadingFiles"
           class="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-50"
         >
           <Send class="w-5 h-5" />
