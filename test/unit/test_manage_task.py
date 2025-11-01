@@ -4,6 +4,8 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+# Add the service directory to Python path so kafka_client can be found
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/services/composite/manage_task")))
 from backend.services.composite.manage_task import main
 
 pytestmark = pytest.mark.asyncio

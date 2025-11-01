@@ -72,6 +72,18 @@ class EmailService:
                 # Handle task assigned event
                 logger.info(f"📝 Handling task assigned event: {data}")
                 self._handle_task_assigned(data)
+            elif event_type == EventTypes.PROJECT_COLLABORATOR_ADDED:
+                # Handle project collaborator added event
+                logger.info(f"👥 Handling project collaborator added event: {data}")
+                self._handle_project_collaborator_added(data)
+            elif event_type == EventTypes.TASK_DELETED:
+                # Handle task deleted event
+                logger.info(f"🗑️ Handling task deleted event: {data}")
+                self._handle_task_deleted(data)
+            elif event_type == EventTypes.TASK_UPDATED:
+                # Handle task updated event
+                logger.info(f"📝 Handling task updated event: {data}")
+                self._handle_task_updated(data)
             else:
                 logger.warning(f"❓ Unknown event type: {event_type}")
                 
@@ -155,6 +167,82 @@ class EmailService:
             self.send_email(to_email, subject, body)
         else:
             logger.warning("No email address provided in notification data")
+    
+    def _handle_project_collaborator_added(self, data: dict):
+        """Handle project collaborator added events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        project_id = data.get('project_id')
+        project_name = data.get('project_name', 'Unknown Project')
+        department = data.get('department')
+        added_by_name = data.get('added_by_name', 'System')
+        task_name = data.get('task_name', 'Unknown Task')
+        
+        subject = data.get('subject', f"Added to Project: {project_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nYou have been added as a member to the project "{project_name}" (ID: {project_id}) because you are involved in the task "{task_name}".\n\nThis means you now have access to all project resources and will receive updates about project activities.\n\nAdded by: {added_by_name}\n\nPlease check your dashboard for more project details.\n\nBest regards,\nProject Management System')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in project collaborator notification data")
+    
+    def _handle_task_deleted(self, data: dict):
+        """Handle task deleted events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        task_id = data.get('tid')
+        task_name = data.get('task_name', 'Unknown Task')
+        department = data.get('department')
+        # deleted_by_name = data.get('deleted_by_name', 'System')
+        project_name = data.get('project_name', 'Unknown Project')
+        
+        subject = data.get('subject', f"Task Deleted: {task_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" has been deleted.\n\nThis task is no longer available and has been removed from your task list.\n\nIf you have any questions about this deletion, please contact your project manager.\n\nBest regards,\nProject Management System')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in task deletion notification data")
+    
+    def _handle_task_updated(self, data: dict):
+        """Handle task updated events"""
+        # Extract email details from the event data
+        to_email = data.get('email')
+        name = data.get('name')
+        task_id = data.get('tid')
+        task_name = data.get('task_name', 'Unknown Task')
+        department = data.get('department')
+        # updated_by_name = data.get('updated_by_name', 'System')
+        project_name = data.get('project_name', 'Unknown Project')
+        changes = data.get('changes', {})
+        
+        # Build changes description
+        changes_text = ""
+        if changes:
+            changes_list = []
+            if 'status' in changes:
+                changes_list.append(f"Status: {changes['status']}")
+            if 'priority' in changes:
+                changes_list.append(f"Priority: {changes['priority']}")
+            if 'deadline' in changes:
+                changes_list.append(f"Deadline: {changes['deadline']}")
+            if 'description' in changes:
+                changes_list.append("Description updated")
+            if 'title' in changes:
+                changes_list.append("Title updated")
+            
+            if changes_list:
+                changes_text = f"\n\nChanges made:\n" + "\n".join(f"• {change}" for change in changes_list)
+        
+        subject = data.get('subject', f"Task Updated: {task_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" has been updated.{changes_text}\n\nPlease check your dashboard for the latest task details.\n\nBest regards,\nProject Management System')
+        
+        if to_email:
+            self.send_email(to_email, subject, body)
+        else:
+            logger.warning("No email address provided in task update notification data")
     
     def _handle_notification_delivered(self, data: dict):
         """Handle notification delivered events"""

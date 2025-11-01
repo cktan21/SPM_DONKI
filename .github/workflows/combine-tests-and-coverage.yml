@@ -49,7 +49,9 @@ jobs:
                     pytest-cov \
                     pytest-asyncio \
                     python-dateutil \
-                    apscheduler
+                    apscheduler \
+                    pytz \
+                    kafka-python-ng
 
             - name: Run Unit Tests (pytest) with coverage
               run: |

@@ -291,3 +291,48 @@ Sample Output:
     "notes": "Optional notes"
   }
 }
+
+### Get task participants
+
+GET http://localhost:5500/task-participants/{task_id}
+
+> http://localhost:5500/task-participants/2a562d6a-2de8-4f3d-9a7f-1f317347c217
+
+Sample Output:
+```json
+{
+  "message": "2 participant(s) retrieved",
+  "participants": [
+    {
+      "sid": "38f45244-a856-48e4-b3a4-ee2c230aaa7e",
+      "tid": "2a562d6a-2de8-4f3d-9a7f-1f317347c217",
+      "task_name": "Im a gorrilla",
+      "start": "2025-10-25T09:00:00+00:00",
+      "deadline": "2025-10-30T17:00:00+00:00",
+      "user_id": "655a9260-f871-480f-abea-ded735b2170a",
+      "user_name": "testManager",
+      "user_email": "testmanager@example.com",
+      "user_role": "manager",
+      "department": "Tech",
+      "phone": null,
+      "is_creator": false,
+      "is_collaborator": true
+    },
+    {
+      "sid": "38f45244-a856-48e4-b3a4-ee2c230aaa7e",
+      "tid": "2a562d6a-2de8-4f3d-9a7f-1f317347c217",
+      "task_name": "Im a gorrilla",
+      "start": "2025-10-25T09:00:00+00:00",
+      "deadline": "2025-10-30T17:00:00+00:00",
+      "user_id": "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+      "user_name": "test staff",
+      "user_email": "teststaff@example.com",
+      "user_role": "staff",
+      "department": "Tech",
+      "phone": null,
+      "is_creator": true,
+      "is_collaborator": false
+    }
+  ]
+}
+```

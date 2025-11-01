@@ -109,14 +109,14 @@ schedule_client = ScheduleClient()
 def read_root():
     return {"message": "Notify User Service is running 🚀😌"}
 
-@app.get("/health")
-def health_check():
-    """Health check endpoint for service monitoring"""
-    return {
-        "status": "healthy",
-        "service": "notify_user",
-        "timestamp": datetime.now(UTC_PLUS_8).isoformat()
-    }
+# @app.get("/health")
+# def health_check():
+#     """Health check endpoint for service monitoring"""
+#     return {
+#         "status": "healthy",
+#         "service": "notify_user",
+#         "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+#     }
 
 @app.get("/favicon.ico")
 async def get_favicon():

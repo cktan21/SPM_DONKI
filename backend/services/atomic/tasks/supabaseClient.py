@@ -64,6 +64,11 @@ class SupabaseClient:
         resp = query.execute()
         return getattr(resp, "data", None) or []
     
+    def get_task(self, task_id: str):
+        """Get a single task by its ID"""
+        response = self.client.table("TASK").select("*").eq("id", task_id).execute()
+        return response.data[0] if response.data else None
+    
     def get_task_participants(self, tid: str):
         """Get all participants for a task"""
         response = self.client.table("schedule_participants").select("*").eq("tid", tid).execute()
