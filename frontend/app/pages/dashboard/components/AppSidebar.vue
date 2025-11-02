@@ -12,6 +12,7 @@ import {
   Map,
   PieChart,
   ClipboardList,
+  ChartNoAxesColumnIncreasing,
   Settings2,
   SquareTerminal,
 } from "lucide-vue-next"
@@ -89,7 +90,7 @@ const data = {
   ],
   projects: [
     ...(["staff","manager"].includes(userData.value?.user?.role)
-      ? [{ name: "Task", url: "/task", icon: CheckSquare}]
+      ? [{ name: "Task", url: "/task", icon: CheckSquare}, { name: "Timeline", url: "/timeline", icon: ChartNoAxesColumnIncreasing }]
       : []),
     ...(["manager"].includes(userData.value?.user?.role)
       ? [{ name: "Assign Task", url: "/assignTask", icon: ClipboardList }]
