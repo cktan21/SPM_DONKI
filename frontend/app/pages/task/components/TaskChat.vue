@@ -76,6 +76,7 @@ const user = computed(() => userData.value?.user)
 
 const { toast } = useToast()
 const messageInput = ref('')
+const messageInputRef = ref<InstanceType<typeof Input> | null>(null)
 const messages = ref<ChatMessage[]>([])
 const loading = ref(false)
 const messagesContainerRef = ref<HTMLElement | null>(null)
@@ -405,21 +406,39 @@ const scrollToBottom = () => {
   })
 }
 
-// Mention autocomplete logic
-watch(messageInput, (newVal) => {
+// ✅ FIXED: Mention autocomplete logic - show dropdown immediately after @
+const updateMentionDropdown = () => {
   const cursorPos = mentionCursorPosition.value
-  const textBeforeCursor = newVal.slice(0, cursorPos)
+  const textBeforeCursor = messageInput.value.slice(0, cursorPos)
   const atIndex = textBeforeCursor.lastIndexOf('@')
   
-  if (atIndex !== -1 && atIndex === textBeforeCursor.length - 1) {
-    showMentionDropdown.value = true
-    mentionSearchTerm.value = ''
-  } else if (atIndex !== -1 && textBeforeCursor.slice(atIndex).includes('@')) {
-    showMentionDropdown.value = true
-    mentionSearchTerm.value = textBeforeCursor.slice(atIndex + 1)
-  } else {
-    showMentionDropdown.value = false
+  // Show dropdown if @ is found and no space after it
+  if (atIndex !== -1) {
+    const textAfterAt = textBeforeCursor.slice(atIndex + 1)
+    // Check if there's no space after @
+    if (!textAfterAt.includes(' ')) {
+      showMentionDropdown.value = true
+      mentionSearchTerm.value = textAfterAt
+      return
+    }
   }
+  
+  showMentionDropdown.value = false
+  mentionSearchTerm.value = ''
+}
+
+watch(messageInput, () => {
+  updateMentionDropdown()
+})
+
+// Filtered collaborators for mention dropdown
+const filteredCollaborators = computed(() => {
+  if (!mentionSearchTerm.value) {
+    return collaborators.value
+  }
+  return collaborators.value.filter(c => 
+    c.name.toLowerCase().includes(mentionSearchTerm.value.toLowerCase())
+  )
 })
 
 // Fetch collaborators for mentions
@@ -437,11 +456,41 @@ const fetchCollaborators = async () => {
 // Insert mention
 const insertMention = (collaborator: Collaborator) => {
   const atIndex = messageInput.value.lastIndexOf('@')
-  messageInput.value = 
+  const newText = 
     messageInput.value.slice(0, atIndex) + 
     `@${collaborator.name} ` + 
     messageInput.value.slice(mentionCursorPosition.value)
+  
+  messageInput.value = newText
+  
+  // Update cursor position to after the inserted mention
+  const newCursorPos = atIndex + collaborator.name.length + 2 // +2 for @ and space
+  mentionCursorPosition.value = newCursorPos
+  
+  // Close dropdown
   showMentionDropdown.value = false
+  mentionSearchTerm.value = ''
+  
+  // Focus back on input and set cursor position
+  nextTick(() => {
+    const inputEl = messageInputRef.value?.$el?.querySelector('input') || messageInputRef.value?.$el
+    if (inputEl && typeof inputEl.focus === 'function') {
+      inputEl.focus()
+      if (typeof inputEl.setSelectionRange === 'function') {
+        inputEl.setSelectionRange(newCursorPos, newCursorPos)
+      }
+    }
+  })
+}
+
+// Handle input change to track cursor position
+const handleInputChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  mentionCursorPosition.value = target.selectionStart || 0
+  // Trigger mention dropdown update
+  nextTick(() => {
+    updateMentionDropdown()
+  })
 }
 
 // Lifecycle
@@ -465,7 +514,7 @@ onMounted(() => {
       </CardDescription>
     </CardHeader>
 
-    <CardContent class="flex-1 flex flex-col overflow-hidden p-0">
+    <CardContent class="flex-1 flex flex-col overflow-hidden p-0 relative">
       <!-- Messages Area -->
       <div 
         ref="messagesContainerRef"
@@ -633,21 +682,21 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Mention dropdown -->
+      <!-- ✅ FIXED: Mention dropdown - now contained within chatbox -->
       <div
-        v-if="showMentionDropdown && collaborators.length > 0"
-        class="absolute bottom-20 left-4 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50"
+        v-if="showMentionDropdown && filteredCollaborators.length > 0"
+        class="absolute bottom-[calc(100%-24rem)] left-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50"
       >
         <button
-          v-for="collab in collaborators.filter(c => 
-            c.name.toLowerCase().includes(mentionSearchTerm.toLowerCase())
-          )"
+          v-for="collab in filteredCollaborators"
           :key="collab.id"
           @click="insertMention(collab)"
-          class="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+          class="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
         >
           <Avatar class="h-6 w-6">
-            <AvatarFallback class="text-xs">{{ getInitials(collab.name) }}</AvatarFallback>
+            <AvatarFallback class="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              {{ getInitials(collab.name) }}
+            </AvatarFallback>
           </Avatar>
           <span class="text-sm">{{ collab.name }}</span>
         </button>
@@ -709,14 +758,14 @@ onMounted(() => {
           <Paperclip class="w-5 h-5" :class="{ 'animate-pulse': uploadingFiles }" />
         </Button>
         <Input
+          ref="messageInputRef"
           v-model="messageInput"
           type="text"
           placeholder="Type a message... (use @ to mention)"
           @keyup.enter="sendMessage"
-          @input="(e: Event) => {
-            const target = e.target as HTMLInputElement
-            mentionCursorPosition = target.selectionStart || 0
-          }"
+          @input="handleInputChange"
+          @keyup="handleInputChange"
+          @click="handleInputChange"
           class="flex-1 text-sm border-slate-200 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
           :disabled="uploadingFiles"
         />
