@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Task and Project interfaces
+interface CreatedBy {
+  id: string
+  name: string
+}
+
 interface Collaborator {
   id: string
   name: string
@@ -16,6 +21,7 @@ interface Task {
   id: string
   name: string
   created_by_uid: string
+  created_by?: CreatedBy
   updated_timestamp: string
   parentTaskId: string | null
   collaborators: Collaborator[] | null
@@ -112,6 +118,7 @@ const mainTasks = computed(() => {
 
   // Admin, Manager, and HR can see ALL tasks
   const hasFullAccess = ['admin', 'manager', 'hr'].includes(userRole)
+  console.log('User Role:', userRole, 'Has Full Access:', hasFullAccess)
 
   // Step 1️⃣: Get only the main tasks that the user can access
   const visibleMainTasks = allTasks.filter(task => {
@@ -119,6 +126,7 @@ const mainTasks = computed(() => {
 
     // Full access roles see everything
     if (hasFullAccess) return true
+    
 
     // Staff only see tasks they created or collaborate on
     const isCreator = task.created_by_uid === currentUserId
@@ -234,27 +242,53 @@ const chartSegments = computed(() => {
 })
 
 // Get unique collaborators from accessible tasks only (including subtasks) + current user
+// Get unique collaborators from accessible tasks only (including subtasks) + current user
 const uniqueCollaborators = computed(() => {
   if (!selectedProject.value?.tasks || !userData.value?.user?.id) return []
 
   const collabMap = new Map<string, { id: string; name: string }>()
   const currentUserId = userData.value.user.id
   const currentUserName = userData.value.user.name
-  const accessibleParentIds = new Set(mainTasks.value.map(t => t.id))
+  const userRole = userData.value.user.role?.toLowerCase() || 'staff'
+  
+  // Check if user has full access (admin, manager, hr)
+  const hasFullAccess = ['admin', 'manager', 'hr'].includes(userRole)
   
   // Add current user first
   collabMap.set(currentUserId, { id: currentUserId, name: currentUserName })
   
-  // Iterate through all tasks
-  selectedProject.value.tasks.forEach(task => {
-    // Include task if it's a main task the user has access to, or a subtask of an accessible parent
-    const isAccessibleMainTask = !task.parentTaskId && (
-      task.created_by_uid === currentUserId || 
-      task.collaborators?.some(c => c && c.id === currentUserId)
-    )
-    const isAccessibleSubtask = task.parentTaskId && accessibleParentIds.has(task.parentTaskId)
+  // Helper function to add creator to collabMap
+  const addCreatorToMap = async (creatorId: string) => {
+    if (!creatorId || collabMap.has(creatorId)) return
     
-    if (isAccessibleMainTask || isAccessibleSubtask) {
+    try {
+      const res = await fetch(`http://user:5100/internal/${creatorId}`, {
+        headers: { 'Content-Type': 'application/json' }
+      })
+      if (res.ok) {
+        const userData = await res.json()
+        const name = userData.name || userData.email?.split('@')[0] || 'Unknown User'
+        collabMap.set(creatorId, { id: creatorId, name })
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch creator ${creatorId}:`, err)
+    }
+  }
+
+  // ✅ If user has full access, show ALL collaborators + creators from ALL tasks
+  if (hasFullAccess) {
+    selectedProject.value.tasks.forEach(task => {
+      // Add task creator
+      if (task.created_by_uid && !collabMap.has(task.created_by_uid)) {
+        // For now, add with ID only - you may want to fetch the name separately
+        const creatorName = task.created_by?.name || `User ${task.created_by_uid.slice(0, 8)}`
+        collabMap.set(task.created_by_uid, { 
+          id: task.created_by_uid, 
+          name: creatorName
+        })
+      }
+      
+      // Add collaborators
       if (task.collaborators && Array.isArray(task.collaborators)) {
         task.collaborators.forEach(collab => {
           if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
@@ -263,8 +297,39 @@ const uniqueCollaborators = computed(() => {
           }
         })
       }
-    }
-  })
+    })
+  } else {
+    // Staff: only show collaborators + creators from accessible tasks
+    const accessibleParentIds = new Set(mainTasks.value.map(t => t.id))
+    
+    selectedProject.value.tasks.forEach(task => {
+      const isAccessibleMainTask = !task.parentTaskId && (
+        task.created_by_uid === currentUserId || 
+        task.collaborators?.some(c => c && c.id === currentUserId)
+      )
+      const isAccessibleSubtask = task.parentTaskId && accessibleParentIds.has(task.parentTaskId)
+      
+      if (isAccessibleMainTask || isAccessibleSubtask) {
+        // Add task creator
+        if (task.created_by_uid && !collabMap.has(task.created_by_uid)) {
+          collabMap.set(task.created_by_uid, { 
+            id: task.created_by_uid, 
+            name: `Creator ${task.created_by_uid.slice(0, 8)}` 
+          })
+        }
+        
+        // Add collaborators
+        if (task.collaborators && Array.isArray(task.collaborators)) {
+          task.collaborators.forEach(collab => {
+            if (collab && typeof collab === 'object' && 'id' in collab && 'name' in collab) {
+              const collaborator = collab as { id: string; name: string }
+              collabMap.set(collaborator.id, { id: collaborator.id, name: collaborator.name })
+            }
+          })
+        }
+      }
+    })
+  }
 
   return Array.from(collabMap.values()).map((collab, index) => ({
     id: collab.id,
