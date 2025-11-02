@@ -90,11 +90,11 @@ const data = {
   ],
   projects: [
     ...(["staff","manager"].includes(userData.value?.user?.role)
-      ? [{ name: "Task", url: "/task", icon: CheckSquare}, { name: "Timeline", url: "/timeline", icon: ChartNoAxesColumnIncreasing }]
+      ? [{ name: "Timeline", url: "/timeline", icon: ChartNoAxesColumnIncreasing }]
       : []),
-    ...(["manager"].includes(userData.value?.user?.role)
-      ? [{ name: "Assign Task", url: "/assignTask", icon: ClipboardList }]
-      : []),
+    // ...(["manager"].includes(userData.value?.user?.role)
+    //   ? [{ name: "Assign Task", url: "/assignTask", icon: ClipboardList }]
+    //   : []),
     ...(["hr"].includes(userData.value?.user?.role)
       ? [{ name: "Create Signup", url: "/auth/signup", icon: ClipboardList }]
       : []),
