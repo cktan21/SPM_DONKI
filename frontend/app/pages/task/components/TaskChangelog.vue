@@ -49,9 +49,9 @@ const getChangeDescription = (log: any) => {
     const changedFields = log.changed_fields || []
     const delta = log.delta || {}
     
-    // If no changed fields or only updated_timestamp, it's a generic update
+    // Filter out messages, updated_timestamp, and created_at
     const meaningfulFields = changedFields.filter((f: string) => 
-      f !== 'updated_timestamp' && f !== 'created_at'
+      f !== 'updated_timestamp' && f !== 'created_at' && f !== 'messages'
     )
     
     if (meaningfulFields.length === 0) {
@@ -186,6 +186,20 @@ const processedChangelog = computed(() => {
   
   // Sort from newest to oldest (reverse chronological)
   return props.changelog
+    .filter(log => {
+      // Skip entries that only update messages (chat messages)
+      if (log.operation?.toLowerCase() === 'update') {
+        const changedFields = log.changed_fields || []
+        const meaningfulFields = changedFields.filter((f: string) => 
+          f !== 'updated_timestamp' && f !== 'created_at' && f !== 'messages'
+        )
+        // If only messages (and timestamp) changed, skip this entry
+        if (meaningfulFields.length === 0) {
+          return false
+        }
+      }
+      return true
+    })
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .map((log, index, array) => ({
       step: index + 1,
