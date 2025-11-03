@@ -189,7 +189,7 @@ def test_fetch_schedule_by_tid_latest_found(mock_client, supabase_client):
     mock_client.table.assert_called_once_with("SCHEDULE")
     mock_table.select.assert_called_once_with("*")
     mock_table.select.return_value.eq.assert_called_once_with("tid", tid)
-    mock_table.select.return_value.eq.return_value.order.assert_called_once_with("created_at", desc=True)
+    mock_table.select.return_value.eq.return_value.order.assert_called_once_with("start", desc=True)
     mock_table.select.return_value.eq.return_value.order.return_value.limit.assert_called_once_with(1)
     assert result == expected
 
