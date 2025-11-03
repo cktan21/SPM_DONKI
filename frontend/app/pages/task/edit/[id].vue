@@ -15,7 +15,8 @@ import { useToast } from "@/components/ui/toast"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { TriangleAlert, Loader2, ArrowLeft } from "lucide-vue-next"
+import { Badge } from "@/components/ui/badge"
+import { TriangleAlert, Loader2, ArrowLeft, Clock, Plus, X, Timer } from "lucide-vue-next"
 
 // --- Setup ---
 const router = useRouter()
@@ -31,6 +32,25 @@ const userData = useState<any>("userData")
 // --- Authorization State ---
 const canEditAll = ref(false)
 const canEditCollaborators = ref(false)
+
+// --- Time Logger State ---
+interface TimeEntry {
+  id: string
+  hours: number
+  minutes: number
+  description: string
+  date: string
+  userId: string
+  userName: string
+}
+
+const timeEntries = ref<TimeEntry[]>([])
+const newTimeEntry = ref({
+  hours: 0,
+  minutes: 0,
+  description: ""
+})
+const isAddingTime = ref(false)
 
 // --- Form State ---
 const formEdit = ref({
@@ -71,6 +91,26 @@ const projectTasks = ref<{ id: string; name: string }[]>([])
 const isParentTaskPopoverOpen = ref(false)
 const parentTaskSearchQuery = ref("")
 
+// --- Time Logger Computed ---
+const totalTimeSpent = computed(() => {
+  const total = timeEntries.value.reduce((acc, entry) => {
+    return acc + (entry.hours * 60) + entry.minutes
+  }, 0)
+  
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  
+  return { hours, minutes, total }
+})
+
+const formattedTotalTime = computed(() => {
+  const { hours, minutes } = totalTimeSpent.value
+  if (hours === 0 && minutes === 0) return "No time logged"
+  if (hours === 0) return `${minutes}m`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes}m`
+})
+
 const handleBack = () => router.back()
 
 const getUserName = (id: string) =>
@@ -88,7 +128,7 @@ const filteredUsers = computed(() =>
 const filteredTasks = computed(() =>
   projectTasks.value.filter(t =>
     t.name.toLowerCase().includes(parentTaskSearchQuery.value.toLowerCase()) &&
-    t.id !== taskId.value // Exclude current task
+    t.id !== taskId.value
   )
 )
 
@@ -179,7 +219,6 @@ const nextOccurrence = computed(() => {
   )
 })
 
-// Watch for changes in recurring settings
 watch(
   () => [
     formEdit.value.isRecurring,
@@ -190,6 +229,73 @@ watch(
     // Trigger next occurrence recalculation
   }
 )
+
+// --- Time Logger Functions ---
+const addTimeEntry = () => {
+  if (newTimeEntry.value.hours === 0 && newTimeEntry.value.minutes === 0) {
+    toast({
+      title: "Invalid time",
+      description: "Please enter at least 1 minute",
+      variant: "destructive"
+    })
+    return
+  }
+
+  const entry: TimeEntry = {
+    id: Date.now().toString(),
+    hours: newTimeEntry.value.hours,
+    minutes: newTimeEntry.value.minutes,
+    description: newTimeEntry.value.description,
+    date: new Date().toISOString(),
+    userId: userData.value?.user?.id || "",
+    userName: userData.value?.user?.name || "Unknown User"
+  }
+
+  timeEntries.value.unshift(entry)
+  
+  // Reset form
+  newTimeEntry.value = {
+    hours: 0,
+    minutes: 0,
+    description: ""
+  }
+  
+  isAddingTime.value = false
+
+  toast({
+    title: "Time logged successfully!",
+    description: `Added ${entry.hours}h ${entry.minutes}m`
+  })
+}
+
+const removeTimeEntry = (id: string) => {
+  timeEntries.value = timeEntries.value.filter(e => e.id !== id)
+  toast({
+    title: "Time entry removed"
+  })
+}
+
+const formatTimeEntry = (entry: TimeEntry) => {
+  if (entry.hours === 0) return `${entry.minutes}m`
+  if (entry.minutes === 0) return `${entry.hours}h`
+  return `${entry.hours}h ${entry.minutes}m`
+}
+
+const formatEntryDate = (dateString: string) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays === 1) return "Yesterday"
+  if (diffDays < 7) return `${diffDays}d ago`
+  
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 // --- Fetch All Users ---
 const fetchAllUsers = async () => {
@@ -283,7 +389,6 @@ const fetchTaskData = async () => {
     console.log("Fetched task data:", task)
     console.log("Schedule data:", scheduleData)
 
-    // Fill form fields
     formEdit.value.name = task.name || ""
     formEdit.value.pid = task.pid || ""
     formEdit.value.parentTaskId = task.parentTaskId || ""
@@ -295,12 +400,10 @@ const fetchTaskData = async () => {
     formEdit.value.label = task.label || ""
     formEdit.value.createdByUid = task.created_by_uid || ""
     
-    // Recurring task fields
     const isRecurring = task.is_recurring ?? scheduleData.is_recurring ?? false
     formEdit.value.isRecurring = isRecurring ? "true" : "false"
     formEdit.value.frequency = task.frequency || scheduleData.frequency || ""
 
-    // Convert ISO strings to DateValue
     const startISO = task.start || scheduleData.start
     const deadlineISO = task.deadline || scheduleData.deadline
     
@@ -309,7 +412,6 @@ const fetchTaskData = async () => {
     startDate.value = startISO ? parseDate(startISO.slice(0, 10)) : undefined
     deadline.value = deadlineISO ? parseDate(deadlineISO.slice(0, 10)) : undefined
 
-    // Handle collaborators
     if (Array.isArray(task.collaborators)) {
       const collaboratorIds = task.collaborators
         .map((c: any) => (typeof c === "string" ? c : c?.id))
@@ -319,7 +421,6 @@ const fetchTaskData = async () => {
       formEdit.value.collaboratorsCsv = collaboratorIds.join(", ")
     }
 
-    // Fetch project tasks for parent task dropdown
     if (formEdit.value.pid) {
       await fetchProjectTasks(formEdit.value.pid)
     }
@@ -379,7 +480,6 @@ const updateTask = async () => {
       
       payload.is_recurring = formEdit.value.isRecurring === "true"
       if (!payload.is_recurring) {
-        // Clear out recurring-only fields
         payload.frequency = null
         payload.next_occurrence = null
       }
@@ -460,6 +560,144 @@ onMounted(async () => {
               <AlertTitle>Limited Edit Access</AlertTitle>
               <AlertDescription>As a manager, you can only modify collaborators for this task.</AlertDescription>
             </Alert>
+
+            <!-- Time Logger Section -->
+            <Card class="border-2 shadow-sm">
+              <CardHeader class="pb-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="p-2 bg-primary/10 rounded-lg">
+                      <Timer class="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle class="text-xl">Time Tracking</CardTitle>
+                      <CardDescription class="text-sm mt-1">
+                        Log time spent working on this task
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-2xl font-bold text-primary">
+                      {{ formattedTotalTime }}
+                    </div>
+                    <div class="text-xs text-muted-foreground">
+                      Total logged
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent class="space-y-4">
+                <!-- Add Time Entry Form -->
+                <div v-if="isAddingTime" class="p-4 border-2 border-dashed rounded-lg space-y-4 bg-muted/30">
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="space-y-2">
+                      <Label for="time-hours" class="text-sm font-medium">Hours</Label>
+                      <Input
+                        id="time-hours"
+                        v-model.number="newTimeEntry.hours"
+                        type="number"
+                        min="0"
+                        max="999"
+                        placeholder="0"
+                        class="text-center text-lg font-medium"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="time-minutes" class="text-sm font-medium">Minutes</Label>
+                      <Input
+                        id="time-minutes"
+                        v-model.number="newTimeEntry.minutes"
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="0"
+                        class="text-center text-lg font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="flex gap-2">
+                    <Button
+                      type="button"
+                      @click="addTimeEntry"
+                      class="flex-1"
+                      size="sm"
+                    >
+                      <Plus class="h-4 w-4 mr-2" />
+                      Log Time
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      @click="isAddingTime = false"
+                      size="sm"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+
+                <!-- Add Time Button -->
+                <Button
+                  v-else
+                  type="button"
+                  variant="outline"
+                  @click="isAddingTime = true"
+                  class="w-full border-dashed"
+                >
+                  <Plus class="h-4 w-4 mr-2" />
+                  Add Time Entry
+                </Button>
+
+                <!-- Time Entries List -->
+                <div v-if="timeEntries.length > 0" class="space-y-2">
+                  <Separator class="my-4" />
+                  <div class="space-y-2 max-h-80 overflow-y-auto">
+                    <div
+                      v-for="entry in timeEntries"
+                      :key="entry.id"
+                      class="group flex items-start justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    >
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                          <Badge variant="secondary" class="font-mono">
+                            <Clock class="h-3 w-3 mr-1" />
+                            {{ formatTimeEntry(entry) }}
+                          </Badge>
+                          <span class="text-xs text-muted-foreground">
+                            {{ formatEntryDate(entry.date) }}
+                          </span>
+                        </div>
+                        <p v-if="entry.description" class="text-sm text-muted-foreground truncate">
+                          {{ entry.description }}
+                        </p>
+                        <p class="text-xs text-muted-foreground mt-1">
+                          by {{ entry.userName }}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        @click="removeTimeEntry(entry.id)"
+                      >
+                        <X class="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else-if="!isAddingTime" class="text-center py-8 text-muted-foreground">
+                  <Clock class="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p class="text-sm">No time entries yet</p>
+                  <p class="text-xs mt-1">Click "Add Time Entry" to start tracking</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Separator />
 
             <!-- Task Information Section -->
             <div class="space-y-4">
