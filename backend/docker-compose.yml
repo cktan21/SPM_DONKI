@@ -146,7 +146,7 @@ services:
         ports: ["4000:4000"]
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9093
             TZ: Asia/Singapore
         develop:
             watch:
@@ -171,7 +171,7 @@ services:
         ports: ["4100:4100"]
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9093
             TZ: Asia/Singapore
         develop:
             watch:
@@ -199,7 +199,7 @@ services:
             - email
         environment:
             INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9093
             TZ: Asia/Singapore
         develop:
             watch:
@@ -224,7 +224,7 @@ services:
             kafka:
                 condition: service_healthy
         environment:
-            KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+            KAFKA_BOOTSTRAP_SERVERS: kafka:9093
             SMTP_SERVER: ${SMTP_SERVER}
             SMTP_PORT: ${SMTP_PORT}
             SMTP_USER: ${SMTP_USER}
@@ -255,7 +255,7 @@ services:
         environment:
             # Listeners
             KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
-            KAFKA_ADVERTISED_LISTENERS: HOST://kafka:9092,DOCKER://kafka:9093
+            KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:9093 #localhost->kafka 9092, docker->kafka 9093
             KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
 
             # KRaft
@@ -291,7 +291,7 @@ services:
     #         KAFKA_PROCESS_ROLES: "broker,controller"
     #         KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
     #         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
-    #         KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+    #         KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9093"
     #         KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
     #         KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
     #         KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
@@ -316,7 +316,7 @@ services:
         environment:
             DYNAMIC_CONFIG_ENABLED: "true"
             KAFKA_CLUSTERS_0_NAME: spm-cluster
-            KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+            KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
 
     # kafka-setup:
     #     image: apache/kafka-native:4.0.0
@@ -328,13 +328,13 @@ services:
     #         - /bin/sh
     #         - -lc
     #         - |
-    #             echo "Waiting for kafka:9092..." ;
+    #             echo "Waiting for kafka:9093..." ;
     #             for i in $(seq 1 10); do
-    #             /usr/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break ;
+    #             /usr/bin/kafka-topics.sh --bootstrap-server kafka:9093 --list >/dev/null 2>&1 && break ;
     #             sleep 2 ;
     #             done ;
     #             echo "Creating topic notification-events if missing..." ;
-    #             /usr/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+    #             /usr/bin/kafka-topics.sh --bootstrap-server kafka:9093 --create --if-not-exists \
     #             --topic notification-events --partitions 1 --replication-factor 1 || true ;
     #             echo "Done."
     #     restart: "no"

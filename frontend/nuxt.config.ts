@@ -4,6 +4,13 @@ export default defineNuxtConfig({
     devtools: { enabled: true },
 
     modules: ['@nuxtjs/tailwindcss', 'shadcn-nuxt', 'vue-sonner/nuxt'],
+
+    // Enable WebSockets for Socket.IO
+    nitro: {
+        experimental: {
+            websocket: true
+        }
+    },
     //   vueSonner: {
     //     css: false // true by default to include css file
     //   },
