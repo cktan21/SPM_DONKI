@@ -11,7 +11,10 @@ import logging
 import pytz
 from fastapi.middleware.cors import CORSMiddleware
 from kafka_client import KafkaEventPublisher, EventTypes, Topics
+from datetime import datetime
+import uuid
 
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -56,6 +59,20 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600,
 )
+
+class TimeEntryCreate(BaseModel):
+    hours: int
+    minutes: int
+    description: str = ""
+
+class TimeEntry(BaseModel):
+    id: str
+    hours: int
+    minutes: int
+    description: str
+    date: str
+    userId: str
+    userName: str
 
 # Helper function to notify task participants
 def notify_task_participants(task_id, event_type: str, task_data: Dict[str, Any], 
@@ -446,6 +463,151 @@ async def delete_task(
         # Don't fail the deletion if notifications fail
 
     return {"message": "Task deleted successfully", "task": deleted_task}
+
+
+@app.get("/tasks/{task_id}/time-entries", summary="Get all time entries for a task")
+async def get_task_time_entries(
+    task_id: str = Path(..., description="Task ID")
+):
+    """
+    Fetch all time entries for a specific task.
+    """
+    try:
+        # Get task with time_entries column
+        resp = supabase.client.table("TASK").select("time_entries").eq("id", task_id).execute()
+        
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        time_entries = resp.data[0].get("time_entries", [])
+        
+        return {
+            "message": f"{len(time_entries)} time entry(ies) retrieved",
+            "task_id": task_id,
+            "time_entries": time_entries
+        }
+    except Exception as e:
+        logger.error(f"Error fetching time entries: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch time entries: {str(e)}")
+
+
+# Add time entry to a task
+@app.post("/tasks/{task_id}/time-entries", summary="Add a time entry to a task")
+async def add_task_time_entry(
+    task_id: str = Path(..., description="Task ID"),
+    entry: TimeEntryCreate = Body(...),
+    user_id: str = Body(..., embed=True),
+    user_name: str = Body(..., embed=True)
+):
+    """
+    Add a new time entry to a task's time log.
+    """
+    try:
+        # Get current time entries
+        resp = supabase.client.table("TASK").select("time_entries").eq("id", task_id).execute()
+        
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        current_entries = resp.data[0].get("time_entries", [])
+        
+        # Create new time entry
+        new_entry = {
+            "id": str(uuid.uuid4()),
+            "hours": entry.hours,
+            "minutes": entry.minutes,
+            "description": entry.description,
+            "date": datetime.now(UTC_PLUS_8).isoformat(),
+            "userId": user_id,
+            "userName": user_name
+        }
+        
+        # Append to existing entries
+        updated_entries = current_entries + [new_entry]
+        
+        # Update task with new time entries
+        update_resp = supabase.client.table("TASK").update({
+            "time_entries": updated_entries,
+            "updated_timestamp": datetime.now(timezone.utc).isoformat()
+        }).eq("id", task_id).execute()
+        
+        if not update_resp.data:
+            raise HTTPException(status_code=400, detail="Failed to add time entry")
+        
+        logger.info(f"✅ Time entry added to task {task_id} by user {user_name}")
+        
+        return {
+            "message": "Time entry added successfully",
+            "task_id": task_id,
+            "entry": new_entry
+        }
+        
+    except Exception as e:
+        logger.error(f"Error adding time entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add time entry: {str(e)}")
+
+
+# Remove time entry from a task
+@app.delete("/tasks/{task_id}/time-entries/{entry_id}", summary="Remove a time entry from a task")
+async def remove_task_time_entry(
+    task_id: str = Path(..., description="Task ID"),
+    entry_id: str = Path(..., description="Time entry ID"),
+    user_id: str = Body(..., embed=True)
+):
+    """
+    Remove a time entry from a task's time log.
+    Only the user who created the entry can delete it.
+    """
+    try:
+        # Get current time entries
+        resp = supabase.client.table("TASK").select("time_entries").eq("id", task_id).execute()
+        
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        current_entries = resp.data[0].get("time_entries", [])
+        
+        # Find and validate the entry
+        entry_to_remove = None
+        updated_entries = []
+        
+        for entry in current_entries:
+            if entry.get("id") == entry_id:
+                # Check if user owns this entry
+                if entry.get("userId") != user_id:
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="You can only delete your own time entries"
+                    )
+                entry_to_remove = entry
+            else:
+                updated_entries.append(entry)
+        
+        if not entry_to_remove:
+            raise HTTPException(status_code=404, detail="Time entry not found")
+        
+        # Update task with filtered entries
+        update_resp = supabase.client.table("TASK").update({
+            "time_entries": updated_entries,
+            "updated_timestamp": datetime.now(timezone.utc).isoformat()
+        }).eq("id", task_id).execute()
+        
+        if not update_resp.data:
+            raise HTTPException(status_code=400, detail="Failed to remove time entry")
+        
+        logger.info(f"✅ Time entry {entry_id} removed from task {task_id}")
+        
+        return {
+            "message": "Time entry removed successfully",
+            "task_id": task_id,
+            "entry_id": entry_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing time entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove time entry: {str(e)}")
 
 
 

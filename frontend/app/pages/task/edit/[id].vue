@@ -230,8 +230,35 @@ watch(
   }
 )
 
-// --- Time Logger Functions ---
-const addTimeEntry = () => {
+// --- Time Logger Functions (Backend Connected) ---
+
+// Fetch time entries from backend
+const fetchTimeEntries = async () => {
+  try {
+    console.log(`Fetching time entries for task ${taskId.value}`)
+    const res = await fetch(`${API_BASE_URL}/tasks/${taskId.value}/time-entries`)
+    
+    if (res.status === 404) {
+      console.log("No time entries found (task may not exist yet)")
+      timeEntries.value = []
+      return
+    }
+    
+    if (!res.ok) throw new Error(`Failed to fetch time entries: ${res.statusText}`)
+    
+    const data = await res.json()
+    timeEntries.value = data.time_entries || []
+    
+    console.log(`✅ Loaded ${timeEntries.value.length} time entries`)
+  } catch (err: any) {
+    console.error("Failed to fetch time entries:", err)
+    // Don't show toast for initial load failure - task might not have time entries yet
+    timeEntries.value = []
+  }
+}
+
+// Add time entry to backend
+const addTimeEntry = async () => {
   if (newTimeEntry.value.hours === 0 && newTimeEntry.value.minutes === 0) {
     toast({
       title: "Invalid time",
@@ -241,38 +268,105 @@ const addTimeEntry = () => {
     return
   }
 
-  const entry: TimeEntry = {
-    id: Date.now().toString(),
-    hours: newTimeEntry.value.hours,
-    minutes: newTimeEntry.value.minutes,
-    description: newTimeEntry.value.description,
-    date: new Date().toISOString(),
-    userId: userData.value?.user?.id || "",
-    userName: userData.value?.user?.name || "Unknown User"
-  }
+  try {
+    const currentUserId = userData.value?.user?.id
+    const currentUserName = userData.value?.user?.name || "Unknown User"
 
-  timeEntries.value.unshift(entry)
-  
-  // Reset form
-  newTimeEntry.value = {
-    hours: 0,
-    minutes: 0,
-    description: ""
-  }
-  
-  isAddingTime.value = false
+    if (!currentUserId) {
+      toast({
+        title: "Authentication required",
+        description: "Unable to log time. Please log in again.",
+        variant: "destructive"
+      })
+      return
+    }
 
-  toast({
-    title: "Time logged successfully!",
-    description: `Added ${entry.hours}h ${entry.minutes}m`
-  })
+    // ✅ FIX: Match the expected structure
+    const payload = {
+      entry: {
+        hours: newTimeEntry.value.hours,
+        minutes: newTimeEntry.value.minutes,
+        description: newTimeEntry.value.description
+      },
+      user_id: currentUserId,
+      user_name: currentUserName
+    }
+
+    console.log("🚀 Adding time entry with payload:", payload)
+
+    const response = await fetch(`${API_BASE_URL}/tasks/${taskId.value}/time-entries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+
+    // ... rest of the code
+  } catch (err: any) {
+    console.error("❌ Failed to add time entry:", err)
+    toast({
+      title: "Error logging time",
+      description: err.message,
+      variant: "destructive"
+    })
+  }
 }
 
-const removeTimeEntry = (id: string) => {
-  timeEntries.value = timeEntries.value.filter(e => e.id !== id)
-  toast({
-    title: "Time entry removed"
-  })
+// Remove time entry from backend
+const removeTimeEntry = async (id: string) => {
+  const currentUserId = userData.value?.user?.id
+
+  if (!currentUserId) {
+    toast({
+      title: "Authentication required",
+      description: "Unable to remove time entry. Please log in again.",
+      variant: "destructive"
+    })
+    return
+  }
+
+  try {
+    console.log(`🗑️ Removing time entry ${id} for user ${currentUserId}`)
+    
+    const response = await fetch(
+      `${API_BASE_URL}/tasks/${taskId.value}/time-entries/${id}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: currentUserId })
+      }
+    )
+
+    if (response.status === 403) {
+      toast({
+        title: "Access denied",
+        description: "You can only delete your own time entries",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Failed to remove time entry' }))
+      console.error("❌ Backend error:", errorData)
+      throw new Error(errorData.detail || 'Failed to remove time entry')
+    }
+
+    console.log("✅ Time entry removed successfully")
+
+    // Remove from local state
+    timeEntries.value = timeEntries.value.filter(e => e.id !== id)
+
+    toast({
+      title: "Time entry removed"
+    })
+  } catch (err: any) {
+    console.error("❌ Failed to remove time entry:", err)
+    toast({
+      title: "Error removing time entry",
+      description: err.message,
+      variant: "destructive"
+    })
+  }
 }
 
 const formatTimeEntry = (entry: TimeEntry) => {
@@ -522,6 +616,7 @@ const updateTask = async () => {
 onMounted(async () => {
   await fetchAllUsers()
   await fetchTaskData()
+  await fetchTimeEntries() // ✅ Load time entries on mount
 })
 </script>
 

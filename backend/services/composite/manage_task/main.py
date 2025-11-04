@@ -2242,6 +2242,208 @@ async def edit_task_message(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+    
+# Add to your Composite microservice (main.py)
+
+@app.get(
+    "/tasks/{task_id}/time-entries",
+    summary="Get time entries for a task",
+    response_description="List of time entries with enriched user data"
+)
+async def get_task_time_entries_composite(
+    task_id: str = Path(..., description="UUID of the task")
+):
+    """
+    Fetch all time entries for a task with enriched user information.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Get time entries from task service
+            resp = await client.get(f"{TASK_SERVICE_URL}/tasks/{task_id}/time-entries")
+            
+            if resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            resp.raise_for_status()
+            data = resp.json()
+            
+            # Enrich entries with user data if needed
+            time_entries = data.get("time_entries", [])
+            
+            # Calculate total time
+            total_minutes = sum(
+                (entry.get("hours", 0) * 60) + entry.get("minutes", 0)
+                for entry in time_entries
+            )
+            total_hours = total_minutes // 60
+            remaining_minutes = total_minutes % 60
+            
+            return {
+                "message": data.get("message"),
+                "task_id": task_id,
+                "time_entries": time_entries,
+                "total_time": {
+                    "hours": total_hours,
+                    "minutes": remaining_minutes,
+                    "total_minutes": total_minutes
+                },
+                "count": len(time_entries)
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to task service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.post(
+    "/tasks/{task_id}/time-entries",
+    summary="Add a time entry to a task",
+    response_description="Created time entry"
+)
+async def add_task_time_entry_composite(
+    task_id: str = Path(..., description="UUID of the task"),
+    payload: Dict[str, Any] = Body(
+        ...,
+        example={
+            "entry": {
+                "hours": 2,
+                "minutes": 30,
+                "description": "Worked on feature implementation"
+            },
+            "user_id": "655a9260-f871-480f-abea-ded735b2170a",
+            "user_name": "John Doe"
+        }
+    )
+):
+    """
+    Add a new time entry to a task's time log.
+    """
+    try:
+        # Extract and validate fields
+        entry = payload.get("entry", {})
+        user_id = payload.get("user_id")
+        user_name = payload.get("user_name")
+        
+        hours = entry.get("hours", 0)
+        minutes = entry.get("minutes", 0)
+        
+        if hours == 0 and minutes == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Time entry must have at least 1 minute"
+            )
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="user_id is required"
+            )
+        
+        if not user_name:
+            raise HTTPException(
+                status_code=400,
+                detail="user_name is required"
+            )
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Forward to task service with the same nested structure
+            resp = await client.post(
+                f"{TASK_SERVICE_URL}/tasks/{task_id}/time-entries",
+                json=payload  # Send the entire payload as-is
+            )
+            
+            if resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Task not found")
+            
+            resp.raise_for_status()
+            data = resp.json()
+            
+            logger.info(f"✅ Time entry added to task {task_id} via composite service")
+            
+            return {
+                "message": data.get("message"),
+                "task_id": task_id,
+                "entry": data.get("entry")
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to task service: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.delete(
+    "/tasks/{task_id}/time-entries/{entry_id}",
+    summary="Remove a time entry from a task",
+    response_description="Confirmation of deletion"
+)
+async def remove_task_time_entry_composite(
+    task_id: str = Path(..., description="UUID of the task"),
+    entry_id: str = Path(..., description="UUID of the time entry"),
+    user_id: str = Body(..., embed=True, description="ID of user removing entry")
+):
+    """
+    Remove a time entry from a task's time log.
+    Only the user who created the entry can delete it.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Forward to task service
+            resp = await client.delete(
+                f"{TASK_SERVICE_URL}/tasks/{task_id}/time-entries/{entry_id}",
+                json={"user_id": user_id}
+            )
+            
+            if resp.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Task or time entry not found"
+                )
+            
+            if resp.status_code == 403:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You can only delete your own time entries"
+                )
+            
+            resp.raise_for_status()
+            data = resp.json()
+            
+            logger.info(f"✅ Time entry {entry_id} removed from task {task_id} via composite service")
+            
+            return {
+                "message": data.get("message"),
+                "task_id": task_id,
+                "entry_id": entry_id
+            }
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to task service: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 @app.delete(
