@@ -41,7 +41,7 @@ const deleteDialogOpen = ref(false)
 const itemToDelete = ref<{ id: string, type: 'task' | 'subtask' } | null>(null)
 
 const API_BASE_URL = 'http://localhost:4000'
-const TASKA_BASE_URL = 'http://localhost:5500'
+const TASK_BASE_URL = 'http://localhost:5500'
 
 // User permissions
 const userData = useState<any>("userData")
@@ -99,7 +99,7 @@ const fetchMainTask = async (id: string) => {
 }
 
 const fetchSubtasks = async (id: string) => {
-  const res = await fetch(`${TASKA_BASE_URL}/ptid/${id}`, {
+  const res = await fetch(`${TASK_BASE_URL}/ptid/${id}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' }
   })
@@ -114,7 +114,7 @@ const fetchSubtasks = async (id: string) => {
 
 const fetchChangelog = async (id: string) => {
   try {
-    const res = await fetch(`${TASKA_BASE_URL}/logs/${id}`, {
+    const res = await fetch(`${TASK_BASE_URL}/logs/${id}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
