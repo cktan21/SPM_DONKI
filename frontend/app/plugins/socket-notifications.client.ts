@@ -1,5 +1,6 @@
-import { watch } from "vue";
+import { watch, h } from "vue";
 import { toast } from "@/components/ui/toast";
+import { ToastAction } from "@/components/ui/toast"
 import { socket, formatNotificationMessage } from "~/components/socket";
 
 export default defineNuxtPlugin(() => {
@@ -45,6 +46,11 @@ export default defineNuxtPlugin(() => {
                 title: notification.title,
                 description: notification.description,
                 variant: toastVariant,
+                // action: h(ToastAction, {
+                //     altText: 'Dismiss',
+                //   }, {
+                //     default: () => 'Dismiss',
+                //   }),
             });
 
             console.log("[Socket.IO Client] Toast notification displayed");

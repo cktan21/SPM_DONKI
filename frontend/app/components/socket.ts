@@ -11,7 +11,8 @@ export const socket: Socket = io({
 
 // Notification event types
 export interface NotificationPayload {
-    eventType: string;
+    event_type?: string;
+    eventType?: string; // Support both formats
     data: {
         uid?: string;
         user_id?: string;
@@ -19,8 +20,17 @@ export interface NotificationPayload {
         task_name?: string;
         tid?: string;
         project_id?: string;
+        project_name?: string;
         name?: string;
         email?: string;
+        added_by_name?: string;
+        created_by_uid?: string;
+        priority_level?: number;
+        label?: string;
+        status?: string;
+        description?: string;
+        is_creator?: boolean;
+        is_collaborator?: boolean;
         [key: string]: any;
     };
     timestamp: string;
@@ -32,15 +42,20 @@ export function formatNotificationMessage(payload: NotificationPayload): {
     description: string;
     variant?: "default" | "success" | "warning" | "error" | "info";
 } {
-    const { eventType, data } = payload;
+    // Support both event_type (snake_case) and eventType (camelCase)
+    const eventType = payload.event_type || payload.eventType || "unknown";
+    const { data } = payload;
+
     const taskName = data.task_name || "Task";
     const userName = data.name || "User";
+    const projectName = data.project_name || "Project";
+    const addedByName = data.added_by_name || "Someone";
 
     switch (eventType) {
         case "task_created":
             return {
                 title: "New Task Created",
-                description: `${taskName} has been created`,
+                description: `${taskName} has been created${data.project_name ? ` in ${data.project_name}` : ""}`,
                 variant: "info",
             };
         case "task_updated":
@@ -56,15 +71,29 @@ export function formatNotificationMessage(payload: NotificationPayload): {
                 variant: "warning",
             };
         case "task_assigned":
-            return {
-                title: "Task Assigned",
-                description: `You have been assigned to ${taskName}`,
-                variant: "success",
-            };
+            const priorityText = data.priority_level ? ` (Priority: ${data.priority_level})` : "";
+            const labelText = data.label ? ` [${data.label}]` : "";
+
+            // Different messages based on whether user is the creator
+            if (data.is_creator === true) {
+                return {
+                    title: "Task Created & Assigned",
+                    description: `You've created and been assigned to "${taskName}"${priorityText}${labelText}`,
+                    variant: "success",
+                };
+            } else {
+                const assignedBy = userName && userName !== "User" ? ` by ${userName}` : "";
+                return {
+                    title: "Task Assigned",
+                    description: `You've been assigned to "${taskName}"${assignedBy}${priorityText}${labelText}`,
+                    variant: "success",
+                };
+            }
         case "task_status_changed":
+            const statusText = data.status ? ` to ${data.status}` : "";
             return {
                 title: "Task Status Changed",
-                description: `Status of ${taskName} has been changed`,
+                description: `Status of ${taskName} has been changed${statusText}`,
                 variant: "info",
             };
         case "deadline_approaching":
@@ -82,13 +111,14 @@ export function formatNotificationMessage(payload: NotificationPayload): {
         case "project_created":
             return {
                 title: "New Project Created",
-                description: `A new project has been created`,
+                description: `A new project${projectName !== "Project" ? ` "${projectName}"` : ""} has been created`,
                 variant: "info",
             };
         case "project_collaborator_added":
+            const taskContext = taskName && taskName !== "Task" ? ` for task "${taskName}"` : "";
             return {
                 title: "Added to Project",
-                description: `You have been added to a project`,
+                description: `${addedByName} added you to project "${projectName}"${taskContext}`,
                 variant: "success",
             };
         default:
