@@ -25,7 +25,7 @@ export default defineNuxtConfig({
          * Directory that the component lives in.
          * Keep it at root: components/ui
          */
-        componentDir: './components/ui'
+        componentDir: '~/components/ui'
     },
 
     // Make sure Nuxt scans the root components folder

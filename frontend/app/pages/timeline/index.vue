@@ -44,12 +44,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import LoadingState from "./components/LoadingState.vue";
-import ErrorState from "./components/ErrorState.vue";
-import TimelineHeader from "./components/TimelineHeader.vue";
-import StatsCards from "./components/StatsCards.vue";
-import TimelineContent from "./components/TimelineContent.vue";
-import TaskDetailModal from "./components/TaskDetailModal.vue";
+import LoadingState from "~/pages/timeline/components/LoadingState.vue";
+import ErrorState from "~/pages/timeline/components/ErrorState.vue";
+import TimelineHeader from "~/pages/timeline/components/TimelineHeader.vue";
+import StatsCards from "~/pages/timeline/components/StatsCards.vue";
+import TimelineContent from "~/pages/timeline/components/TimelineContent.vue";
+import TaskDetailModal from "~/pages/timeline/components/TaskDetailModal.vue";
 
 // Get user data from middleware
 const userDataFromMiddleware = useState("userData");
