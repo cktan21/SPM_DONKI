@@ -3,7 +3,7 @@ export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
 
-    modules: ['@nuxtjs/tailwindcss', 'shadcn-nuxt', 'vue-sonner/nuxt', '@vueuse/nuxt'],
+    modules: ['@nuxtjs/tailwindcss', 'shadcn-nuxt', '@vueuse/nuxt'],
 
     // Enable WebSockets for Socket.IO
     nitro: {
@@ -29,6 +29,10 @@ export default defineNuxtConfig({
 
     // Make sure Nuxt scans the root components folder
     components: [
-        { path: '~/components', pathPrefix: false }
+        {
+            path: '~/components',
+            pathPrefix: false,
+            ignore: ['**/index.ts', '**/*.ts'] // Ignore index.ts barrel exports to avoid name conflicts with .vue components
+        }
     ]
 })

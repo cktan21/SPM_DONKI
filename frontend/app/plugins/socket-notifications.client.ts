@@ -1,8 +1,13 @@
 import { watch } from "vue";
-import { toast } from "vue-sonner";
+import { toast } from "@/components/ui/toast";
 import { socket, formatNotificationMessage } from "~/components/socket";
 
 export default defineNuxtPlugin(() => {
+    console.log("[Socket.IO Plugin] Initializing...");
+    console.log("[Socket.IO Plugin] Socket connected:", socket.connected);
+    console.log("[Socket.IO Plugin] Socket ID:", socket.id);
+    console.log("[Socket.IO Plugin] Toast function available:", typeof toast);
+
     const userData = useState<{ user: { id: string; email: string; role: string; name: string } } | null>("userData");
     let registeredUserId: string | null = null;
 
@@ -25,31 +30,33 @@ export default defineNuxtPlugin(() => {
 
     // Listen for notification events from Socket.IO
     socket.on("notification", (payload: any) => {
-        const notification = formatNotificationMessage(payload);
+        console.log("[Socket.IO Client] Received notification:", payload);
 
-        // Show toast notification based on variant using vue-sonner
-        if (notification.variant === "error") {
-            toast.error(notification.title, {
+        try {
+            const notification = formatNotificationMessage(payload);
+            console.log("[Socket.IO Client] Formatted notification:", notification);
+
+            // Show toast notification using shadcn toast
+            // Map notification variants to shadcn toast variants
+            // shadcn toast only supports "default" and "destructive" variants
+            const toastVariant = notification.variant === "error" ? "destructive" : "default";
+
+            toast({
+                title: notification.title,
                 description: notification.description,
+                variant: toastVariant,
             });
-        } else if (notification.variant === "warning") {
-            toast.warning(notification.title, {
-                description: notification.description,
-            });
-        } else if (notification.variant === "success") {
-            toast.success(notification.title, {
-                description: notification.description,
-            });
-        } else {
-            toast.info(notification.title, {
-                description: notification.description,
-            });
+
+            console.log("[Socket.IO Client] Toast notification displayed");
+        } catch (error) {
+            console.error("[Socket.IO Client] Error processing notification:", error);
         }
     });
 
     // Register user when socket connects
     socket.on("connect", () => {
-        console.log("[Socket.IO] Client connected, attempting to register user...");
+        console.log("[Socket.IO Plugin] Client connected, socket ID:", socket.id);
+        console.log("[Socket.IO Plugin] Attempting to register user...");
         handleUserRegistration();
     });
 

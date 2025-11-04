@@ -1,6 +1,13 @@
 import { io, Socket } from "socket.io-client";
 
-export const socket: Socket = io();
+// Initialize Socket.IO client
+// In Nuxt, the server runs on the same origin, so we can use relative URL
+// The path should match the server route (/socket.io/)
+export const socket: Socket = io({
+    path: "/socket.io/",
+    transports: ["websocket", "polling"],
+    autoConnect: true,
+});
 
 // Notification event types
 export interface NotificationPayload {
