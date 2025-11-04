@@ -133,7 +133,7 @@ const getInitials = (name: string | undefined) => {
             class="flex items-center gap-2.5"
           >
             <Avatar class="h-8 w-8 border border-slate-200 dark:border-slate-800">
-              <AvatarFallback :class="`text-white text-xs font-medium ${getColorFromName(collab?.name || collab)}`">
+              <AvatarFallback :class="`text-black text-xs font-medium ${getColorFromName(collab?.name || collab)}`">
                 {{ getInitials(collab?.name || collab) }}
               </AvatarFallback>
             </Avatar>
