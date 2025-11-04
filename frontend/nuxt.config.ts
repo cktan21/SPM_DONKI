@@ -31,9 +31,14 @@ export default defineNuxtConfig({
     // Make sure Nuxt scans the root components folder
     components: [
         {
+            path: '~/components/ui',
+            pathPrefix: false,
+            ignore: ['**/index.ts', '**/*.ts'], // Ignore index.ts barrel exports to avoid name conflicts with .vue components
+        },
+        {
             path: '~/components',
             pathPrefix: false,
-            ignore: ['**/index.ts', '**/*.ts'] // Ignore index.ts barrel exports to avoid name conflicts with .vue components
+            // ignore: ['**/index.ts', '**/*.ts'] // Ignore index.ts barrel exports to avoid name conflicts with .vue components
         }
     ]
 })
