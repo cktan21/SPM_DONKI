@@ -3,7 +3,7 @@ export default defineNuxtConfig({
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
 
-    modules: ['@nuxtjs/tailwindcss', 'shadcn-nuxt', 'vue-sonner/nuxt'],
+    modules: ['@nuxtjs/tailwindcss', 'shadcn-nuxt', 'vue-sonner/nuxt', '@vueuse/nuxt'],
 
     // Enable WebSockets for Socket.IO
     nitro: {
