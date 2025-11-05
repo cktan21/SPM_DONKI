@@ -248,6 +248,108 @@ async def notify_task_participants(task_id, task_data: Dict[str, Any]) -> bool:
         return False
 
 
+async def notify_task_status_change(task_id: str, old_status: Optional[str], new_status: str, task_data: Dict[str, Any]) -> bool:
+    """
+    Notify all task participants (creator + collaborators) about task status change via Kafka
+    """
+    try:
+        logger.info(f"🚀 Starting status change notification process for task {task_id}")
+        
+        # Only publish if status actually changed
+        if old_status == new_status:
+            logger.info(f"⏭️ Status unchanged for task {task_id}, skipping notification")
+            return True
+        
+        logger.info(f"📤 Publishing status change event for task {task_id}: {old_status} -> {new_status}")
+        
+        # Ensure Kafka producer is connected
+        if not kafka_publisher.producer:
+            logger.info("📡 Connecting to Kafka producer...")
+            kafka_publisher._connect()
+            if not kafka_publisher.producer:
+                logger.error("❌ Failed to initialize Kafka producer")
+                return False
+        
+        # Get all participants for this task
+        logger.info(f"👥 Fetching participants for task {task_id}")
+        participants = await get_task_participants(task_id)
+        
+        if not participants:
+            logger.warning(f"⚠️ No participants found for task {task_id}, skipping status change notification")
+            return False
+        
+        logger.info(f"✅ Found {len(participants)} participants for task {task_id}")
+        
+        # Prepare event data
+        event_data = {
+            "tid": task_id,
+            "task_name": task_data.get("name", "Unknown Task"),
+            "old_status": old_status,
+            "new_status": new_status,
+            "project_id": task_data.get("pid"),
+            "created_by_uid": task_data.get("created_by_uid"),
+            "collaborators": task_data.get("collaborators", []),
+            "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+        }
+        
+        logger.info(f"📝 Prepared event data: {event_data}")
+        
+        # Send events to all participants
+        failed_count = 0
+        success_count = 0
+        
+        for i, participant in enumerate(participants):
+            logger.info(f"📤 Sending notification {i+1}/{len(participants)} to participant {participant.get('user_id')}")
+            
+            local_event_data = event_data.copy()
+            local_event_data["uid"] = participant.get("user_id") or participant.get("id")
+            local_event_data["name"] = participant.get("name") or participant.get("user_name")
+            local_event_data["email"] = participant.get("email") or participant.get("user_email")
+            local_event_data["role"] = participant.get("role") or participant.get("user_role")
+            local_event_data["department"] = participant.get("department")
+            local_event_data["phone"] = participant.get("phone")
+            local_event_data["is_creator"] = participant.get("is_creator", False)
+            local_event_data["is_collaborator"] = participant.get("is_collaborator", False)
+            
+            logger.debug(f"📋 Participant data: {local_event_data}")
+            
+            # Publish event for each participant
+            success = kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type=EventTypes.TASK_STATUS_CHANGED,
+                data=local_event_data,
+            )
+            
+            if success:
+                success_count += 1
+                logger.info(f"✅ Successfully sent notification to participant {participant.get('user_id')}")
+            else:
+                failed_count += 1
+                logger.error(f"❌ Failed to send notification to participant {participant.get('user_id')}")
+        
+        # Final flush to ensure all messages are sent
+        try:
+            logger.info("🔄 Flushing remaining Kafka messages...")
+            if kafka_publisher.producer:
+                kafka_publisher.producer.flush(timeout=10)
+            logger.info("✅ Kafka flush completed")
+        except Exception as e:
+            logger.warning(f"⚠️ Error during Kafka flush: {e}")
+        
+        if failed_count > 0:
+            logger.error(f"❌ Failed to broadcast {failed_count} out of {len(participants)} status change events")
+            return False
+        
+        logger.info(f"🎉 Successfully broadcasted status change events for {success_count} participants")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error notifying task status change: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return False
+
+
 # Root endpoint
 @app.get("/")
 def read_root():
@@ -1474,66 +1576,9 @@ async def update_task_composite(
             
             # Publish Kafka event for status changes
             if "status" in schedule_updates:
-                try:
-                    new_status = schedule_updates["status"]
-                    
-                    # Only publish if status actually changed
-                    if old_status != new_status:
-                        logger.info(f"📤 Publishing status change event for task {task_id}: {old_status} -> {new_status}")
-                        
-                        # Get task participants
-                        participants = await get_task_participants(task_id)
-                        
-                        if participants:
-                            # Prepare event data
-                            event_data = {
-                                "tid": task_id,
-                                "task_name": current_task.get("name", "Unknown Task"),
-                                "old_status": old_status,
-                                "new_status": new_status,
-                                "project_id": project_id,
-                                "created_by_uid": current_task.get("created_by_uid"),
-                                "collaborators": current_task.get("collaborators", []),
-                                "timestamp": datetime.now(UTC_PLUS_8).isoformat()
-                            }
-                            
-                            # Publish event to all participants
-                            success_count = 0
-                            for participant in participants:
-                                participant_data = {
-                                    **event_data,
-                                    "uid": participant.get("user_id") or participant.get("id"),
-                                    "name": participant.get("name"),
-                                    "email": participant.get("email"),
-                                    "role": participant.get("role"),
-                                    "department": participant.get("department"),
-                                    "phone": participant.get("phone")
-                                }
-                                
-                                success = kafka_publisher.publish_event(
-                                    topic=Topics.NOTIFICATION_EVENTS,
-                                    event_type=EventTypes.TASK_STATUS_CHANGED,
-                                    data=participant_data
-                                )
-                                
-                                if success:
-                                    success_count += 1
-                            
-                            # Flush Kafka messages
-                            try:
-                                if kafka_publisher.producer:
-                                    kafka_publisher.producer.flush(timeout=10)
-                            except Exception as e:
-                                logger.warning(f"Error flushing Kafka messages: {e}")
-                            
-                            logger.info(f"✅ Published status change events to {success_count}/{len(participants)} participants")
-                        else:
-                            logger.warning(f"⚠️ No participants found for task {task_id}, skipping status change notification")
-                except Exception as e:
-                    logger.error(f"❌ Error publishing status change event for task {task_id}: {str(e)}")
-                    import traceback
-                    logger.error(f"Traceback: {traceback.format_exc()}")
-                    # Don't fail the update if Kafka publishing fails
+                new_status = schedule_updates["status"]
+                # Don't fail the update if Kafka publishing fails
+                await notify_task_status_change(task_id, old_status, new_status, current_task)
 
         # ===================================================================
         # STEP 5: SYNC PROJECT MEMBERS (Handle collaborator additions and removals)
