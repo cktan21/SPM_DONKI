@@ -1915,8 +1915,9 @@ async def delete_task_composite(
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             # 1) Get task details BEFORE deletion (to get project_id, owner, collaborators)
-            task_url = f"{TASK_SERVICE_URL}/tasks/{task_id}"
-            get_resp = await client.get(task_url)
+            # Use /tid/{task_id} for GET (correct endpoint)
+            get_task_url = f"{TASK_SERVICE_URL}/tid/{task_id}"
+            get_resp = await client.get(get_task_url)
 
             if get_resp.status_code == 200:
                 task_data = get_resp.json().get("task", {})
@@ -1929,7 +1930,7 @@ async def delete_task_composite(
                     "message": "Task already deleted (idempotent)",
                     "task_id": task_id,
                     "task_delete": {
-                        "url": task_url,
+                        "url": f"{TASK_SERVICE_URL}/{task_id}",
                         "status_code": 404,
                         "result": "already_deleted",
                     },
@@ -1941,12 +1942,14 @@ async def delete_task_composite(
                         "message": "Task service get failed",
                         "status_code": get_resp.status_code,
                         "body": _safe_json(get_resp),
-                        "url": task_url,
+                        "url": get_task_url,
                     },
                 )
 
             # 2) Delete the task itself
-            delete_resp = await client.delete(task_url)
+            # Use /{task_id} for DELETE (correct endpoint, not /tasks/{task_id})
+            delete_task_url = f"{TASK_SERVICE_URL}/{task_id}"
+            delete_resp = await client.delete(delete_task_url)
             if delete_resp.status_code not in (200, 204, 404):
                 raise HTTPException(
                     status_code=502,
@@ -1954,7 +1957,7 @@ async def delete_task_composite(
                         "message": "Task service delete failed",
                         "status_code": delete_resp.status_code,
                         "body": _safe_json(delete_resp),
-                        "url": task_url,
+                        "url": delete_task_url,
                     },
                 )
 
@@ -1976,7 +1979,7 @@ async def delete_task_composite(
             "message": "Delete workflow completed and project members synced",
             "task_id": task_id,
             "task_delete": {
-                "url": task_url,
+                "url": delete_task_url,
                 "status_code": delete_resp.status_code,
                 "result": _safe_json(delete_resp),
             },
