@@ -12,9 +12,6 @@ export default defineNuxtConfig({
             websocket: true
         }
     },
-    //   vueSonner: {
-    //     css: false // true by default to include css file
-    //   },
     shadcn: {
         /**
          * Prefix for all the imported component
