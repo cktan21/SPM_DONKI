@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Path, Body
+from fastapi import FastAPI, HTTPException, Path, Body, Query
 from typing import Dict, Any, List, Optional
 import httpx
 from datetime import datetime, timezone
@@ -8,6 +8,7 @@ import logging
 import pytz
 import uuid
 import asyncio
+import json
 from pydantic import BaseModel
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -2585,6 +2586,8 @@ async def add_task_time_entry_composite(
         )
 
 
+  # Add this at the top if not already imported
+
 @app.delete(
     "/tasks/{task_id}/time-entries/{entry_id}",
     summary="Remove a time entry from a task",
@@ -2593,7 +2596,7 @@ async def add_task_time_entry_composite(
 async def remove_task_time_entry_composite(
     task_id: str = Path(..., description="UUID of the task"),
     entry_id: str = Path(..., description="UUID of the time entry"),
-    user_id: str = Body(..., embed=True, description="ID of user removing entry")
+    user_id: str = Query(..., description="ID of user removing entry")  # Changed from Body to Query
 ):
     """
     Remove a time entry from a task's time log.
@@ -2601,11 +2604,12 @@ async def remove_task_time_entry_composite(
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Forward to task service
+            # Forward to task service with query parameter
             resp = await client.delete(
-                f"{TASK_SERVICE_URL}/tasks/{task_id}/time-entries/{entry_id}",
-                json={"user_id": user_id}
+                f"{TASK_SERVICE_URL}/tasks/{task_id}/time-entries/{entry_id}?user_id={user_id}"
             )
+            
+            # ... rest of the code stays the same
             
             if resp.status_code == 404:
                 raise HTTPException(

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body, Path, Request
+from fastapi import FastAPI, HTTPException, Body, Path, Request,Query
 from fastapi.responses import Response
 from supabaseClient import SupabaseClient
 from dotenv import load_dotenv
@@ -552,7 +552,7 @@ async def add_task_time_entry(
 async def remove_task_time_entry(
     task_id: str = Path(..., description="Task ID"),
     entry_id: str = Path(..., description="Time entry ID"),
-    user_id: str = Body(..., embed=True)
+    user_id: str = Query(..., description="ID of user removing entry")  # Changed from Body to Query
 ):
     """
     Remove a time entry from a task's time log.
