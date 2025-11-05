@@ -311,8 +311,6 @@ const createTask = async () => {
         // Get the project ID from the created task response or use the one from form
         const projectId = responseData.task?.pid || formCreate.value.pid;
 
-        toast({ title: "Task created successfully!" });
-
         // Clear the selected project state to force fresh data fetch
         const selectedProject = useState<any>("selectedProject");
         selectedProject.value = null;

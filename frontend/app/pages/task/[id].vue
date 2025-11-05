@@ -35,9 +35,21 @@ const route = useRoute();
 const router = useRouter();
 const taskId = computed(() => route.params.id as string);
 
+// Cache task data by ID for instant loading
+const getCachedTask = (id: string) => {
+    const cacheKey = `task_${id}`;
+    return useState<any>(cacheKey, () => null);
+};
+
+const getCachedChangelog = (id: string) => {
+    const cacheKey = `task_changelog_${id}`;
+    return useState<any[]>(cacheKey, () => []);
+};
+
 const task = ref<any>(null);
 const changelog = ref<any[]>([]);
 const loading = ref(false);
+const refreshing = ref(false); // Separate flag for background refresh
 const error = ref<string | null>(null);
 const deleteDialogOpen = ref(false);
 const itemToDelete = ref<{ id: string; type: "task" | "subtask" } | null>(null);
@@ -137,17 +149,22 @@ const fetchChangelog = async (id: string) => {
     }
 };
 
-const fetchTask = async () => {
+const fetchTask = async (backgroundRefresh = false) => {
     const id = String(taskId.value || "").trim();
     if (!isUuid(id)) {
         error.value = "Invalid task ID (must be a 36-char UUID)";
         return;
     }
 
-    try {
+    // Set appropriate loading flags
+    if (backgroundRefresh) {
+        refreshing.value = true;
+    } else {
         loading.value = true;
-        error.value = null;
+    }
+    error.value = null;
 
+    try {
         const [main, subs, logs] = await Promise.all([
             fetchMainTask(id),
             fetchSubtasks(id),
@@ -160,17 +177,27 @@ const fetchTask = async () => {
             return;
         }
 
-        task.value = {
+        const updatedTask = {
             ...main,
             subtasks: subs
         };
 
+        // Update both local state and cache
+        task.value = updatedTask;
         changelog.value = logs;
+
+        // Cache the task data
+        const cachedTask = getCachedTask(id);
+        const cachedLogs = getCachedChangelog(id);
+        cachedTask.value = updatedTask;
+        cachedLogs.value = logs;
     } catch (e: any) {
         console.error(e);
         error.value = e?.message || "Failed to load task";
+        // Don't clear cache on error - keep showing stale data
     } finally {
         loading.value = false;
+        refreshing.value = false;
     }
 };
 
@@ -231,15 +258,36 @@ const goToEditPage = (id: string) => {
 };
 
 onMounted(async () => {
-    await fetchTask();
+    const id = String(taskId.value || "").trim();
+
+    if (!isUuid(id)) {
+        error.value = "Invalid task ID (must be a 36-char UUID)";
+        return;
+    }
+
+    // Check for cached data
+    const cachedTask = getCachedTask(id);
+    const cachedLogs = getCachedChangelog(id);
+
+    if (cachedTask.value) {
+        // Show cached data immediately
+        task.value = cachedTask.value;
+        changelog.value = cachedLogs.value;
+        console.log("Loaded cached task:", id);
+        // Fetch fresh data in background
+        await fetchTask(true); // true = background refresh
+    } else {
+        // No cache, do normal fetch
+        await fetchTask(false);
+    }
 });
 </script>
 
 <template>
     <div class="min-h-screen bg-slate-50/50 dark:bg-slate-950">
         <div class="container mx-auto max-w-7xl py-8 px-4 sm:px-6 lg:px-8">
-            <!-- Back Button -->
-            <div class="mb-6">
+            <!-- Back Button & Refresh Indicator -->
+            <div class="mb-6 flex items-center justify-between">
                 <Button
                     variant="ghost"
                     size="sm"
@@ -248,6 +296,29 @@ onMounted(async () => {
                     <ArrowLeft class="w-4 h-4" />
                     <span>Back</span>
                 </Button>
+                <!-- Refresh indicator -->
+                <div
+                    v-if="refreshing"
+                    class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <svg
+                        class="h-4 w-4 animate-spin"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24">
+                        <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"></circle>
+                        <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Refreshing...</span>
+                </div>
             </div>
 
             <!-- Loading State -->
