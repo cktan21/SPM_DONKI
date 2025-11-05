@@ -21,7 +21,7 @@ class KafkaEventPublisher:
     """Kafka event publisher for sending events to topics"""
     
     def __init__(self, bootstrap_servers: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9093')
         self.producer = None
     
     def _connect(self):
@@ -97,7 +97,7 @@ class KafkaEventConsumer:
     """Kafka event consumer for receiving events from topics"""
     
     def __init__(self, bootstrap_servers: str = None, group_id: str = None):
-        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+        self.bootstrap_servers = bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9093')
         self.group_id = group_id or os.getenv('KAFKA_GROUP_ID', 'spm-consumer-group')
         self.consumer = None
     

@@ -1298,17 +1298,41 @@ async def update_task_composite(
     print(f"[DEBUG] Received updates for task {task_id}:")
     print(f"[DEBUG] Raw payload: {updates}")
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             current_task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
             if current_task_resp.status_code != 200:
+                error_detail = current_task_resp.text if current_task_resp.text else f"Task {task_id} not found"
+                logger.error(f"Task service returned status {current_task_resp.status_code}: {error_detail}")
                 raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-            current_task = current_task_resp.json().get("task", {})
+            
+            response_data = current_task_resp.json()
+            current_task = response_data.get("task")
+            
+            if not current_task:
+                logger.error(f"Task {task_id} not found in response: {response_data}")
+                raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+            
             old_collaborators = set(current_task.get("collaborators") or [])
             old_owner = current_task.get("created_by_uid")
             project_id = current_task.get("pid")
-    except Exception as e:
+    except httpx.RequestError as e:
+        logger.error(f"Network error fetching task {task_id}: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to fetch current task: {str(e)}"
+            status_code=503, detail=f"Failed to connect to task service: {str(e)}"
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error fetching task {task_id}: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code, detail=f"Task service error: {e.response.text}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error fetching task {task_id}: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to fetch current task: {type(e).__name__}: {str(e)}"
         )
 
     # ===================================================================
@@ -1385,7 +1409,7 @@ async def update_task_composite(
         if schedule_updates:
             schedule_response = await update_schedule_service(task_id, schedule_updates)
 
-      # ===================================================================
+        # ===================================================================
         # STEP 5: SYNC PROJECT MEMBERS (Handle collaborator additions and removals)
         # ===================================================================
         members_synced = {"added": [], "removed": [], "skipped": []}

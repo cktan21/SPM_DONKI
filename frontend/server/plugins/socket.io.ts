@@ -38,7 +38,7 @@ export default defineNitroPlugin(async (nitroApp: NitroApp) => {
     });
 
     // Initialize Kafka consumer
-    // Use localhost:9092 for frontend (host machine), or kafka:9092 if running inside Docker
+    // Use localhost:9092 for frontend (host machine), or kafka:9093 if running inside Docker
     const kafkaBootstrapServers = process.env.KAFKA_BOOTSTRAP_SERVERS || "localhost:9092";
 
     const kafka = new Kafka({
