@@ -111,7 +111,7 @@ export function formatNotificationMessage(payload: NotificationPayload): {
             return {
                 title: "Deadline Overdue",
                 description: `${taskName} deadline has passed`,
-                variant: "error",
+                variant: "warning",
             };
         case "project_created":
             return {

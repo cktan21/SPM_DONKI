@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
 import pytz
+import requests
 from kafka_client import EventTypes, KafkaEventPublisher, Topics
 
 # Configure logging
@@ -218,11 +219,11 @@ class RecurringTaskProcessor:
             tid = current_entry.get("tid")
             if tid:
                 try:
-                    import requests
                     task_response = requests.get(f"{self.schedule_client.task_service_url}/tid/{tid}", timeout=5)
                     if task_response.status_code == 200:
                         task_data = task_response.json().get("task", {})
                         task_name = task_data.get("name", "Unknown Task")
+                        logger.info(f"Fetched task name for {tid}: {task_name}")
                 except Exception as e:
                     logger.warning(f"Could not fetch task name for {tid}: {e}")
             
@@ -273,10 +274,24 @@ class RecurringTaskProcessor:
                 logger.error(f"Failed to update task status to overdue for {sid}")
                 return False
             
+            # Get task name from task service
+            task_name = "Unknown Task"
+            tid = current_entry.get("tid")
+            if tid:
+                try:
+                    task_response = requests.get(f"{self.schedule_client.task_service_url}/tid/{tid}", timeout=5)
+                    if task_response.status_code == 200:
+                        task_data = task_response.json().get("task", {})
+                        task_name = task_data.get("name", "Unknown Task")
+                        logger.info(f"Fetched task name for {tid}: {task_name}")
+                except Exception as e:
+                    logger.warning(f"Could not fetch task name for {tid}: {e}")
+            
             # Broadcast deadline overdue event to Kafka
             event_data = {
                 "sid": sid,
-                "tid": current_entry.get("tid"),
+                "tid": tid,
+                "task_name": task_name,
                 "deadline": current_entry.get("deadline"),
                 "status": "overdue",
                 "timestamp": datetime.now(UTC_PLUS_8).isoformat()
