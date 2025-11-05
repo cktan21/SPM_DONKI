@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import logging
 import pytz
 import uuid
+import asyncio
 from pydantic import BaseModel
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -837,6 +838,7 @@ async def create_task_composite(
 
         # ===================================================================
         # STEP 1: COMPLETE ALL VALIDATIONS BEFORE ANY CREATION OPERATIONS
+        # Run all validations in parallel for better performance
         # ===================================================================
         validation_results = {
             "parentTaskId": False,
@@ -845,22 +847,43 @@ async def create_task_composite(
             "schedule_data": False,
         }
 
+        # Collect all validation tasks to run in parallel
+        validation_tasks = []
+        validation_keys = []
+
         # Validate parent task ID
+        # Note: Calling async function without await creates a coroutine (doesn't execute yet)
         if task_json.get("parentTaskId"):
-            await validate_parent_task_id(task_json["parentTaskId"])
-            validation_results["parentTaskId"] = True
+            validation_tasks.append(validate_parent_task_id(task_json["parentTaskId"]))
+            validation_keys.append("parentTaskId")
 
         # Validate collaborators
         if task_json.get("collaborators"):
-            await validate_collaborators(task_json["collaborators"])
-            validation_results["collaborators"] = True
+            validation_tasks.append(validate_collaborators(task_json["collaborators"]))
+            validation_keys.append("collaborators")
 
         # Validate project ID
         if task_json.get("pid"):
-            await validate_project_id(task_json["pid"])
-            validation_results["project"] = True
+            validation_tasks.append(validate_project_id(task_json["pid"]))
+            validation_keys.append("project")
 
-        # Validate schedule data (if provided)
+        # Run all HTTP validations simultaneously
+        # asyncio.gather() will execute all coroutines in parallel
+        if validation_tasks:
+            try:
+                # Execute all validations in parallel
+                await asyncio.gather(*validation_tasks)
+                # If all passed, mark them as validated
+                for key in validation_keys:
+                    validation_results[key] = True
+            except ValidationError as e:
+                # Re-raise validation errors (they contain specific error messages)
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ValidationError(f"Validation error: {str(e)}")
+
+        # Validate schedule data (if provided) - this is a simple field check, not an HTTP call
         if schedule_data:
             # Check required fields for schedule
             if not schedule_data.get("deadline"):
@@ -1367,6 +1390,7 @@ async def update_task_composite(
     try:
         # ===================================================================
         # STEP 2: COMPLETE ALL VALIDATIONS BEFORE ANY UPDATE OPERATIONS
+        # Run all validations in parallel for better performance
         # ===================================================================
         validation_results = {
             "parentTaskId": False,
@@ -1375,25 +1399,44 @@ async def update_task_composite(
             "created_by_uid": False,
         }
 
+        # Collect all validation tasks to run in parallel
+        validation_tasks = []
+        validation_keys = []
+
         # Validate parent task ID
         if "parentTaskId" in filtered_updates and filtered_updates["parentTaskId"]:
-            await validate_parent_task_id(filtered_updates["parentTaskId"])
-            validation_results["parentTaskId"] = True
+            validation_tasks.append(validate_parent_task_id(filtered_updates["parentTaskId"]))
+            validation_keys.append("parentTaskId")
 
         # Validate collaborators exist in Users DB
         if "collaborators" in filtered_updates and filtered_updates["collaborators"]:
-            await validate_collaborators(filtered_updates["collaborators"])
-            validation_results["collaborators"] = True
+            validation_tasks.append(validate_collaborators(filtered_updates["collaborators"]))
+            validation_keys.append("collaborators")
 
         # Validate project ID exists
         if "pid" in filtered_updates and filtered_updates["pid"]:
-            await validate_project_id(filtered_updates["pid"])
-            validation_results["project"] = True
+            validation_tasks.append(validate_project_id(filtered_updates["pid"]))
+            validation_keys.append("project")
 
         # Validate created_by_uid exists in Users DB
         if "created_by_uid" in filtered_updates and filtered_updates["created_by_uid"]:
-            await validate_user_exists(filtered_updates["created_by_uid"])
-            validation_results["created_by_uid"] = True
+            validation_tasks.append(validate_user_exists(filtered_updates["created_by_uid"]))
+            validation_keys.append("created_by_uid")
+
+        # Run all validations simultaneously
+        if validation_tasks:
+            try:
+                # Execute all validations in parallel
+                await asyncio.gather(*validation_tasks)
+                # If all passed, mark them as validated
+                for key in validation_keys:
+                    validation_results[key] = True
+            except ValidationError as e:
+                # Re-raise validation errors (they contain specific error messages)
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ValidationError(f"Validation error: {str(e)}")
 
         # ===================================================================
         # STEP 3: UPDATE TASK (only after all validations pass)
