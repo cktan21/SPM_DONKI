@@ -5,8 +5,8 @@ from apscheduler.triggers.date import DateTrigger
 from dateutil.relativedelta import relativedelta
 from schedule_client import ScheduleClient
 import logging
-import asyncio
 import pytz
+import requests
 from kafka_client import EventTypes, KafkaEventPublisher, Topics
 
 # Configure logging
@@ -24,12 +24,12 @@ class RecurringTaskProcessor:
         self.scheduler.start()
         logger.info("RecurringTaskProcessor initialized and scheduler started with UTC+8 timezone")
     
-    async def initialize_kafka(self):
+    def initialize_kafka(self):
         """
         Initialize Kafka producer connection
         """
         try:
-            await self.kafka_publisher._connect()
+            self.kafka_publisher._connect()
             logger.info("Kafka producer initialized successfully")
             return True
         except Exception as e:
@@ -214,10 +214,24 @@ class RecurringTaskProcessor:
             
             logger.info(f"Current schedule entry for {sid}: {current_entry}")
             
+            # Get task name from task service
+            task_name = "Unknown Task"
+            tid = current_entry.get("tid")
+            if tid:
+                try:
+                    task_response = requests.get(f"{self.schedule_client.task_service_url}/tid/{tid}", timeout=5)
+                    if task_response.status_code == 200:
+                        task_data = task_response.json().get("task", {})
+                        task_name = task_data.get("name", "Unknown Task")
+                        logger.info(f"Fetched task name for {tid}: {task_name}")
+                except Exception as e:
+                    logger.warning(f"Could not fetch task name for {tid}: {e}")
+            
             # Broadcast deadline approaching event to Kafka
             event_data = {
                 "sid": sid,
-                "tid": current_entry.get("tid"),
+                "tid": tid,
+                "task_name": task_name,
                 "deadline": current_entry.get("deadline"),
                 "status": "approaching",
                 "timestamp": datetime.now(UTC_PLUS_8).isoformat()
@@ -229,8 +243,8 @@ class RecurringTaskProcessor:
                 logger.error(f"Task info not found for {sid}")
                 return False
             
-            # Use asyncio.run for proper async handling
-            return asyncio.run(self._broadcast_deadline_approaching_events(user_info, event_data))
+            # Broadcast events synchronously
+            return self._broadcast_deadline_approaching_events(user_info, event_data)
                 
         except Exception as e:
             logger.error(f"Error processing deadline approaching for {sid}: {str(e)}")
@@ -260,10 +274,24 @@ class RecurringTaskProcessor:
                 logger.error(f"Failed to update task status to overdue for {sid}")
                 return False
             
+            # Get task name from task service
+            task_name = "Unknown Task"
+            tid = current_entry.get("tid")
+            if tid:
+                try:
+                    task_response = requests.get(f"{self.schedule_client.task_service_url}/tid/{tid}", timeout=5)
+                    if task_response.status_code == 200:
+                        task_data = task_response.json().get("task", {})
+                        task_name = task_data.get("name", "Unknown Task")
+                        logger.info(f"Fetched task name for {tid}: {task_name}")
+                except Exception as e:
+                    logger.warning(f"Could not fetch task name for {tid}: {e}")
+            
             # Broadcast deadline overdue event to Kafka
             event_data = {
                 "sid": sid,
-                "tid": current_entry.get("tid"),
+                "tid": tid,
+                "task_name": task_name,
                 "deadline": current_entry.get("deadline"),
                 "status": "overdue",
                 "timestamp": datetime.now(UTC_PLUS_8).isoformat()
@@ -275,24 +303,26 @@ class RecurringTaskProcessor:
                 logger.error(f"Task info not found for {sid}")
                 return False
             
-            # Use asyncio.run for proper async handling
-            return asyncio.run(self._broadcast_deadline_events(user_info, event_data))
+            # Broadcast events synchronously
+            return self._broadcast_deadline_events(user_info, event_data)
                 
         except Exception as e:
             logger.error(f"Error processing deadline reached for {sid}: {str(e)}")
             return False
 
-    async def _broadcast_deadline_approaching_events(self, user_info, event_data) -> bool:
+    def _broadcast_deadline_approaching_events(self, user_info, event_data) -> bool:
         """
-        Broadcast deadline approaching events to all users asynchronously
+        Broadcast deadline approaching events to all users synchronously
         """
         try:
             # Ensure Kafka producer is connected
             if not self.kafka_publisher.producer:
-                await self.kafka_publisher._connect()
+                self.kafka_publisher._connect()
             
-            # Send events to all users concurrently
-            tasks = []
+            # Send events to all users
+            failed_count = 0
+            success_count = 0
+            
             for user in user_info:
                 local_event_data = event_data.copy()
                 local_event_data["uid"] = user.get("user_id")
@@ -301,49 +331,43 @@ class RecurringTaskProcessor:
                 local_event_data["role"] = user.get("user_role")
                 local_event_data["department"] = user.get("department")
                 
-                # Create async task for each user
-                task = self.kafka_publisher.publish_event(
+                # Publish event synchronously
+                success = self.kafka_publisher.publish_event(
                     topic=Topics.NOTIFICATION_EVENTS,
                     event_type=EventTypes.DEADLINE_APPROACHING,
                     data=local_event_data,
                 )
-                tasks.append(task)
-            
-            # Wait for all events to be published
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Check results
-            failed_count = 0
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error(f"Failed to broadcast deadline approaching event for user {user_info[i].get('id')}: {result}")
+                
+                if success:
+                    success_count += 1
+                else:
                     failed_count += 1
-                elif not result:
-                    logger.error(f"Failed to broadcast deadline approaching event for user {user_info[i].get('id')}")
-                    failed_count += 1
+                    logger.error(f"Failed to broadcast deadline approaching event for user {user.get('user_id')}")
             
             if failed_count > 0:
                 logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} deadline approaching events")
                 return False
             
-            logger.info(f"Successfully broadcasted deadline approaching events for {len(user_info)} users")
+            logger.info(f"Successfully broadcasted deadline approaching events for {success_count} users")
             return True
             
         except Exception as e:
             logger.error(f"Error broadcasting deadline approaching events: {str(e)}")
             return False
 
-    async def _broadcast_deadline_events(self, user_info, event_data) -> bool:
+    def _broadcast_deadline_events(self, user_info, event_data) -> bool:
         """
-        Broadcast deadline overdue events to all users asynchronously
+        Broadcast deadline overdue events to all users synchronously
         """
         try:
             # Ensure Kafka producer is connected
             if not self.kafka_publisher.producer:
-                await self.kafka_publisher._connect()
+                self.kafka_publisher._connect()
             
-            # Send events to all users concurrently
-            tasks = []
+            # Send events to all users
+            failed_count = 0
+            success_count = 0
+            
             for user in user_info:
                 local_event_data = event_data.copy()
                 local_event_data["uid"] = user.get("user_id")
@@ -352,32 +376,24 @@ class RecurringTaskProcessor:
                 local_event_data["role"] = user.get("user_role")
                 local_event_data["department"] = user.get("department")
                 
-                # Create async task for each user
-                task = self.kafka_publisher.publish_event(
+                # Publish event synchronously
+                success = self.kafka_publisher.publish_event(
                     topic=Topics.NOTIFICATION_EVENTS,
                     event_type=EventTypes.DEADLINE_OVERDUE,
                     data=local_event_data,
                 )
-                tasks.append(task)
-            
-            # Wait for all events to be published
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Check results
-            failed_count = 0
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}: {result}")
+                
+                if success:
+                    success_count += 1
+                else:
                     failed_count += 1
-                elif not result:
-                    logger.error(f"Failed to broadcast deadline overdue event for user {user_info[i].get('id')}")
-                    failed_count += 1
+                    logger.error(f"Failed to broadcast deadline overdue event for user {user.get('user_id')}")
             
             if failed_count > 0:
                 logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} deadline overdue events")
                 return False
             
-            logger.info(f"Successfully broadcasted deadline overdue events for {len(user_info)} users")
+            logger.info(f"Successfully broadcasted deadline overdue events for {success_count} users")
             return True
             
         except Exception as e:

@@ -15,8 +15,8 @@ export interface NotificationPayload {
     eventType?: string; // Support both formats
     data: {
         uid?: string;
-        user_id?: string;
-        userId?: string;
+        // user_id?: string;
+        // userId?: string;
         task_name?: string;
         tid?: string;
         project_id?: string;
@@ -26,6 +26,8 @@ export interface NotificationPayload {
         added_by_name?: string;
         created_by_uid?: string;
         priority_level?: number;
+        old_status?: string;
+        new_status?: string;
         label?: string;
         status?: string;
         description?: string;
@@ -50,6 +52,9 @@ export function formatNotificationMessage(payload: NotificationPayload): {
     const userName = data.name || "User";
     const projectName = data.project_name || "Project";
     const addedByName = data.added_by_name || "Someone";
+
+    const oldStatusText = data.old_status ? ` from ${data.old_status}` : "";
+    const newStatusText = data.new_status ? ` to ${data.new_status}` : "";
 
     switch (eventType) {
         case "task_created":
@@ -93,7 +98,7 @@ export function formatNotificationMessage(payload: NotificationPayload): {
             const statusText = data.status ? ` to ${data.status}` : "";
             return {
                 title: "Task Status Changed",
-                description: `Status of ${taskName} has been changed${statusText}`,
+                description: `Status of ${taskName} has been changed${oldStatusText}${newStatusText}`,
                 variant: "info",
             };
         case "deadline_approaching":
@@ -106,7 +111,7 @@ export function formatNotificationMessage(payload: NotificationPayload): {
             return {
                 title: "Deadline Overdue",
                 description: `${taskName} deadline has passed`,
-                variant: "error",
+                variant: "warning",
             };
         case "project_created":
             return {

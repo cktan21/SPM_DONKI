@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import logging
 import pytz
 import uuid
+import asyncio
 from pydantic import BaseModel
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,6 +106,7 @@ async def get_task_participants(task_id) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error getting participants for task {task_id}: {str(e)}")
         return []
+
 
 def test_kafka_connectivity() -> bool:
     """
@@ -241,6 +243,108 @@ async def notify_task_participants(task_id, task_data: Dict[str, Any]) -> bool:
         
     except Exception as e:
         logger.error(f"❌ Error notifying task participants: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return False
+
+
+async def notify_task_status_change(task_id: str, old_status: Optional[str], new_status: str, task_data: Dict[str, Any]) -> bool:
+    """
+    Notify all task participants (creator + collaborators) about task status change via Kafka
+    """
+    try:
+        logger.info(f"🚀 Starting status change notification process for task {task_id}")
+        
+        # Only publish if status actually changed
+        if old_status == new_status:
+            logger.info(f"⏭️ Status unchanged for task {task_id}, skipping notification")
+            return True
+        
+        logger.info(f"📤 Publishing status change event for task {task_id}: {old_status} -> {new_status}")
+        
+        # Ensure Kafka producer is connected
+        if not kafka_publisher.producer:
+            logger.info("📡 Connecting to Kafka producer...")
+            kafka_publisher._connect()
+            if not kafka_publisher.producer:
+                logger.error("❌ Failed to initialize Kafka producer")
+                return False
+        
+        # Get all participants for this task
+        logger.info(f"👥 Fetching participants for task {task_id}")
+        participants = await get_task_participants(task_id)
+        
+        if not participants:
+            logger.warning(f"⚠️ No participants found for task {task_id}, skipping status change notification")
+            return False
+        
+        logger.info(f"✅ Found {len(participants)} participants for task {task_id}")
+        
+        # Prepare event data
+        event_data = {
+            "tid": task_id,
+            "task_name": task_data.get("name", "Unknown Task"),
+            "old_status": old_status,
+            "new_status": new_status,
+            "project_id": task_data.get("pid"),
+            "created_by_uid": task_data.get("created_by_uid"),
+            "collaborators": task_data.get("collaborators", []),
+            "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+        }
+        
+        logger.info(f"📝 Prepared event data: {event_data}")
+        
+        # Send events to all participants
+        failed_count = 0
+        success_count = 0
+        
+        for i, participant in enumerate(participants):
+            logger.info(f"📤 Sending notification {i+1}/{len(participants)} to participant {participant.get('user_id')}")
+            
+            local_event_data = event_data.copy()
+            local_event_data["uid"] = participant.get("user_id") or participant.get("id")
+            local_event_data["name"] = participant.get("name") or participant.get("user_name")
+            local_event_data["email"] = participant.get("email") or participant.get("user_email")
+            local_event_data["role"] = participant.get("role") or participant.get("user_role")
+            local_event_data["department"] = participant.get("department")
+            local_event_data["phone"] = participant.get("phone")
+            local_event_data["is_creator"] = participant.get("is_creator", False)
+            local_event_data["is_collaborator"] = participant.get("is_collaborator", False)
+            
+            logger.debug(f"📋 Participant data: {local_event_data}")
+            
+            # Publish event for each participant
+            success = kafka_publisher.publish_event(
+                topic=Topics.NOTIFICATION_EVENTS,
+                event_type=EventTypes.TASK_STATUS_CHANGED,
+                data=local_event_data,
+            )
+            
+            if success:
+                success_count += 1
+                logger.info(f"✅ Successfully sent notification to participant {participant.get('user_id')}")
+            else:
+                failed_count += 1
+                logger.error(f"❌ Failed to send notification to participant {participant.get('user_id')}")
+        
+        # Final flush to ensure all messages are sent
+        try:
+            logger.info("🔄 Flushing remaining Kafka messages...")
+            if kafka_publisher.producer:
+                kafka_publisher.producer.flush(timeout=10)
+            logger.info("✅ Kafka flush completed")
+        except Exception as e:
+            logger.warning(f"⚠️ Error during Kafka flush: {e}")
+        
+        if failed_count > 0:
+            logger.error(f"❌ Failed to broadcast {failed_count} out of {len(participants)} status change events")
+            return False
+        
+        logger.info(f"🎉 Successfully broadcasted status change events for {success_count} participants")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error notifying task status change: {str(e)}")
         import traceback
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return False
@@ -837,6 +941,7 @@ async def create_task_composite(
 
         # ===================================================================
         # STEP 1: COMPLETE ALL VALIDATIONS BEFORE ANY CREATION OPERATIONS
+        # Run all validations in parallel for better performance
         # ===================================================================
         validation_results = {
             "parentTaskId": False,
@@ -845,22 +950,43 @@ async def create_task_composite(
             "schedule_data": False,
         }
 
+        # Collect all validation tasks to run in parallel
+        validation_tasks = []
+        validation_keys = []
+
         # Validate parent task ID
+        # Note: Calling async function without await creates a coroutine (doesn't execute yet)
         if task_json.get("parentTaskId"):
-            await validate_parent_task_id(task_json["parentTaskId"])
-            validation_results["parentTaskId"] = True
+            validation_tasks.append(validate_parent_task_id(task_json["parentTaskId"]))
+            validation_keys.append("parentTaskId")
 
         # Validate collaborators
         if task_json.get("collaborators"):
-            await validate_collaborators(task_json["collaborators"])
-            validation_results["collaborators"] = True
+            validation_tasks.append(validate_collaborators(task_json["collaborators"]))
+            validation_keys.append("collaborators")
 
         # Validate project ID
         if task_json.get("pid"):
-            await validate_project_id(task_json["pid"])
-            validation_results["project"] = True
+            validation_tasks.append(validate_project_id(task_json["pid"]))
+            validation_keys.append("project")
 
-        # Validate schedule data (if provided)
+        # Run all HTTP validations simultaneously
+        # asyncio.gather() will execute all coroutines in parallel
+        if validation_tasks:
+            try:
+                # Execute all validations in parallel
+                await asyncio.gather(*validation_tasks)
+                # If all passed, mark them as validated
+                for key in validation_keys:
+                    validation_results[key] = True
+            except ValidationError as e:
+                # Re-raise validation errors (they contain specific error messages)
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ValidationError(f"Validation error: {str(e)}")
+
+        # Validate schedule data (if provided) - this is a simple field check, not an HTTP call
         if schedule_data:
             # Check required fields for schedule
             if not schedule_data.get("deadline"):
@@ -1297,18 +1423,61 @@ async def update_task_composite(
     # ===================================================================
     print(f"[DEBUG] Received updates for task {task_id}:")
     print(f"[DEBUG] Raw payload: {updates}")
+    
+    # Initialize variables for tracking changes
+    old_status = None
+    old_collaborators = set()
+    old_owner = None
+    project_id = None
+    current_task = None
+    
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             current_task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
             if current_task_resp.status_code != 200:
+                error_detail = current_task_resp.text if current_task_resp.text else f"Task {task_id} not found"
+                logger.error(f"Task service returned status {current_task_resp.status_code}: {error_detail}")
                 raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-            current_task = current_task_resp.json().get("task", {})
+            
+            response_data = current_task_resp.json()
+            current_task = response_data.get("task")
+            
+            if not current_task:
+                logger.error(f"Task {task_id} not found in response: {response_data}")
+                raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+            
             old_collaborators = set(current_task.get("collaborators") or [])
             old_owner = current_task.get("created_by_uid")
             project_id = current_task.get("pid")
-    except Exception as e:
+            
+            # Get old status from schedule if status is being updated
+            if "status" in updates:
+                try:
+                    schedule_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
+                    if schedule_resp.status_code == 200:
+                        schedule_data = schedule_resp.json()
+                        if isinstance(schedule_data, dict) and "data" in schedule_data:
+                            old_status = schedule_data["data"].get("status")
+                except Exception as e:
+                    logger.warning(f"Could not fetch old status for task {task_id}: {e}")
+    except httpx.RequestError as e:
+        logger.error(f"Network error fetching task {task_id}: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to fetch current task: {str(e)}"
+            status_code=503, detail=f"Failed to connect to task service: {str(e)}"
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error fetching task {task_id}: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code, detail=f"Task service error: {e.response.text}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error fetching task {task_id}: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to fetch current task: {type(e).__name__}: {str(e)}"
         )
 
     # ===================================================================
@@ -1343,6 +1512,7 @@ async def update_task_composite(
     try:
         # ===================================================================
         # STEP 2: COMPLETE ALL VALIDATIONS BEFORE ANY UPDATE OPERATIONS
+        # Run all validations in parallel for better performance
         # ===================================================================
         validation_results = {
             "parentTaskId": False,
@@ -1351,25 +1521,44 @@ async def update_task_composite(
             "created_by_uid": False,
         }
 
+        # Collect all validation tasks to run in parallel
+        validation_tasks = []
+        validation_keys = []
+
         # Validate parent task ID
         if "parentTaskId" in filtered_updates and filtered_updates["parentTaskId"]:
-            await validate_parent_task_id(filtered_updates["parentTaskId"])
-            validation_results["parentTaskId"] = True
+            validation_tasks.append(validate_parent_task_id(filtered_updates["parentTaskId"]))
+            validation_keys.append("parentTaskId")
 
         # Validate collaborators exist in Users DB
         if "collaborators" in filtered_updates and filtered_updates["collaborators"]:
-            await validate_collaborators(filtered_updates["collaborators"])
-            validation_results["collaborators"] = True
+            validation_tasks.append(validate_collaborators(filtered_updates["collaborators"]))
+            validation_keys.append("collaborators")
 
         # Validate project ID exists
         if "pid" in filtered_updates and filtered_updates["pid"]:
-            await validate_project_id(filtered_updates["pid"])
-            validation_results["project"] = True
+            validation_tasks.append(validate_project_id(filtered_updates["pid"]))
+            validation_keys.append("project")
 
         # Validate created_by_uid exists in Users DB
         if "created_by_uid" in filtered_updates and filtered_updates["created_by_uid"]:
-            await validate_user_exists(filtered_updates["created_by_uid"])
-            validation_results["created_by_uid"] = True
+            validation_tasks.append(validate_user_exists(filtered_updates["created_by_uid"]))
+            validation_keys.append("created_by_uid")
+
+        # Run all validations simultaneously
+        if validation_tasks:
+            try:
+                # Execute all validations in parallel
+                await asyncio.gather(*validation_tasks)
+                # If all passed, mark them as validated
+                for key in validation_keys:
+                    validation_results[key] = True
+            except ValidationError as e:
+                # Re-raise validation errors (they contain specific error messages)
+                raise
+            except Exception as e:
+                # Wrap unexpected errors
+                raise ValidationError(f"Validation error: {str(e)}")
 
         # ===================================================================
         # STEP 3: UPDATE TASK (only after all validations pass)
@@ -1384,8 +1573,14 @@ async def update_task_composite(
         schedule_response = None
         if schedule_updates:
             schedule_response = await update_schedule_service(task_id, schedule_updates)
+            
+            # Publish Kafka event for status changes
+            if "status" in schedule_updates:
+                new_status = schedule_updates["status"]
+                # Don't fail the update if Kafka publishing fails
+                await notify_task_status_change(task_id, old_status, new_status, current_task)
 
-      # ===================================================================
+        # ===================================================================
         # STEP 5: SYNC PROJECT MEMBERS (Handle collaborator additions and removals)
         # ===================================================================
         members_synced = {"added": [], "removed": [], "skipped": []}
@@ -1848,8 +2043,9 @@ async def delete_task_composite(
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             # 1) Get task details BEFORE deletion (to get project_id, owner, collaborators)
-            task_url = f"{TASK_SERVICE_URL}/tasks/{task_id}"
-            get_resp = await client.get(task_url)
+            # Use /tid/{task_id} for GET (correct endpoint)
+            get_task_url = f"{TASK_SERVICE_URL}/tid/{task_id}"
+            get_resp = await client.get(get_task_url)
 
             if get_resp.status_code == 200:
                 task_data = get_resp.json().get("task", {})
@@ -1862,7 +2058,7 @@ async def delete_task_composite(
                     "message": "Task already deleted (idempotent)",
                     "task_id": task_id,
                     "task_delete": {
-                        "url": task_url,
+                        "url": f"{TASK_SERVICE_URL}/{task_id}",
                         "status_code": 404,
                         "result": "already_deleted",
                     },
@@ -1874,12 +2070,14 @@ async def delete_task_composite(
                         "message": "Task service get failed",
                         "status_code": get_resp.status_code,
                         "body": _safe_json(get_resp),
-                        "url": task_url,
+                        "url": get_task_url,
                     },
                 )
 
             # 2) Delete the task itself
-            delete_resp = await client.delete(task_url)
+            # Use /{task_id} for DELETE (correct endpoint, not /tasks/{task_id})
+            delete_task_url = f"{TASK_SERVICE_URL}/{task_id}"
+            delete_resp = await client.delete(delete_task_url)
             if delete_resp.status_code not in (200, 204, 404):
                 raise HTTPException(
                     status_code=502,
@@ -1887,7 +2085,7 @@ async def delete_task_composite(
                         "message": "Task service delete failed",
                         "status_code": delete_resp.status_code,
                         "body": _safe_json(delete_resp),
-                        "url": task_url,
+                        "url": delete_task_url,
                     },
                 )
 
@@ -1909,7 +2107,7 @@ async def delete_task_composite(
             "message": "Delete workflow completed and project members synced",
             "task_id": task_id,
             "task_delete": {
-                "url": task_url,
+                "url": delete_task_url,
                 "status_code": delete_resp.status_code,
                 "result": _safe_json(delete_resp),
             },
@@ -2311,7 +2509,7 @@ async def add_task_time_entry_composite(
     task_id: str = Path(..., description="UUID of the task"),
     payload: Dict[str, Any] = Body(
         ...,
-        example={
+        examples={
             "entry": {
                 "hours": 2,
                 "minutes": 30,

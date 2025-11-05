@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from recurring_processor import recurring_processor
 from schedule_client import ScheduleClient
 import uvicorn
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 import logging
 import pytz
@@ -21,8 +21,8 @@ async def process_overdue_tasks(all_schedules: list):
     try:
         logger.info("🔍 Checking for overdue tasks...")
         
-        # Initialize Kafka connection
-        kafka_initialized = await recurring_processor.initialize_kafka()
+        # Initialize Kafka connection (synchronous call)
+        kafka_initialized = recurring_processor.initialize_kafka()
         if not kafka_initialized:
             logger.error("Failed to initialize Kafka for overdue task processing")
             return
@@ -209,6 +209,7 @@ def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
         frequency = task_data.get("frequency")
         next_occurrence_str = task_data.get("next_occurrence")
         is_recurring = task_data.get("is_recurring", False)
+        deadline = task_data.get("deadline")
         
         if not sid:
             raise HTTPException(status_code=400, detail="Missing required field: sid")
@@ -216,36 +217,61 @@ def update_recurring_task(task_data: Dict[str, Any] = Body(...)):
         # First, cancel any existing recurring task for this sid
         recurring_processor.cancel_recurring_task(sid)
         
+        recurring_success = True
+        deadline_success = True
+        
         # If the task is still recurring and has the required fields, reschedule it
         if is_recurring and frequency and next_occurrence_str:
             # Schedule the updated recurring task
-            success = recurring_processor.schedule_recurring_task({
+            recurring_success = recurring_processor.schedule_recurring_task({
                 "sid": sid,
                 "frequency": frequency,
                 "next_occurrence": next_occurrence_str
             })
+        
+        # Handle deadline monitoring updates
+        if deadline:
+            # Cancel old deadline monitoring jobs first
+            recurring_processor.cancel_deadline_monitoring(sid)
             
-            if success:
-                return {
-                    "message": f"Successfully updated recurring task {sid}",
-                    "sid": sid,
-                    "frequency": frequency,
-                    "next_occurrence": next_occurrence_str,
-                    "action": "rescheduled"
-                }
-            else:
-                return {
-                    "message": f"Cancelled recurring task {sid} but failed to reschedule",
-                    "sid": sid,
-                    "action": "cancelled_only"
-                }
-        else:
-            # Task is no longer recurring, just cancelled
-            return {
-                "message": f"Successfully cancelled recurring task {sid}",
-                "sid": sid,
-                "action": "cancelled"
-            }
+            # Reschedule deadline monitoring with new deadline
+            deadline_success = recurring_processor.schedule_deadline_monitoring(task_data)
+            
+            # Check if deadline needs immediate processing (overdue or within 3 days)
+            try:
+                deadline_dt = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+                if deadline_dt.tzinfo is None:
+                    deadline_dt = UTC_PLUS_8.localize(deadline_dt)
+                else:
+                    deadline_dt = deadline_dt.astimezone(UTC_PLUS_8)
+                
+                current_time = datetime.now(UTC_PLUS_8)
+                approaching_dt = deadline_dt - timedelta(days=3)
+                
+                # If deadline is already past, immediately process overdue notification
+                if deadline_dt < current_time:
+                    logger.info(f"Deadline {deadline} is already overdue, immediately processing...")
+                    recurring_processor.process_deadline_reached(sid)
+                # If we're within the 3-day window (approaching notification time has passed), trigger it now
+                elif approaching_dt <= current_time < deadline_dt:
+                    logger.info(f"Deadline {deadline} is within 3 days, immediately processing approaching notification...")
+                    recurring_processor.process_deadline_approaching(sid)
+            except Exception as e:
+                logger.error(f"Error checking if deadline needs immediate processing: {str(e)}")
+        
+        # Build response
+        response = {
+            "message": f"Successfully updated cron jobs for task {sid}",
+            "sid": sid,
+            "action": "updated"
+        }
+        
+        if is_recurring:
+            response["recurring_success"] = recurring_success
+        if deadline:
+            response["deadline_success"] = deadline_success
+        
+        return response
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating recurring task: {str(e)}")
