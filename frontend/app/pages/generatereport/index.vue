@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FileText, Download, Filter, BarChart3, Users, FolderKanban, Calendar, TrendingUp, AlertCircle, ChevronDown, X } from 'lucide-vue-next'
+import { FileText, Download, Filter, BarChart3, Users, FolderKanban, Calendar, TrendingUp, AlertCircle, ChevronDown, X, Clock } from 'lucide-vue-next'
 
 let jsPDF: any
 let autoTable: any
@@ -38,6 +38,16 @@ interface User {
   role?: string
 }
 
+interface TimeEntry {
+  id: string
+  date: string
+  description: string
+  hours: number
+  minutes: number
+  userId: string
+  userName: string
+}
+
 interface Task {
   id: string
   name: string
@@ -48,6 +58,8 @@ interface Task {
   priorityLevel: number
   label: string
   desc?: string
+  totalHours?: number
+  timeEntries?: TimeEntry[]
   project: {
     id: string
     name: string
@@ -85,9 +97,12 @@ interface ReportData {
     todo: number
     overdue: number
     total: number
+    totalHours?: number
   }
   tasks: Task[]
 }
+
+const API_BASE_URL = "http://localhost:4000"
 
 // State
 const loading = ref(true)
@@ -132,6 +147,43 @@ const users = computed(() => {
   return Array.from(userMap.values())
 })
 
+// Fetch time entries for a task
+const fetchTimeEntriesForTask = async (taskId: string): Promise<TimeEntry[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/tasks/${taskId}/time-entries`)
+    
+    if (res.status === 404) {
+      return []
+    }
+
+    if (!res.ok) {
+      console.warn(`Failed to fetch time entries for task ${taskId}`)
+      return []
+    }
+
+    const data = await res.json()
+    return data.time_entries || []
+  } catch (err) {
+    console.error(`Error fetching time entries for task ${taskId}:`, err)
+    return []
+  }
+}
+
+// Calculate total hours from time entries
+const calculateTotalHours = (timeEntries: TimeEntry[]): number => {
+  return timeEntries.reduce((total, entry) => {
+    return total + entry.hours + (entry.minutes / 60)
+  }, 0)
+}
+
+// Format hours for display
+const formatHours = (hours: number | undefined) => {
+  if (hours === undefined || hours === 0) return '0h'
+  const h = Math.floor(hours)
+  const m = Math.round((hours - h) * 60)
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
 // Get unique teams (departments) from projects
 const teams = computed(() => {
   if (!data.value) return []
@@ -167,12 +219,23 @@ const selectedUsersDisplay = computed(() => {
 const statsCards = computed(() => {
   if (!currentReport.value) return []
 
-  return [
+  const baseCards = [
     { label: 'Completed', value: currentReport.value.stats.completed, color: 'bg-green-500', icon: '✓' },
     { label: 'In Progress', value: currentReport.value.stats.inProgress, color: 'bg-blue-500', icon: '●' },
     { label: 'To Do', value: currentReport.value.stats.todo, color: 'bg-gray-500', icon: '○' },
     { label: 'Overdue', value: currentReport.value.stats.overdue, color: 'bg-red-500', icon: '!' },
   ]
+  
+  if (currentReport.value.filterType === 'project' && currentReport.value.stats.totalHours !== undefined) {
+    baseCards.push({
+      label: 'Total Hours',
+      value: currentReport.value.stats.totalHours,
+      color: 'bg-purple-500',
+      icon: '⏱'
+    })
+  }
+
+  return baseCards
 })
 
 // Helper to get date range for week/month
@@ -288,27 +351,23 @@ const isUserSelected = (userId: string) => {
   return selectedUsers.value.includes(userId)
 }
 
-const handleGenerateReport = () => {
+const handleGenerateReport = async () => {
   if (!data.value) return
   
-  // Check if filter is selected
   if (filterType.value === 'team' && selectedUsers.value.length === 0) return
   if (filterType.value !== 'team' && !selectedFilter.value) return
 
   generating.value = true
-  setTimeout(() => {
+  
+  try {
     let tasks: Task[] = []
     let filterName = ''
     let dateRange: { start: Date, end: Date } | undefined
 
     if (filterType.value === 'team') {
-      // Get date range for team reports
       dateRange = getDateRange(timePeriod.value)
-      
-      // Get all tasks from all projects
       const allTasks = data.value!.projects.flatMap((p) => p.tasks)
       
-      // Filter by selected users
       tasks = allTasks.filter((task) =>
         selectedUsers.value.includes(task.created_by.id) ||
         task.collaborators.some((c) => selectedUsers.value.includes(c.id))
@@ -324,6 +383,21 @@ const handleGenerateReport = () => {
       if (project) {
         tasks = project.tasks
         filterName = project.name
+        
+        // Fetch time entries for each task in the project
+        const tasksWithHours = await Promise.all(
+          tasks.map(async (task) => {
+            const timeEntries = await fetchTimeEntriesForTask(task.id)
+            const totalHours = calculateTotalHours(timeEntries)
+            return {
+              ...task,
+              timeEntries,
+              totalHours
+            }
+          })
+        )
+        
+        tasks = tasksWithHours
       }
     } else {
       const allTasks = data.value!.projects.flatMap((p) => p.tasks)
@@ -336,12 +410,17 @@ const handleGenerateReport = () => {
       filterName = foundUser?.name || 'Unknown User'
     }
 
-    // Calculate stats with optional date filtering
     const { stats, tasks: filteredTasks } = calculateStats(
       tasks, 
       filterType.value === 'team',
       dateRange
     )
+
+    // Calculate total hours for project reports
+    let totalHours: number | undefined
+    if (filterType.value === 'project') {
+      totalHours = filteredTasks.reduce((sum, task) => sum + (task.totalHours || 0), 0)
+    }
 
     const report: ReportData = {
       id: generateReportId(),
@@ -354,13 +433,17 @@ const handleGenerateReport = () => {
         periodStart: dateRange?.start.toISOString(),
         periodEnd: dateRange?.end.toISOString(),
       }),
-      stats,
+      stats: {
+        ...stats,
+        ...(totalHours !== undefined && { totalHours: Math.round(totalHours * 100) / 100 })
+      },
       tasks: filteredTasks,
     }
 
     currentReport.value = report
+  } finally {
     generating.value = false
-  }, 800)
+  }
 }
 
 const exportToPDF = () => {
@@ -397,6 +480,7 @@ const exportToPDF = () => {
     ['In Progress', currentReport.value.stats.inProgress.toString(), `${Math.round((currentReport.value.stats.inProgress / currentReport.value.stats.total) * 100)}%`],
     ['To Do', currentReport.value.stats.todo.toString(), `${Math.round((currentReport.value.stats.todo / currentReport.value.stats.total) * 100)}%`],
     ['Overdue', currentReport.value.stats.overdue.toString(), `${Math.round((currentReport.value.stats.overdue / currentReport.value.stats.total) * 100)}%`],
+    ['Total Hours', currentReport.value.stats.totalHours?.toString() || '0', 'N/A'],
     ['Total Tasks', currentReport.value.stats.total.toString(), '100%'],
   ]
 
@@ -428,13 +512,14 @@ const exportToPDF = () => {
       task.collaborators.map((c) => c.name).join(', ') || 'None',
     ])
   } else {
-    taskHeaders = ['Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To']
+    taskHeaders = ['Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To', 'Hours']
     taskData = currentReport.value.tasks.map((task) => [
       task.name,
       task.status,
       task.priorityLevel.toString(),
       new Date(task.deadline).toLocaleDateString(),
       task.collaborators.map((c) => c.name).join(', ') || 'None',
+      (task.totalHours || 0).toFixed(2)
     ])
   }
 
@@ -478,6 +563,7 @@ const exportToExcel = () => {
     ['In Progress', currentReport.value.stats.inProgress, `${Math.round((currentReport.value.stats.inProgress / currentReport.value.stats.total) * 100)}%`],
     ['To Do', currentReport.value.stats.todo, `${Math.round((currentReport.value.stats.todo / currentReport.value.stats.total) * 100)}%`],
     ['Overdue', currentReport.value.stats.overdue, `${Math.round((currentReport.value.stats.overdue / currentReport.value.stats.total) * 100)}%`],
+    ['Total Hours', currentReport.value.stats.totalHours || 0, 'N/A'],
     ['Total Tasks', currentReport.value.stats.total, '100%']
   )
 
@@ -503,13 +589,14 @@ const exportToExcel = () => {
     ]
   } else {
     taskData = [
-      ['Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To', 'Created By', 'Description'],
+      ['Task Name', 'Status', 'Priority', 'Deadline', 'Assigned To', 'Hours', 'Created By', 'Description'],
       ...currentReport.value.tasks.map((task) => [
         task.name,
         task.status,
         task.priorityLevel,
         new Date(task.deadline).toLocaleDateString(),
         task.collaborators.map((c) => c.name).join(', '),
+        (task.totalHours || 0).toFixed(2),
         task.created_by.name,
         task.desc || '',
       ]),
@@ -850,6 +937,8 @@ onMounted(() => {
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Priority</th>
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Deadline</th>
                       <th class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Assigned To</th>
+                      <th v-if="currentReport.filterType === 'project'" 
+                        class="text-left py-3 px-4 text-sm font-semibold text-gray-700">Hours</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -882,6 +971,12 @@ onMounted(() => {
                             class="text-xs">
                             {{ collab.name }}
                           </Badge>
+                        </div>
+                      </td>
+                      <td v-if="currentReport.filterType === 'project'" class="py-3 px-4">
+                        <div class="flex items-center gap-1 text-sm font-medium text-purple-700">
+                          <Clock class="w-4 h-4" />
+                          {{ formatHours(task.totalHours) }}
                         </div>
                       </td>
                     </tr>
