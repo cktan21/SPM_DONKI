@@ -314,6 +314,7 @@ const fetchTimeEntries = async () => {
         timeEntries.value = data.time_entries || [];
 
         console.log(`✅ Loaded ${timeEntries.value.length} time entries`);
+        console.log(timeEntries.value);
     } catch (err: any) {
         console.error("Failed to fetch time entries:", err);
         // Don't show toast for initial load failure - task might not have time entries yet
