@@ -2509,7 +2509,7 @@ async def add_task_time_entry_composite(
     task_id: str = Path(..., description="UUID of the task"),
     payload: Dict[str, Any] = Body(
         ...,
-        example={
+        examples={
             "entry": {
                 "hours": 2,
                 "minutes": 30,
