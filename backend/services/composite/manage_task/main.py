@@ -107,6 +107,7 @@ async def get_task_participants(task_id) -> List[Dict[str, Any]]:
         logger.error(f"Error getting participants for task {task_id}: {str(e)}")
         return []
 
+
 def test_kafka_connectivity() -> bool:
     """
     Test Kafka connectivity and topic existence
@@ -1320,6 +1321,14 @@ async def update_task_composite(
     # ===================================================================
     print(f"[DEBUG] Received updates for task {task_id}:")
     print(f"[DEBUG] Raw payload: {updates}")
+    
+    # Initialize variables for tracking changes
+    old_status = None
+    old_collaborators = set()
+    old_owner = None
+    project_id = None
+    current_task = None
+    
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             current_task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
@@ -1338,6 +1347,17 @@ async def update_task_composite(
             old_collaborators = set(current_task.get("collaborators") or [])
             old_owner = current_task.get("created_by_uid")
             project_id = current_task.get("pid")
+            
+            # Get old status from schedule if status is being updated
+            if "status" in updates:
+                try:
+                    schedule_resp = await client.get(f"{SCHEDULE_SERVICE_URL}/tid/{task_id}/latest")
+                    if schedule_resp.status_code == 200:
+                        schedule_data = schedule_resp.json()
+                        if isinstance(schedule_data, dict) and "data" in schedule_data:
+                            old_status = schedule_data["data"].get("status")
+                except Exception as e:
+                    logger.warning(f"Could not fetch old status for task {task_id}: {e}")
     except httpx.RequestError as e:
         logger.error(f"Network error fetching task {task_id}: {str(e)}")
         raise HTTPException(
@@ -1451,6 +1471,69 @@ async def update_task_composite(
         schedule_response = None
         if schedule_updates:
             schedule_response = await update_schedule_service(task_id, schedule_updates)
+            
+            # Publish Kafka event for status changes
+            if "status" in schedule_updates:
+                try:
+                    new_status = schedule_updates["status"]
+                    
+                    # Only publish if status actually changed
+                    if old_status != new_status:
+                        logger.info(f"📤 Publishing status change event for task {task_id}: {old_status} -> {new_status}")
+                        
+                        # Get task participants
+                        participants = await get_task_participants(task_id)
+                        
+                        if participants:
+                            # Prepare event data
+                            event_data = {
+                                "tid": task_id,
+                                "task_name": current_task.get("name", "Unknown Task"),
+                                "old_status": old_status,
+                                "new_status": new_status,
+                                "project_id": project_id,
+                                "created_by_uid": current_task.get("created_by_uid"),
+                                "collaborators": current_task.get("collaborators", []),
+                                "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+                            }
+                            
+                            # Publish event to all participants
+                            success_count = 0
+                            for participant in participants:
+                                participant_data = {
+                                    **event_data,
+                                    "uid": participant.get("user_id") or participant.get("id"),
+                                    "name": participant.get("name"),
+                                    "email": participant.get("email"),
+                                    "role": participant.get("role"),
+                                    "department": participant.get("department"),
+                                    "phone": participant.get("phone")
+                                }
+                                
+                                success = kafka_publisher.publish_event(
+                                    topic=Topics.NOTIFICATION_EVENTS,
+                                    event_type=EventTypes.TASK_STATUS_CHANGED,
+                                    data=participant_data
+                                )
+                                
+                                if success:
+                                    success_count += 1
+                            
+                            # Flush Kafka messages
+                            try:
+                                if kafka_publisher.producer:
+                                    kafka_publisher.producer.flush(timeout=10)
+                            except Exception as e:
+                                logger.warning(f"Error flushing Kafka messages: {e}")
+                            
+                            logger.info(f"✅ Published status change events to {success_count}/{len(participants)} participants")
+                        else:
+                            logger.warning(f"⚠️ No participants found for task {task_id}, skipping status change notification")
+                except Exception as e:
+                    logger.error(f"❌ Error publishing status change event for task {task_id}: {str(e)}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    # Don't fail the update if Kafka publishing fails
 
         # ===================================================================
         # STEP 5: SYNC PROJECT MEMBERS (Handle collaborator additions and removals)
