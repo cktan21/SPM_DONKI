@@ -368,7 +368,41 @@ const addTimeEntry = async () => {
             }
         );
 
-        // ... rest of the code
+        if (!response.ok) {
+            const errorData = await response
+                .json()
+                .catch(() => ({ detail: "Failed to add time entry" }));
+            console.error("❌ Backend error:", errorData);
+            throw new Error(errorData.detail || "Failed to add time entry");
+        }
+
+        const result = await response.json();
+        console.log("✅ Time entry added successfully:", result);
+
+        // Add the new entry to local state
+        const newEntry: TimeEntry = {
+            id: result.entry_id || result.id || crypto.randomUUID(),
+            hours: newTimeEntry.value.hours,
+            minutes: newTimeEntry.value.minutes,
+            description: newTimeEntry.value.description,
+            date: new Date().toISOString(),
+            userId: currentUserId,
+            userName: currentUserName
+        };
+        
+        timeEntries.value.unshift(newEntry); // Add to beginning of array
+
+        // Reset form
+        newTimeEntry.value = {
+            hours: 0,
+            minutes: 0,
+            description: ""
+        };
+        isAddingTime.value = false;
+
+        toast({
+            title: "Time logged successfully!"
+        });
     } catch (err: any) {
         console.error("❌ Failed to add time entry:", err);
         toast({
@@ -396,14 +430,12 @@ const removeTimeEntry = async (id: string) => {
         console.log(`🗑️ Removing time entry ${id} for user ${currentUserId}`);
 
         const response = await fetch(
-            `${API_BASE_URL}/tasks/${taskId.value}/time-entries/${id}`,
+            `${API_BASE_URL}/tasks/${taskId.value}/time-entries/${id}?user_id=${currentUserId}`,
             {
                 method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: currentUserId })
+                headers: { "Content-Type": "application/json" }
             }
         );
-
         if (response.status === 403) {
             toast({
                 title: "Access denied",
@@ -418,6 +450,7 @@ const removeTimeEntry = async (id: string) => {
                 .json()
                 .catch(() => ({ detail: "Failed to remove time entry" }));
             console.error("❌ Backend error:", errorData);
+            console.error("❌ Error details:", JSON.stringify(errorData, null, 2)); // Add this line
             throw new Error(errorData.detail || "Failed to remove time entry");
         }
 
