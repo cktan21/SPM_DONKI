@@ -322,17 +322,22 @@ async def create_task(
         return {"message": "Task created successfully", "task": rows[0]}
 
     except APIError as e:
-        # Duplicate name error from Supabase/Postgres
-        if "duplicate key value" in str(e):
-            print("Task name already exist")  # ✅ Logs to backend console
-            raise HTTPException(status_code=400, detail="Task name already exist")
+        # Handle database errors - duplicate names are now allowed
+        # If you still get duplicate key errors, remove the unique constraint from the database
+        error_str = str(e).lower()
+        if "duplicate key value" in error_str:
+            logger.error(f"Database constraint violation (may need to remove unique constraint): {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Database constraint error. If this is about duplicate task names, please remove the UNIQUE constraint on the 'name' field in the TASK table: {str(e)}"
+            )
         else:
-            print("Supabase API error:", str(e))
-            raise HTTPException(status_code=500, detail="Database error")
+            logger.error(f"Supabase API error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     except Exception as e:
-        print("Unexpected error:", str(e))
-        raise HTTPException(status_code=500, detail="Unexpected error")
+        logger.error(f"Unexpected error creating task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 # Update task details
