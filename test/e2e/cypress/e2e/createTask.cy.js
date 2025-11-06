@@ -50,7 +50,8 @@
     // deleteExistingTasks();
 
 
-/// <reference types="cypress" />
+///
+ <reference types="cypress" />
 
 Cypress.on("uncaught:exception", () => false);
 
