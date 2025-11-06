@@ -400,6 +400,51 @@ class RecurringTaskProcessor:
             logger.error(f"Error broadcasting deadline events: {str(e)}")
             return False
 
+    def _broadcast_recurring_task_reset_events(self, user_info, event_data) -> bool:
+        """
+        Broadcast recurring task reset events to all users synchronously
+        """
+        try:
+            # Ensure Kafka producer is connected
+            if not self.kafka_publisher.producer:
+                self.kafka_publisher._connect()
+            
+            # Send events to all users
+            failed_count = 0
+            success_count = 0
+            
+            for user in user_info:
+                local_event_data = event_data.copy()
+                local_event_data["uid"] = user.get("user_id")
+                local_event_data["name"] = user.get("user_name")
+                local_event_data["email"] = user.get("user_email")
+                local_event_data["role"] = user.get("user_role")
+                local_event_data["department"] = user.get("department")
+                
+                # Publish event synchronously
+                success = self.kafka_publisher.publish_event(
+                    topic=Topics.NOTIFICATION_EVENTS,
+                    event_type=EventTypes.RECURRING_TASK_RESET,
+                    data=local_event_data,
+                )
+                
+                if success:
+                    success_count += 1
+                else:
+                    failed_count += 1
+                    logger.error(f"Failed to broadcast recurring task reset event for user {user.get('user_id')}")
+            
+            if failed_count > 0:
+                logger.error(f"Failed to broadcast {failed_count} out of {len(user_info)} recurring task reset events")
+                return False
+            
+            logger.info(f"Successfully broadcasted recurring task reset events for {success_count} users")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error broadcasting recurring task reset events: {str(e)}")
+            return False
+
     def process_recurring_task(self, sid: str, frequency: str):
         """
         Process a recurring task when its next occurrence time is reached
@@ -417,6 +462,49 @@ class RecurringTaskProcessor:
             new_entry = self.create_recurring_entry(current_entry, frequency)
             if new_entry:
                 logger.info(f"Successfully created new recurring entry for task {current_entry['tid']}")
+                
+                # Mark the old entry as completed
+                old_status = current_entry.get("status")
+                if old_status not in ["completed", "cancelled"]:
+                    update_success = self.schedule_client.update_schedule(sid, {"status": "completed"})
+                    if update_success:
+                        logger.info(f"Marked old schedule entry {sid} as completed")
+                    else:
+                        logger.warning(f"Failed to mark old schedule entry {sid} as completed")
+                
+                # Get task name from task service
+                task_name = "Unknown Task"
+                tid = current_entry.get("tid")
+                if tid:
+                    try:
+                        task_response = requests.get(f"{self.schedule_client.task_service_url}/tid/{tid}", timeout=5)
+                        if task_response.status_code == 200:
+                            task_data = task_response.json().get("task", {})
+                            task_name = task_data.get("name", "Unknown Task")
+                            logger.info(f"Fetched task name for {tid}: {task_name}")
+                    except Exception as e:
+                        logger.warning(f"Could not fetch task name for {tid}: {e}")
+                
+                # Get user info for notification
+                user_info = self.schedule_client.get_user_info(new_entry["sid"])
+                if user_info:
+                    # Broadcast recurring task reset event to Kafka
+                    event_data = {
+                        "sid": new_entry["sid"],
+                        "tid": tid,
+                        "task_name": task_name,
+                        "start": new_entry.get("start"),
+                        "deadline": new_entry.get("deadline"),
+                        "frequency": frequency,
+                        "next_occurrence": new_entry.get("next_occurrence"),
+                        "status": "ongoing",
+                        "timestamp": datetime.now(UTC_PLUS_8).isoformat()
+                    }
+                    
+                    # Broadcast events synchronously
+                    self._broadcast_recurring_task_reset_events(user_info, event_data)
+                else:
+                    logger.warning(f"Could not get user info for new schedule entry {new_entry['sid']}, skipping notification")
                 
                 # Schedule the next occurrence for the new entry
                 new_sid = new_entry["sid"]
