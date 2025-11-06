@@ -33,6 +33,12 @@ export interface NotificationPayload {
         description?: string;
         is_creator?: boolean;
         is_collaborator?: boolean;
+        // Recurring task reset fields
+        frequency?: string;
+        start?: string;
+        deadline?: string;
+        next_occurrence?: string;
+        sid?: string;
         [key: string]: any;
     };
     timestamp: string;
@@ -112,6 +118,16 @@ export function formatNotificationMessage(payload: NotificationPayload): {
                 title: "Deadline Overdue",
                 description: `${taskName} deadline has passed`,
                 variant: "warning",
+            };
+        case "recurring_task_reset":
+            const frequencyText = data.frequency ? ` (${data.frequency})` : "";
+            const startDate = data.start ? new Date(data.start).toLocaleDateString() : "";
+            const deadlineDate = data.deadline ? new Date(data.deadline).toLocaleDateString() : "";
+            const dateRange = startDate && deadlineDate ? ` from ${startDate} to ${deadlineDate}` : deadlineDate ? ` (deadline: ${deadlineDate})` : "";
+            return {
+                title: "Recurring Task Reset",
+                description: `${taskName} has been reset for a new occurrence${frequencyText}${dateRange}`,
+                variant: "info",
             };
         case "project_created":
             return {

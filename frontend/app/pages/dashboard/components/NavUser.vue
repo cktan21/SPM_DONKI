@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import {
     BadgeCheck,
     Bell,
     ChevronsUpDown,
     CreditCard,
     LogOut,
-    Sparkles,
+    Sparkles
 } from "lucide-vue-next";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,14 +17,15 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
+    DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-    useSidebar,
+    useSidebar
 } from "@/components/ui/sidebar";
+import NotificationPreferencesDialog from "./NotificationPreferencesDialog.vue";
 
 const props = defineProps<{
     user: {
@@ -36,14 +38,21 @@ const props = defineProps<{
 
 const { isMobile } = useSidebar();
 
+// Notification preferences dialog state
+const showNotificationPreferences = ref(false);
+
+const openNotificationPreferences = () => {
+    showNotificationPreferences.value = true;
+};
+
 const handleLogout = async () => {
     try {
         const response = await fetch("http://localhost:8000/user/logout", {
             method: "POST",
             credentials: "include", // Important: sends cookies
             headers: {
-                "Content-Type": "application/json",
-            },
+                "Content-Type": "application/json"
+            }
         });
 
         if (response.ok) {
@@ -136,7 +145,7 @@ const handleLogout = async () => {
                             <CreditCard />
                             Billing
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem @click="openNotificationPreferences">
                             <Bell />
                             Notifications
                         </DropdownMenuItem>
@@ -150,4 +159,7 @@ const handleLogout = async () => {
             </DropdownMenu>
         </SidebarMenuItem>
     </SidebarMenu>
+
+    <!-- Notification Preferences Dialog -->
+    <NotificationPreferencesDialog v-model:open="showNotificationPreferences" />
 </template>
