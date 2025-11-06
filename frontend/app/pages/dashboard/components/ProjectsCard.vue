@@ -421,7 +421,7 @@ function openProject(project: Project) {
             </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500">Created On:</span>
-              <span class="text-gray-700 font-bold">{{ new Date(project.created_at).toLocaleDateString() }}</span>
+              <span class="text-gray-700 font-bold">{{ new Date(project.created_at).toLocaleDateString('en-GB') }}</span>
             </div>
           </div>
         </CardContent>

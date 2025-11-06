@@ -1,16 +1,16 @@
 export const formatDate = (dateString) => {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return date.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export const formatDateShort = (dateString) => {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })
 }
 
 export const formatTime = (dateString) => {
   const date = new Date(dateString)
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
 export const getStatusColor = (status) => {
