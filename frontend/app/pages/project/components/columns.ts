@@ -24,7 +24,7 @@ interface StatusOption {
 const formatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'N/A'
   try {
-    const formatted = new Date(dateStr).toLocaleDateString('en-US', {
+    const formatted = new Date(dateStr).toLocaleDateString('en-GB', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
