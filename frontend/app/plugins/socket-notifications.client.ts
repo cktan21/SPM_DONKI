@@ -2,6 +2,7 @@ import { watch, h } from "vue";
 import { toast } from "@/components/ui/toast";
 import { ToastAction } from "@/components/ui/toast"
 import { socket, formatNotificationMessage } from "~/components/socket";
+import { useNotificationPreferences } from "~/composables/useNotificationPreferences";
 
 export default defineNuxtPlugin(() => {
     console.log("[Socket.IO Plugin] Initializing...");
@@ -34,6 +35,28 @@ export default defineNuxtPlugin(() => {
         console.log("[Socket.IO Client] Received notification:", payload);
 
         try {
+            // Extract event type from payload (support both formats)
+            const eventType = payload.event_type || payload.eventType || "unknown";
+
+            // Check if this notification type is enabled in user preferences
+            // Load preferences directly from localStorage to avoid reactivity issues in plugin
+            const preferences = (() => {
+                if (typeof window === "undefined") return null;
+                try {
+                    const stored = localStorage.getItem("notification_preferences");
+                    if (!stored) return null;
+                    return JSON.parse(stored);
+                } catch {
+                    return null;
+                }
+            })();
+
+            // If preferences exist and this event type is disabled, skip
+            if (preferences && preferences[eventType] === false) {
+                console.log(`[Socket.IO Client] Notification type "${eventType}" is disabled, skipping...`);
+                return;
+            }
+
             const notification = formatNotificationMessage(payload);
             console.log("[Socket.IO Client] Formatted notification:", notification);
 
