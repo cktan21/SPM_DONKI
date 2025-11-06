@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from kafka_client import KafkaEventConsumer, EventTypes, Topics
 import pytz
 import time
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from daily_email_summary import DailyEmailSummaryService
 
 load_dotenv()
 
@@ -254,12 +257,48 @@ class EmailService:
         logger.error(f"Notification failed: {data}")
         # You can add logic here to retry or log failures
 
+def setup_daily_email_scheduler(email_service: EmailService):
+    """
+    Setup and start the daily email summary scheduler
+    Sends daily summaries at 8:15 AM UTC+8 (Singapore time)
+    """
+    try:
+        # Initialize daily email summary service
+        daily_summary_service = DailyEmailSummaryService(email_service)
+        
+        # Create scheduler
+        scheduler = BackgroundScheduler(timezone=UTC_PLUS_8)
+        
+        # Schedule daily email summary at 8:15 AM UTC+8
+        scheduler.add_job(
+            func=daily_summary_service.send_daily_summaries,
+            trigger=CronTrigger(hour=8, minute=15, timezone=UTC_PLUS_8),
+            id='daily_email_summary',
+            name='Daily Email Summary at 8:15 AM',
+            replace_existing=True
+        )
+        
+        # Start scheduler
+        scheduler.start()
+        logger.info("✅ Daily email summary scheduler started")
+        logger.info("📅 Daily summaries will be sent at 8:15 AM UTC+8 (Singapore time)")
+        
+        return scheduler
+    except Exception as e:
+        logger.error(f"❌ Failed to setup daily email scheduler: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return None
+
 def main():
     """Main function to run the email service as a Kafka consumer"""
     email_service = EmailService()
     consumer = KafkaEventConsumer(
         group_id='email-service-group'  # Unique consumer group for email service
     )
+    
+    # Setup daily email summary scheduler
+    scheduler = setup_daily_email_scheduler(email_service)
     
     try:
         # Connect to Kafka
@@ -287,8 +326,21 @@ def main():
         import traceback
         logger.error(f"Full traceback: {traceback.format_exc()}")
     finally:
+        if scheduler:
+            scheduler.shutdown()
         consumer.close()
 
 if __name__ == "__main__":
-    # Run the main function
-    main()
+    import sys
+    
+    # Check if manual trigger is requested
+    if len(sys.argv) > 1 and sys.argv[1] == "--send-daily-summary":
+        # Manual trigger for testing daily summaries
+        logger.info("📧 Manually triggering daily email summary...")
+        email_service = EmailService()
+        daily_summary_service = DailyEmailSummaryService(email_service)
+        daily_summary_service.send_daily_summaries()
+        logger.info("✅ Daily summary job completed")
+    else:
+        # Run the main function (Kafka consumer + scheduler)
+        main()

@@ -26,6 +26,31 @@ const formatDate = (dateStr: string | null | undefined) => {
   }
 }
 
+const formatDateTime = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 'N/A'
+  try {
+    const date = new Date(dateStr)
+    
+    // Format date and time in UTC+8 (Singapore timezone)
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'Asia/Singapore',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }
+    
+    const formatted = date.toLocaleString('en-GB', options)
+    // Format: "DD/MM/YYYY, HH:MM" -> "DD/MM/YYYY HH:MM (UTC+8)"
+    const [datePart, timePart] = formatted.split(', ')
+    return `${datePart} ${timePart} (UTC+8)`
+  } catch {
+    return 'N/A'
+  }
+}
+
 const getColorFromName = (name: string) => {
   const colors = [
     'bg-red-600', 'bg-blue-600', 'bg-green-600', 'bg-amber-600',
@@ -47,6 +72,19 @@ const getInitials = (name: string | undefined) => {
       <CardTitle class="text-base font-semibold">Details</CardTitle>
     </CardHeader>
     <CardContent class="space-y-5">
+      <!-- Start Date & Time -->
+      <div v-if="task.start" class="space-y-1.5">
+        <div class="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <Calendar class="w-3.5 h-3.5" />
+          Start Date & Time
+        </div>
+        <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+          {{ formatDateTime(task.start) }}
+        </p>
+      </div>
+
+      <Separator v-if="task.start" class="bg-slate-100 dark:bg-slate-800" />
+
       <!-- Deadline -->
       <div class="space-y-1.5">
         <div class="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -54,7 +92,7 @@ const getInitials = (name: string | undefined) => {
           Deadline
         </div>
         <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-          {{ formatDate(task.deadline) }}
+          {{ formatDateTime(task.deadline) }}
         </p>
       </div>
 

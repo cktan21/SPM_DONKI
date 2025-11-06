@@ -102,6 +102,10 @@ const formEdit = ref({
 const startDate = shallowRef<DateValue | undefined>(undefined);
 const deadline = shallowRef<DateValue | undefined>(undefined);
 
+// Time refs (default to UTC+8 times)
+const startTime = ref("09:00"); // Default to 9:00 AM UTC+8
+const deadlineTime = ref("17:00"); // Default to 5:00 PM UTC+8
+
 // --- Page State ---
 const state = ref({
     loading: false,
@@ -207,7 +211,7 @@ const formatDate = (dateValue: any): string => {
     }
 };
 
-// Validate date range
+// Validate date range (including time)
 const isDateRangeValid = computed(() => {
     if (!startDate.value || !deadline.value) {
         return true;
@@ -215,6 +219,11 @@ const isDateRangeValid = computed(() => {
 
     const start = startDate.value.toDate(getLocalTimeZone());
     const end = deadline.value.toDate(getLocalTimeZone());
+
+    // If dates are the same, check times
+    if (start.toDateString() === end.toDateString()) {
+        return startTime.value < deadlineTime.value;
+    }
 
     return start < end;
 });
@@ -389,7 +398,7 @@ const addTimeEntry = async () => {
             userId: currentUserId,
             userName: currentUserName
         };
-        
+
         timeEntries.value.unshift(newEntry); // Add to beginning of array
 
         // Reset form
@@ -450,7 +459,10 @@ const removeTimeEntry = async (id: string) => {
                 .json()
                 .catch(() => ({ detail: "Failed to remove time entry" }));
             console.error("❌ Backend error:", errorData);
-            console.error("❌ Error details:", JSON.stringify(errorData, null, 2)); // Add this line
+            console.error(
+                "❌ Error details:",
+                JSON.stringify(errorData, null, 2)
+            ); // Add this line
             throw new Error(errorData.detail || "Failed to remove time entry");
         }
 
@@ -614,12 +626,62 @@ const fetchTaskData = async () => {
 
         console.log("Start ISO:", startISO, "Deadline ISO:", deadlineISO);
 
+        // Parse dates
         startDate.value = startISO
             ? parseDate(startISO.slice(0, 10))
             : undefined;
         deadline.value = deadlineISO
             ? parseDate(deadlineISO.slice(0, 10))
             : undefined;
+
+        // Extract time from ISO strings (format: YYYY-MM-DDTHH:MM:SS+08:00 or similar)
+        if (startISO) {
+            try {
+                // Parse ISO string and convert to UTC+8 (Singapore time) for display
+                const date = new Date(startISO);
+                // Use toLocaleString to get time in UTC+8 timezone
+                const timeStr = date.toLocaleString("en-GB", {
+                    timeZone: "Asia/Singapore",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false
+                });
+                startTime.value = timeStr;
+            } catch (e) {
+                console.error("Error parsing start time:", e);
+                // Fallback: try to extract time directly from ISO string
+                const timeMatch = startISO.match(/T(\d{2}):(\d{2})/);
+                if (timeMatch) {
+                    startTime.value = `${timeMatch[1]}:${timeMatch[2]}`;
+                } else {
+                    startTime.value = "09:00";
+                }
+            }
+        }
+
+        if (deadlineISO) {
+            try {
+                // Parse ISO string and convert to UTC+8 (Singapore time) for display
+                const date = new Date(deadlineISO);
+                // Use toLocaleString to get time in UTC+8 timezone
+                const timeStr = date.toLocaleString("en-GB", {
+                    timeZone: "Asia/Singapore",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false
+                });
+                deadlineTime.value = timeStr;
+            } catch (e) {
+                console.error("Error parsing deadline time:", e);
+                // Fallback: try to extract time directly from ISO string
+                const timeMatch = deadlineISO.match(/T(\d{2}):(\d{2})/);
+                if (timeMatch) {
+                    deadlineTime.value = `${timeMatch[1]}:${timeMatch[2]}`;
+                } else {
+                    deadlineTime.value = "17:00";
+                }
+            }
+        }
 
         // Auto-set status to overdue if deadline is in the past
         if (deadline.value && canEditAll.value) {
@@ -694,16 +756,36 @@ const updateTask = async () => {
             payload.collaborators =
                 collaborators.length > 0 ? collaborators : undefined;
 
+            // Combine date and time for start, defaulting to UTC+8 (Singapore time)
             if (startDate.value) {
-                payload.start = startDate.value
-                    .toDate(getLocalTimeZone())
-                    .toISOString();
+                const startDateObj = startDate.value.toDate(getLocalTimeZone());
+                const year = startDateObj.getFullYear();
+                const month = String(startDateObj.getMonth() + 1).padStart(
+                    2,
+                    "0"
+                );
+                const day = String(startDateObj.getDate()).padStart(2, "0");
+                const timeStr = startTime.value || "09:00";
+
+                // Create ISO string with UTC+8 offset
+                payload.start = `${year}-${month}-${day}T${timeStr}:00+08:00`;
             }
 
+            // Combine date and time for deadline, defaulting to UTC+8 (Singapore time)
             if (deadline.value) {
-                payload.deadline = deadline.value
-                    .toDate(getLocalTimeZone())
-                    .toISOString();
+                const deadlineDateObj = deadline.value.toDate(
+                    getLocalTimeZone()
+                );
+                const year = deadlineDateObj.getFullYear();
+                const month = String(deadlineDateObj.getMonth() + 1).padStart(
+                    2,
+                    "0"
+                );
+                const day = String(deadlineDateObj.getDate()).padStart(2, "0");
+                const timeStr = deadlineTime.value || "17:00";
+
+                // Create ISO string with UTC+8 offset
+                payload.deadline = `${year}-${month}-${day}T${timeStr}:00+08:00`;
             }
 
             payload.is_recurring = formEdit.value.isRecurring === "true";
@@ -741,7 +823,7 @@ const updateTask = async () => {
             throw new Error(errorData.detail || "Failed to update task");
         }
 
-        toast({ title: "Task updated successfully!" });
+        // toast({ title: "Task updated successfully!" });
         router.push(`/task/${taskId.value}`);
     } catch (err: any) {
         toast({
@@ -1487,6 +1569,21 @@ onMounted(async () => {
                                                     :initial-focus="true" />
                                             </PopoverContent>
                                         </Popover>
+                                        <!-- Start Time Input -->
+                                        <div class="mt-2">
+                                            <Label
+                                                for="task-start-time"
+                                                class="text-xs text-muted-foreground">
+                                                Start Time (UTC+8)
+                                            </Label>
+                                            <Input
+                                                id="task-start-time"
+                                                v-model="startTime"
+                                                type="time"
+                                                class="w-full mt-1"
+                                                :disabled="!canEditAll"
+                                                placeholder="09:00" />
+                                        </div>
                                     </div>
 
                                     <div class="space-y-2">
@@ -1534,6 +1631,21 @@ onMounted(async () => {
                                                     :initial-focus="true" />
                                             </PopoverContent>
                                         </Popover>
+                                        <!-- Deadline Time Input -->
+                                        <div class="mt-2">
+                                            <Label
+                                                for="task-deadline-time"
+                                                class="text-xs text-muted-foreground">
+                                                Deadline Time (UTC+8)
+                                            </Label>
+                                            <Input
+                                                id="task-deadline-time"
+                                                v-model="deadlineTime"
+                                                type="time"
+                                                class="w-full mt-1"
+                                                :disabled="!canEditAll"
+                                                placeholder="17:00" />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1625,9 +1737,7 @@ onMounted(async () => {
                                             <p
                                                 class="text-xs text-muted-foreground mt-1">
                                                 Based on start date and
-                                                {{
-                                                    formEdit.frequency
-                                                }}
+                                                {{ formEdit.frequency }}
                                                 frequency
                                             </p>
                                         </div>

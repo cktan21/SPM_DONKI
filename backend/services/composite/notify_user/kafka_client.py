@@ -188,6 +188,7 @@ class EventTypes:
     SCHEDULE_DELETED = "schedule_deleted"
     DEADLINE_APPROACHING = "deadline_approaching"
     DEADLINE_OVERDUE = "deadline_overdue"
+    RECURRING_TASK_RESET = "recurring_task_reset"
     
     # User Events
     USER_CREATED = "user_created"
