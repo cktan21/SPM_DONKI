@@ -345,3 +345,62 @@ def test_get_all_users_failure(mock_client, supabase_client):
     
     with pytest.raises(Exception, match="Database error"):
         supabase_client.get_all_users()
+
+# -------------------------------
+# Additional column & edge coverage
+# -------------------------------
+
+def test_sign_up_custom_fields_forwarded(mock_client, supabase_client):
+    """role/name/department should be forwarded when provided."""
+    email, pwd = "hr@ex.com", "pw"
+    out = {"user": {"id": "u1"}, "session": None}
+    mock_client.auth.sign_up.return_value = out
+
+    res = supabase_client.sign_up(email, pwd, role="manager", name="Alice", department="HR")
+    mock_client.auth.sign_up.assert_called_once_with({
+        "email": email,
+        "password": pwd,
+        "options": {"data": {"role": "manager", "name": "Alice", "department": "HR"}}
+    })
+    assert res == out
+
+
+def test_get_user_by_auth_id_column_list(mock_client, supabase_client):
+    """Covers exact columns (including department)."""
+    mock_table = mock_client.table.return_value
+    expected = {"data": [{"id": "1", "email": "a@b.c", "role": "user", "name": "A", "department": "Ops"}]}
+    mock_table.select.return_value.eq.return_value.execute.return_value = expected
+
+    result = supabase_client.get_user_by_auth_id("auth-1")
+    mock_client.table.assert_called_once_with("USER")
+    mock_table.select.assert_called_once_with("id, email, role, name", "department")
+    assert result == expected
+
+
+def test_get_user_by_id_column_list(mock_client, supabase_client):
+    """Covers created_at and department selection."""
+    mock_table = mock_client.table.return_value
+    expected = {"data": [{"id": "1", "auth_id": "auth", "email": "e", "role": "r",
+                          "name": "n", "created_at": "t", "department": "d"}]}
+    mock_table.select.return_value.eq.return_value.execute.return_value = expected
+
+    result = supabase_client.get_user_by_id("1")
+    mock_table.select.assert_called_once_with(
+        "id, auth_id, email, role, name, created_at", "department"
+    )
+    assert result == expected
+
+
+def test_get_all_users_normalizes_none(mock_client, supabase_client):
+    """get_all_users should normalize None to [] (newer client behavior)."""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.execute.return_value.data = None
+    assert supabase_client.get_all_users() == []
+
+
+def test_get_all_logs_normalizes_none(mock_client, supabase_client):
+    """get_all_logs should normalize None to [] as well."""
+    mock_table = mock_client.table.return_value
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = None
+    assert supabase_client.get_all_logs() == []
+

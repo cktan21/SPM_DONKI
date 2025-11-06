@@ -9,7 +9,7 @@ import uvicorn
 from controllers import ProjectController
 from models import ProjectCreate, ProjectUpdate
 
-load_dotenv()
+load_dotenv() # pragma: no cover
 
 app = FastAPI(title="Atomic Microservice: Project Service")
 project_controller = ProjectController()
@@ -86,5 +86,5 @@ async def get_projects_by_department(department: str):
 async def get_favicon():
     return Response(status_code=204)
 
-if __name__ == "__main__":
+if __name__ == "__main__": # pragma: no cover
     uvicorn.run(app, host="0.0.0.0", port=5200)
