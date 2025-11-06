@@ -79,7 +79,6 @@ describe('Manager flow: login → wait for dashboard → open report page → ge
       .click({ force: true });
 
     // --- VERIFY REPORT RENDERED ---
-    // --- VERIFY REPORT RENDERED ---
     // Wait for the report header first
     cy.contains('Report #', { timeout: 180000 }).should('be.visible');
 
