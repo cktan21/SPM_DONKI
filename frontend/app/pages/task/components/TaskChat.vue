@@ -97,7 +97,7 @@ const uploadingFiles = ref(false)
 // Format timestamp helper
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp)
-  return date.toLocaleTimeString('en-US', { 
+  return date.toLocaleTimeString('en-GB', { 
     hour: 'numeric', 
     minute: '2-digit', 
     hour12: true 
@@ -123,7 +123,7 @@ const getDateSeparator = (timestamp: string) => {
   if (diffDays === 1) return 'Yesterday'
   if (diffDays <= 7) return `${diffDays} days ago`
   
-  return msgDate.toLocaleDateString('en-US', { 
+  return msgDate.toLocaleDateString('en-GB', { 
     month: 'short', 
     day: 'numeric', 
     year: msgDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined 

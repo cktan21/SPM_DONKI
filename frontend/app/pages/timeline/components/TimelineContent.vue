@@ -105,7 +105,7 @@ const formatDateRange = () => {
     const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
     return `${formatDate(now)} - ${formatDate(end)}`
   } else if (props.selectedTimeRange === 'month') {
-    return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
   } else {
     const end = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
     return `${formatDate(now)} - ${formatDate(end)}`
@@ -114,6 +114,6 @@ const formatDateRange = () => {
 
 const formatDate = (dateString) => {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return date.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 </script>

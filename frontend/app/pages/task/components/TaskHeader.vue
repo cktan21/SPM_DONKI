@@ -16,7 +16,7 @@ const emit = defineEmits(['edit', 'delete'])
 const formatDateShort = (dateStr: string | null | undefined) => {
   if (!dateStr) return 'N/A'
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
