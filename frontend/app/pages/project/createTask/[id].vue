@@ -52,9 +52,11 @@ const formCreate = ref({
     label: "",
     isRecurring: "false", // String "true" or "false"
     schedule: {
-        status: "",
+        status: "to do", // Default to "to do"
         start: undefined as DateValue | undefined,
+        startTime: "09:00", // Default to 9:00 AM UTC+8
         deadline: undefined as DateValue | undefined,
+        deadlineTime: "17:00", // Default to 5:00 PM UTC+8
         frequency: ""
     }
 });
@@ -83,7 +85,7 @@ const formatDate = (dateValue: any): string => {
     }
 };
 
-// Computed property to check if dates are valid (start must be before deadline)
+// Computed property to check if dates are valid (start must be before deadline, including time)
 const isDateRangeValid = computed(() => {
     if (
         !formCreate.value.schedule.start ||
@@ -98,6 +100,13 @@ const isDateRangeValid = computed(() => {
     const deadlineDate = formCreate.value.schedule.deadline.toDate(
         getLocalTimeZone()
     );
+
+    // If dates are the same, check times
+    if (startDate.toDateString() === deadlineDate.toDateString()) {
+        const startTime = formCreate.value.schedule.startTime || "09:00";
+        const deadlineTime = formCreate.value.schedule.deadlineTime || "17:00";
+        return startTime < deadlineTime;
+    }
 
     return startDate < deadlineDate;
 });
@@ -243,18 +252,47 @@ const createTask = async () => {
 
         const schedule: any = {};
 
-        if (formCreate.value.schedule.status)
-            schedule.status = formCreate.value.schedule.status;
+        // Always include status, defaulting to "to do" if not set
+        schedule.status = formCreate.value.schedule.status || "to do";
 
-        if (formCreate.value.schedule.start)
-            schedule.start = formCreate.value.schedule.start
-                .toDate(getLocalTimeZone())
-                .toISOString();
+        // Combine date and time for start, defaulting to UTC+8 (Singapore time)
+        if (formCreate.value.schedule.start) {
+            const startDate = formCreate.value.schedule.start.toDate(
+                getLocalTimeZone()
+            );
+            const [hours, minutes] = formCreate.value.schedule.startTime
+                .split(":")
+                .map(Number);
 
-        if (formCreate.value.schedule.deadline)
-            schedule.deadline = formCreate.value.schedule.deadline
-                .toDate(getLocalTimeZone())
-                .toISOString();
+            // Set time in UTC+8 (Singapore timezone)
+            // Create date string in UTC+8 format
+            const year = startDate.getFullYear();
+            const month = String(startDate.getMonth() + 1).padStart(2, "0");
+            const day = String(startDate.getDate()).padStart(2, "0");
+            const timeStr = formCreate.value.schedule.startTime || "09:00";
+
+            // Create ISO string with UTC+8 offset
+            schedule.start = `${year}-${month}-${day}T${timeStr}:00+08:00`;
+        }
+
+        // Combine date and time for deadline, defaulting to UTC+8 (Singapore time)
+        if (formCreate.value.schedule.deadline) {
+            const deadlineDate = formCreate.value.schedule.deadline.toDate(
+                getLocalTimeZone()
+            );
+            const [hours, minutes] = formCreate.value.schedule.deadlineTime
+                .split(":")
+                .map(Number);
+
+            // Set time in UTC+8 (Singapore timezone)
+            const year = deadlineDate.getFullYear();
+            const month = String(deadlineDate.getMonth() + 1).padStart(2, "0");
+            const day = String(deadlineDate.getDate()).padStart(2, "0");
+            const timeStr = formCreate.value.schedule.deadlineTime || "17:00";
+
+            // Create ISO string with UTC+8 offset
+            schedule.deadline = `${year}-${month}-${day}T${timeStr}:00+08:00`;
+        }
 
         // Only set is_recurring if we have a deadline (required for schedule)
         // This prevents sending schedule without required fields
@@ -733,6 +771,23 @@ const createTask = async () => {
                                                     :initial-focus="true" />
                                             </PopoverContent>
                                         </Popover>
+                                        <!-- Start Time Input -->
+                                        <div class="mt-2">
+                                            <Label
+                                                for="task-start-time"
+                                                class="text-xs text-muted-foreground">
+                                                Start Time (UTC+8)
+                                            </Label>
+                                            <Input
+                                                id="task-start-time"
+                                                v-model="
+                                                    formCreate.schedule
+                                                        .startTime
+                                                "
+                                                type="time"
+                                                class="w-full mt-1"
+                                                placeholder="09:00" />
+                                        </div>
                                     </div>
 
                                     <div class="space-y-2">
@@ -790,6 +845,23 @@ const createTask = async () => {
                                                     :initial-focus="true" />
                                             </PopoverContent>
                                         </Popover>
+                                        <!-- Deadline Time Input -->
+                                        <div class="mt-2">
+                                            <Label
+                                                for="task-deadline-time"
+                                                class="text-xs text-muted-foreground">
+                                                Deadline Time (UTC+8)
+                                            </Label>
+                                            <Input
+                                                id="task-deadline-time"
+                                                v-model="
+                                                    formCreate.schedule
+                                                        .deadlineTime
+                                                "
+                                                type="time"
+                                                class="w-full mt-1"
+                                                placeholder="17:00" />
+                                        </div>
                                     </div>
                                 </div>
 
