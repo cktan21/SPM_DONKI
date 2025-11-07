@@ -27,7 +27,7 @@ func init() {
 /***********************
  Helpers (namespaced with MT)
 ***********************/
-var httpClientMT = &http.Client{Timeout: 30 * time.Second}
+var httpClientMT = &http.Client{Timeout: 60 * time.Second}
 
 func getenvMT(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
