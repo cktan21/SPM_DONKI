@@ -23,7 +23,7 @@ describe('updateTask', () => {
     Login_staff()
 
     //create new task
-    cy.contains("TESTING JW",{timeout:20000}).should('exist').click()
+    cy.contains("TESTING JW CY DONT AMEND",{timeout:20000}).should('exist').click()
     cy.contains("Create New Task",{timeout:20000}).should('exist').click()
     cy.get('[id="task-name"]',{timeout:20000}).type("st1")
     cy.get('[id="task-description"]').type("sd")
@@ -68,7 +68,7 @@ describe('updateTask', () => {
     Login_manager()
 
     //access newly created task
-    cy.contains("TESTING JW",{timeout:20000}).should('exist').click()
+    cy.contains("TESTING JW CY DONT AMEND",{timeout:20000}).should('exist').click()
     cy.contains('[data-slot="table-cell"]',"st1",{timeout:20000}).should('exist').click()
     cy.contains('button',"Edit",{timeout:20000}).click().wait(1000)
     cy.contains("Search and select collaborators",{timeout:20000}).click()
