@@ -588,7 +588,7 @@ async def get_task_composite(
     6. Fetch parent task name if parentTaskId exists
     """
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             # === 1. Get Task ===
             task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")
@@ -777,7 +777,12 @@ async def sync_project_members(project_id: str, user_ids: List[str], action: str
                 return
             
             proj = resp.json()
-            current = proj.get("project", {}).get("members", [])
+            if proj is None:
+                proj = {}
+            current = proj.get("project", {}) or {}
+            if not isinstance(current, dict):
+                current = {}
+            current = current.get("members", [])
             
             if action == "add":
                 # Add new members (union)
@@ -2049,7 +2054,10 @@ async def delete_task_composite(
             get_resp = await client.get(get_task_url)
 
             if get_resp.status_code == 200:
-                task_data = get_resp.json().get("task", {})
+                get_json = get_resp.json()
+                if get_json is None:
+                    get_json = {}
+                task_data = get_json.get("task", {}) or {}
                 project_id = task_data.get("pid")
                 task_owner = task_data.get("created_by_uid")
                 collaborators = task_data.get("collaborators") or []
@@ -2079,7 +2087,20 @@ async def delete_task_composite(
             # Use /{task_id} for DELETE (correct endpoint, not /tasks/{task_id})
             delete_task_url = f"{TASK_SERVICE_URL}/{task_id}"
             delete_resp = await client.delete(delete_task_url)
-            if delete_resp.status_code not in (200, 204, 404):
+            
+            # Handle idempotent delete (404 = already deleted)
+            if delete_resp.status_code == 404:
+                return {
+                    "message": "Task already deleted (idempotent)",
+                    "task_id": task_id,
+                    "task_delete": {
+                        "url": delete_task_url,
+                        "status_code": 404,
+                        "result": "already_deleted",
+                    },
+                }
+            
+            if delete_resp.status_code not in (200, 204):
                 raise HTTPException(
                     status_code=502,
                     detail={
@@ -2092,16 +2113,19 @@ async def delete_task_composite(
 
         # 3) Sync project members (check if users should be removed)
         if project_id:
-            # Check if owner should be removed from project members
+            # Collect all user IDs to check for removal
+            users_to_check = []
             if task_owner:
+                users_to_check.append(task_owner)
+            if collaborators:
+                users_to_check.extend(collaborators)
+            
+            # Check if users should be removed from project members (batch call)
+            # Note: This is a simple removal - for more complex logic (checking if user
+            # has other tasks in project), see the update_task_composite function
+            if users_to_check:
                 await sync_project_members(
-                    project_id, task_owner, action="check_remove"
-                )
-
-            # Check if collaborators should be removed from project members
-            for collaborator_id in collaborators:
-                await sync_project_members(
-                    project_id, collaborator_id, action="check_remove"
+                    project_id, users_to_check, action="remove"
                 )
 
         return {

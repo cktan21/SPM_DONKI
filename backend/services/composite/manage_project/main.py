@@ -207,17 +207,39 @@ async def get_project_with_tasks(uid: str):
                 if user_role == "manager" and user_dept:
                     print(f"[DEBUG] User is manager in dept: {user_dept} - checking for projects with owners in same dept")
                     
-                    # For each project in all_projects_for_member_check, check if owner's dept matches
+                    # OPTIMIZATION: Collect all unique owner UIDs first, then batch fetch departments
+                    owner_uids_to_check = set()
+                    projects_by_owner = {}  # owner_uid -> list of projects
+                    
                     for proj in all_projects_for_member_check:
                         pid = proj.get("id")
                         owner_uid = proj.get("uid") or proj.get("user_id")
                         
                         if pid and pid not in project_ids and owner_uid:
-                            # Fetch owner's department
-                            try:
-                                owner_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{owner_uid}", headers=internal_headers)
-                                if owner_resp.status_code == 200:
-                                    owner_data = owner_resp.json()
+                            owner_uids_to_check.add(owner_uid)
+                            if owner_uid not in projects_by_owner:
+                                projects_by_owner[owner_uid] = []
+                            projects_by_owner[owner_uid].append(proj)
+                    
+                    # Batch fetch all owner departments concurrently
+                    if owner_uids_to_check:
+                        print(f"[DEBUG] Batch fetching departments for {len(owner_uids_to_check)} unique owners")
+                        owner_dept_requests = [
+                            client.get(f"{USERS_SERVICE_URL}/internal/{owner_uid}", headers=internal_headers)
+                            for owner_uid in owner_uids_to_check
+                        ]
+                        owner_dept_responses = await asyncio.gather(*owner_dept_requests, return_exceptions=True)
+                        
+                        # Create mapping: owner_uid -> department
+                        owner_dept_map = {}
+                        for owner_uid, resp in zip(owner_uids_to_check, owner_dept_responses):
+                            if isinstance(resp, Exception):
+                                print(f"[ERROR] Failed to fetch dept for owner {owner_uid}: {resp}")
+                                continue
+                            
+                            if resp.status_code == 200:
+                                try:
+                                    owner_data = resp.json()
                                     owner_dept = (
                                         owner_data.get("dept")
                                         or owner_data.get("department")
@@ -226,13 +248,25 @@ async def get_project_with_tasks(uid: str):
                                         or owner_data.get("user", {}).get("dept")
                                         or owner_data.get("user", {}).get("department")
                                     )
-                                    
-                                    if owner_dept and owner_dept == user_dept:
+                                    if owner_dept:
+                                        owner_dept_map[owner_uid] = owner_dept
+                                except Exception as e:
+                                    print(f"[ERROR] Failed to parse dept for owner {owner_uid}: {e}")
+                        
+                        # Now check which projects have owners in the same department
+                        dept_match_count = 0
+                        for owner_uid, owner_dept in owner_dept_map.items():
+                            if owner_dept == user_dept:
+                                # Add all projects owned by this user
+                                for proj in projects_by_owner.get(owner_uid, []):
+                                    pid = proj.get("id")
+                                    if pid and pid not in project_ids:
                                         print(f"[DEBUG] Found project {pid} with owner in same dept: {user_dept}")
                                         projects_by_id[pid] = {**proj, "tasks": []}
                                         project_ids.add(pid)
-                            except Exception as e:
-                                print(f"[ERROR] Failed to fetch owner dept for project {pid}: {e}")
+                                        dept_match_count += 1
+                        
+                        print(f"[DEBUG] Added {dept_match_count} projects from same department")
                     
                     print(f"[DEBUG] After checking department projects: {len(project_ids)} total projects")
 
@@ -269,6 +303,52 @@ async def get_project_with_tasks(uid: str):
 
             # ==================== STEP 5: Enrich Tasks via Manage-Task Service ====================
             print(f"[DEBUG] Starting task enrichment via Manage-Task service")
+            
+            # Helper function to process tasks in batches to avoid overwhelming the service
+            async def enrich_tasks_batch(tids: list, raw_tasks: list, batch_size: int = 20):
+                """Enrich tasks in batches to limit concurrent requests"""
+                enriched = []
+                for i in range(0, len(tids), batch_size):
+                    batch = tids[i:i + batch_size]
+                    print(f"[DEBUG] Processing batch {i//batch_size + 1} ({len(batch)} tasks)")
+                    
+                    reqs = [client.get(f"{MANAGE_TASK_URL}/tasks/{tid}", headers=internal_headers) for tid in batch]
+                    results = await asyncio.gather(*reqs, return_exceptions=True)
+                    
+                    for tid, res in zip(batch, results):
+                        fallback = next((t for t in raw_tasks if t.get("id") == tid), {})
+                        
+                        if isinstance(res, Exception):
+                            print(f"[ERROR] Manage-Task call failed for task {tid}: {res}")
+                            enriched.append(fallback)
+                            continue
+                            
+                        if getattr(res, "status_code", 0) == 200:
+                            try:
+                                payload = res.json()
+                                task_obj = payload.get("task") if isinstance(payload, dict) else None
+                                if not task_obj and isinstance(payload, dict):
+                                    task_obj = payload
+                                if isinstance(task_obj, dict) and task_obj:
+                                    task_obj = {**fallback, **task_obj}
+                                    enriched.append(task_obj)
+                                    print(f"[DEBUG] Successfully enriched task {tid}")
+                                else:
+                                    print(f"[WARN] Unexpected task shape for {tid}, using fallback")
+                                    enriched.append(fallback)
+                            except Exception as e:
+                                print(f"[ERROR] Failed parsing Manage-Task response for {tid}: {e}")
+                                enriched.append(fallback)
+                        else:
+                            print(f"[WARN] Manage-Task returned {res.status_code} for {tid}")
+                            enriched.append(fallback)
+                    
+                    # Small delay between batches to prevent overwhelming the service
+                    if i + batch_size < len(tids):
+                        await asyncio.sleep(0.1)
+                
+                return enriched
+            
             for pid in all_pids:
                 raw_tasks = project_tasks_map.get(pid, [])
                 if not raw_tasks:
@@ -278,38 +358,7 @@ async def get_project_with_tasks(uid: str):
                 tids = [t["id"] for t in raw_tasks if t.get("id")]
                 print(f"[DEBUG] Enriching {len(tids)} tasks for project {pid}")
                 
-                reqs = [client.get(f"{MANAGE_TASK_URL}/tasks/{tid}", headers=internal_headers) for tid in tids]
-                results = await asyncio.gather(*reqs, return_exceptions=True)
-
-                enriched = []
-                for tid, res in zip(tids, results):
-                    fallback = next((t for t in raw_tasks if t.get("id") == tid), {})
-                    
-                    if isinstance(res, Exception):
-                        print(f"[ERROR] Manage-Task call failed for task {tid}: {res}")
-                        enriched.append(fallback)
-                        continue
-                        
-                    if getattr(res, "status_code", 0) == 200:
-                        try:
-                            payload = res.json()
-                            task_obj = payload.get("task") if isinstance(payload, dict) else None
-                            if not task_obj and isinstance(payload, dict):
-                                task_obj = payload
-                            if isinstance(task_obj, dict) and task_obj:
-                                task_obj = {**fallback, **task_obj}
-                                enriched.append(task_obj)
-                                print(f"[DEBUG] Successfully enriched task {tid}")
-                            else:
-                                print(f"[WARN] Unexpected task shape for {tid}, using fallback")
-                                enriched.append(fallback)
-                        except Exception as e:
-                            print(f"[ERROR] Failed parsing Manage-Task response for {tid}: {e}")
-                            enriched.append(fallback)
-                    else:
-                        print(f"[WARN] Manage-Task returned {res.status_code} for {tid}")
-                        enriched.append(fallback)
-
+                enriched = await enrich_tasks_batch(tids, raw_tasks, batch_size=20)
                 projects_by_id[pid]["tasks"] = enriched
 
             # ==================== STEP 6: Return Final Response ====================
