@@ -464,7 +464,13 @@ func TestBehaviour_AdminGetsAllProjects(t *testing.T) {
 			t.Errorf("❌ Failed to get projects for admin: %v", err)
 			return
 		}
-		defer resp.Body.Close()
+		if resp == nil {
+			t.Errorf("❌ Response is nil")
+			return
+		}
+		if resp.Body != nil {
+			defer resp.Body.Close()
+		}
 
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 			body, _ := io.ReadAll(resp.Body)
@@ -562,7 +568,13 @@ func TestBehaviour_ManagerSameDepartment(t *testing.T) {
 			t.Errorf("❌ Failed to get projects for manager: %v", err)
 			return
 		}
-		defer resp.Body.Close()
+		if resp == nil {
+			t.Errorf("❌ Response is nil")
+			return
+		}
+		if resp.Body != nil {
+			defer resp.Body.Close()
+		}
 
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 			body, _ := io.ReadAll(resp.Body)
