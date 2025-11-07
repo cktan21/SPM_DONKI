@@ -9,7 +9,7 @@ import (
 )
 
 const manageProjectServiceURL = "http://localhost:4100"
-const projectTestUserID = "d568296e-3644-4ac0-9714-dcaa0aaa5fb0"
+const projectTestUserID = "bba910a9-1685-4fa3-af21-ccb2e11cf751"
 const projectTestProjectID = "2f72ee2f-eda4-4245-8df5-bec3f1fc1c2a"
 const projectTestProjectIDForEnrichment = "352486e8-a727-470c-add4-10fe26f1fbce"
 
