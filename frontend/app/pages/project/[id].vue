@@ -262,7 +262,6 @@ const chartSegments = computed(() => {
 });
 
 // Get unique collaborators from accessible tasks only (including subtasks) + current user
-// Get unique collaborators from accessible tasks only (including subtasks) + current user
 const uniqueCollaborators = computed(() => {
     if (!selectedProject.value?.tasks || !userData.value?.user?.id) return [];
 
