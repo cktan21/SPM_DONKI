@@ -1,0 +1,24 @@
+# Use Python base image
+FROM python:3.13-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Set PATH to include cargo (if we install rust)
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Copy Python dependencies first
+COPY requirements.txt ./
+
+# Install Python dependencies
+# Use --only-binary=all to avoid compiling pydantic-core from source
+RUN pip install --no-cache-dir --only-binary=all -r requirements.txt
+
+# Copy the rest of your application code
+COPY . .
+
+# Expose FastAPI port
+EXPOSE 5800
+
+# Command to run app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5800", "--workers", "8"]

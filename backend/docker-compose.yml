@@ -164,6 +164,26 @@ services:
                   path: ./services/composite/manage_task/requirements.txt
                   # If Node: use package.json / package-lock.json instead
 
+    
+    refactor-manage-task:  # Changed from refactor-manageTask
+        build: ./services/composite/refactor_manageTask
+        container_name: refactor-manage-task  # Optional but recommended
+        networks: [spm-net]  # Add this to match your other services
+        ports:
+            - "5800:5800"
+        environment:
+            - TASK_SERVICE_URL=http://tasks:5500
+            - USERS_SERVICE_URL=http://user:5100
+            - PROJECTS_SERVICE_URL=http://project:5200
+            - SCHEDULE_SERVICE_URL=http://schedule:5300
+            - TZ=Asia/Singapore  # Consistent with other services
+        depends_on:
+            - tasks
+            - user
+            - project
+            - schedule
+
+
     manage-project:
         build: ./services/composite/manage_project
         container_name: manage-project
