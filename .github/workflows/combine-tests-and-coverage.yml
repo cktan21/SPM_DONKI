@@ -116,14 +116,55 @@ jobs:
                   export DOCKER_BUILDKIT=1
                   export BUILDKIT_PROGRESS=plain
                   docker compose up -d --build
-                  echo "Waiting for services to be ready..."
-                  timeout 60s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 1; done'
-                  echo "Services are ready!"
+                  echo "Waiting for containers to start..."
+                  timeout 120s bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 2; done'
+                  echo "Containers are up, waiting for HTTP services to be ready..."
+
+                  # Wait for actual HTTP health endpoints
+                  wait_for_service() {
+                      local url=$1
+                      local max_attempts=60
+                      local attempt=1
+                      
+                      echo "Waiting for $url..."
+                      while [ $attempt -le $max_attempts ]; do
+                          if curl -f -s --max-time 5 "$url" > /dev/null 2>&1; then
+                              echo "✅ $url is ready"
+                              return 0
+                          fi
+                          sleep 2
+                          attempt=$((attempt + 1))
+                      done
+                      echo "⚠️ Warning: $url not ready after $max_attempts attempts"
+                      return 1
+                  }
+
+                  # Wait for critical services (non-blocking warnings for others)
+                  wait_for_service "http://localhost:5100" || true  # User Service
+                  wait_for_service "http://localhost:5200" || true  # Project Service
+                  wait_for_service "http://localhost:5300" || true  # Schedule Service
+                  wait_for_service "http://localhost:4000" || true  # Manage-Task Service
+                  wait_for_service "http://localhost:4500" || true  # Notify User Service
+                  wait_for_service "http://localhost:5500" || true  # Tasks Service
+                  wait_for_service "http://localhost:8000/user" || true  # Kong Gateway
+
+                  echo "Services health check complete!"
 
             - name: Run Go integration tests with coverage
+              working-directory: ./test/integration
               run: |
-                  cd ../test/integration
                   go test -v -race -covermode=atomic -coverprofile=coverage.out
+
+            - name: Verify coverage file exists
+              working-directory: ./test/integration
+              run: |
+                  if [ -f coverage.out ]; then
+                      echo "✅ Coverage file exists"
+                      echo "Coverage file size: $(wc -l < coverage.out) lines"
+                      head -5 coverage.out || true
+                  else
+                      echo "⚠️ Warning: coverage.out not found"
+                  fi
 
             - name: Upload Go coverage to Coveralls (parallel)
               uses: shogo82148/actions-goveralls@v1
@@ -133,6 +174,7 @@ jobs:
                   flag-name: go
               env:
                   COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+              continue-on-error: true
 
             - name: Container Cleanup
               if: always()
