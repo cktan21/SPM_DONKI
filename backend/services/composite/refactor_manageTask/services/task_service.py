@@ -1,7 +1,11 @@
 """
 Task Service Client
 Handles all HTTP operations with the task service.
+Implements the Facade pattern — provides a single, unified interface for
+task-related operations while hiding internal service details (e.g., API version,
+authentication, or data source changes) from its consumers.
 """
+
 import httpx
 from typing import Optional, Dict
 from fastapi import HTTPException
@@ -20,6 +24,23 @@ def _safe_json(response: httpx.Response) -> any:
 
 class TaskServiceClient:
     """Handles all task service HTTP operations"""
+
+    """
+    Facade for the Task Service.
+    --------------------------------------------------
+    - Provides a stable interface (get_task, delete_task)
+      to all consumers (e.g., workflows, APIs).
+    - Internally manages HTTP details, URLs, error handling,
+      and schema variations.
+    - If the underlying task service is refactored, migrated,
+      or replaced, consumers continue to call the same methods
+      without knowing anything changed.
+    --------------------------------------------------
+    Example benefit:
+      -> The task service could move from REST to gRPC or change
+         its endpoint paths, but this client adapts internally.
+         All workflows using TaskServiceClient remain unchanged.
+    """
     
     def __init__(self, base_url: str, timeout: float = 10.0):
         self.base_url = base_url
@@ -29,6 +50,14 @@ class TaskServiceClient:
         """
         Fetch task details by ID.
         Returns None if task not found (404), raises HTTPException for other errors.
+        """
+        """
+        Fetch task details by ID.
+        Facade hides:
+          - Exact endpoint path (/tid/{id})
+          - Response schema differences
+          - HTTP error translation to consistent exceptions
+        Consumers just get a `TaskDetails` object or None.
         """
         get_task_url = f"{self.base_url}/tid/{task_id}"
         
@@ -71,6 +100,13 @@ class TaskServiceClient:
         Delete task by ID.
         Returns response details.
         Raises HTTPException if deletion fails (non-2xx/404 status).
+
+        Facade hides:
+          - API URL structure
+          - HTTP response variations (200 vs 204 vs 404)
+          - Conversion to unified response dict
+        This ensures consumers (like workflows) always receive
+        the same shape of result, even if the backend changes.
         """
         delete_task_url = f"{self.base_url}/{task_id}"
         
