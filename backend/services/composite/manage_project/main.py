@@ -207,17 +207,39 @@ async def get_project_with_tasks(uid: str):
                 if user_role == "manager" and user_dept:
                     print(f"[DEBUG] User is manager in dept: {user_dept} - checking for projects with owners in same dept")
                     
-                    # For each project in all_projects_for_member_check, check if owner's dept matches
+                    # OPTIMIZATION: Collect all unique owner UIDs first, then batch fetch departments
+                    owner_uids_to_check = set()
+                    projects_by_owner = {}  # owner_uid -> list of projects
+                    
                     for proj in all_projects_for_member_check:
                         pid = proj.get("id")
                         owner_uid = proj.get("uid") or proj.get("user_id")
                         
                         if pid and pid not in project_ids and owner_uid:
-                            # Fetch owner's department
-                            try:
-                                owner_resp = await client.get(f"{USERS_SERVICE_URL}/internal/{owner_uid}", headers=internal_headers)
-                                if owner_resp.status_code == 200:
-                                    owner_data = owner_resp.json()
+                            owner_uids_to_check.add(owner_uid)
+                            if owner_uid not in projects_by_owner:
+                                projects_by_owner[owner_uid] = []
+                            projects_by_owner[owner_uid].append(proj)
+                    
+                    # Batch fetch all owner departments concurrently
+                    if owner_uids_to_check:
+                        print(f"[DEBUG] Batch fetching departments for {len(owner_uids_to_check)} unique owners")
+                        owner_dept_requests = [
+                            client.get(f"{USERS_SERVICE_URL}/internal/{owner_uid}", headers=internal_headers)
+                            for owner_uid in owner_uids_to_check
+                        ]
+                        owner_dept_responses = await asyncio.gather(*owner_dept_requests, return_exceptions=True)
+                        
+                        # Create mapping: owner_uid -> department
+                        owner_dept_map = {}
+                        for owner_uid, resp in zip(owner_uids_to_check, owner_dept_responses):
+                            if isinstance(resp, Exception):
+                                print(f"[ERROR] Failed to fetch dept for owner {owner_uid}: {resp}")
+                                continue
+                            
+                            if resp.status_code == 200:
+                                try:
+                                    owner_data = resp.json()
                                     owner_dept = (
                                         owner_data.get("dept")
                                         or owner_data.get("department")
@@ -226,13 +248,25 @@ async def get_project_with_tasks(uid: str):
                                         or owner_data.get("user", {}).get("dept")
                                         or owner_data.get("user", {}).get("department")
                                     )
-                                    
-                                    if owner_dept and owner_dept == user_dept:
+                                    if owner_dept:
+                                        owner_dept_map[owner_uid] = owner_dept
+                                except Exception as e:
+                                    print(f"[ERROR] Failed to parse dept for owner {owner_uid}: {e}")
+                        
+                        # Now check which projects have owners in the same department
+                        dept_match_count = 0
+                        for owner_uid, owner_dept in owner_dept_map.items():
+                            if owner_dept == user_dept:
+                                # Add all projects owned by this user
+                                for proj in projects_by_owner.get(owner_uid, []):
+                                    pid = proj.get("id")
+                                    if pid and pid not in project_ids:
                                         print(f"[DEBUG] Found project {pid} with owner in same dept: {user_dept}")
                                         projects_by_id[pid] = {**proj, "tasks": []}
                                         project_ids.add(pid)
-                            except Exception as e:
-                                print(f"[ERROR] Failed to fetch owner dept for project {pid}: {e}")
+                                        dept_match_count += 1
+                        
+                        print(f"[DEBUG] Added {dept_match_count} projects from same department")
                     
                     print(f"[DEBUG] After checking department projects: {len(project_ids)} total projects")
 
