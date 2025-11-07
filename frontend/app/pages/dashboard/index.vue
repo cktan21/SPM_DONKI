@@ -35,7 +35,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, SlidersHorizontal } from "lucide-vue-next";
+import { X, SlidersHorizontal, Plus } from "lucide-vue-next";
 
 // Interfaces
 interface User {
@@ -612,33 +612,42 @@ onMounted(() => {
                     </div>
 
                     <!-- Sort Row -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm text-gray-600">Sort by:</span>
-                        <Select v-model="sortBy">
-                            <SelectTrigger class="w-[180px] h-9 text-sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="health"
-                                    >Health Status</SelectItem
-                                >
-                                <SelectItem value="deadline"
-                                    >Nearest Deadline</SelectItem
-                                >
-                                <SelectItem value="oldest"
-                                    >Oldest First</SelectItem
-                                >
-                                <SelectItem value="most-todo"
-                                    >Most To Do</SelectItem
-                                >
-                                <SelectItem value="least-done"
-                                    >Least Done</SelectItem
-                                >
-                                <SelectItem value="priority"
-                                    >Highest Priority</SelectItem
-                                >
-                            </SelectContent>
-                        </Select>
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-600">Sort by:</span>
+                            <Select v-model="sortBy">
+                                <SelectTrigger class="w-[180px] h-9 text-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="health"
+                                        >Health Status</SelectItem
+                                    >
+                                    <SelectItem value="deadline"
+                                        >Nearest Deadline</SelectItem
+                                    >
+                                    <SelectItem value="oldest"
+                                        >Oldest First</SelectItem
+                                    >
+                                    <SelectItem value="most-todo"
+                                        >Most To Do</SelectItem
+                                    >
+                                    <SelectItem value="least-done"
+                                        >Least Done</SelectItem
+                                    >
+                                    <SelectItem value="priority"
+                                        >Highest Priority</SelectItem
+                                    >
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <!-- Create Project Button -->
+                        <Button
+                            @click="navigateTo('/project/createProject')"
+                            class="gap-2">
+                            <Plus class="h-4 w-4" />
+                            Create Project
+                        </Button>
                     </div>
                 </div>
 
