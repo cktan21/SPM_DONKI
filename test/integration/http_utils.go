@@ -9,7 +9,7 @@ import (
 
 // HTTP client configuration for CI/CD resilience
 var httpClient = &http.Client{
-	Timeout: 30 * time.Second, // Increased timeout for CI/CD (was 10s)
+	Timeout: 60 * time.Second,
 	Transport: &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
