@@ -102,8 +102,11 @@ class EmailService:
         name = data.get('name')
         task_id = data.get('tid')
         department = data.get('department')
-        subject = data.get('subject', f"Deadline Overdue for Task {task_id} from Department {department}")
-        body = data.get('body', f'Hello {name} of Department {department}, your task {task_id} is Overdue! 🚨🚨🚨🚨 Do it Soon!!')
+        task_name = data.get('task_name', 'Unknown Task')
+        project_name = data.get('project_name', 'Unknown Project')
+        
+        subject = data.get('subject', f"Deadline Overdue for Task {task_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" is overdue.\n\nThis task has passed its deadline and requires immediate attention. Please complete it as soon as possible.\n\nIf you have any questions or need assistance, please contact your project manager.\n\nBest regards,\nProject Management System')
         
         if to_email:
             self.send_email(to_email, subject, body)
@@ -133,8 +136,11 @@ class EmailService:
             except:
                 pass
         
-        subject = data.get('subject', f"Deadline Approaching for Task {task_id} from Department {department}")
-        body = data.get('body', f'Hello {name} of Department {department}, your task {task_id} deadline is approaching! ⏰⏰⏰ The deadline is on {deadline_display}. Please make sure to complete it on time!')
+        task_name = data.get('task_name', 'Unknown Task')
+        project_name = data.get('project_name', 'Unknown Project')
+        
+        subject = data.get('subject', f"Deadline Approaching for Task {task_name}")
+        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" has a deadline approaching.\n\nThe deadline is on {deadline_display}. Please make sure to complete it on time.\n\nIf you have any questions or need assistance, please contact your project manager.\n\nBest regards,\nProject Management System')
         
         if to_email:
             self.send_email(to_email, subject, body)
@@ -152,19 +158,21 @@ class EmailService:
         is_creator = data.get('is_creator', False)
         is_collaborator = data.get('is_collaborator', False)
         
+        project_name = data.get('project_name', 'Unknown Project')
+        
         # Determine role and message
         if is_creator:
-            role_text = "You have been assigned as the creator"
+            role_text = "assigned as the creator"
             action_text = "created"
         elif is_collaborator:
-            role_text = "You have been assigned as a collaborator"
+            role_text = "assigned as a collaborator"
             action_text = "assigned to collaborate on"
         else:
-            role_text = "You have been assigned to"
+            role_text = "assigned to"
             action_text = "assigned to"
         
         subject = data.get('subject', f"New Task Assignment: {task_name}")
-        body = data.get('body', f'Hello {name} of Department {department}, {role_text} for task "{task_name}" (ID: {task_id}). You have been {action_text} this task. Please check your dashboard for more details.')
+        body = data.get('body', f'Hello {name} of Department {department},\n\nYou have been {role_text} for task "{task_name}" (ID: {task_id}) from project "{project_name}".\n\nYou have been {action_text} this task. Please check your dashboard for more details.\n\nIf you have any questions about this assignment, please contact your project manager.\n\nBest regards,\nProject Management System')
         
         if to_email:
             self.send_email(to_email, subject, body)
@@ -183,7 +191,7 @@ class EmailService:
         task_name = data.get('task_name', 'Unknown Task')
         
         subject = data.get('subject', f"Added to Project: {project_name}")
-        body = data.get('body', f'Hello {name} of Department {department},\n\nYou have been added as a member to the project "{project_name}" (ID: {project_id}) because you are involved in the task "{task_name}".\n\nThis means you now have access to all project resources and will receive updates about project activities.\n\nAdded by: {added_by_name}\n\nPlease check your dashboard for more project details.\n\nBest regards,\nProject Management System')
+        body = data.get('body', f'Hello {name} of Department {department},\n\nYou have been added as a member to the project "{project_name}" (ID: {project_id}) because you are involved in the task "{task_name}".\n\nThis means you now have access to all project resources and will receive updates about project activities.\n\nAdded by: {added_by_name}\n\nPlease check your dashboard for more project details.\n\nIf you have any questions about this project, please contact your project manager.\n\nBest regards,\nProject Management System')
         
         if to_email:
             self.send_email(to_email, subject, body)
@@ -240,7 +248,7 @@ class EmailService:
                 changes_text = f"\n\nChanges made:\n" + "\n".join(f"• {change}" for change in changes_list)
         
         subject = data.get('subject', f"Task Updated: {task_name}")
-        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" has been updated.{changes_text}\n\nPlease check your dashboard for the latest task details.\n\nBest regards,\nProject Management System')
+        body = data.get('body', f'Hello {name} of Department {department},\n\nTask "{task_name}" (ID: {task_id}) from project "{project_name}" has been updated.{changes_text}\n\nPlease check your dashboard for the latest task details.\n\nIf you have any questions about these changes, please contact your project manager.\n\nBest regards,\nProject Management System')
         
         if to_email:
             self.send_email(to_email, subject, body)
