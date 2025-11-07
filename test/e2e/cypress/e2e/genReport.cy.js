@@ -66,7 +66,7 @@ describe('Manager flow: login → wait for dashboard → open report page → ge
     cy.contains('Select Project', { timeout: 60000 }).should('be.visible');
     cy.get('.h-11').contains('Choose a project').click({ force: true });
     cy.wait(4000);
-    cy.contains('Delete this project', { timeout: 90000 })
+    cy.contains('TESTING JW CY DONT AMEND', { timeout: 90000 })
       .scrollIntoView()
       .should('be.visible')
       .click({ force: true });
