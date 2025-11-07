@@ -54,8 +54,8 @@ const error = ref<string | null>(null);
 const deleteDialogOpen = ref(false);
 const itemToDelete = ref<{ id: string; type: "task" | "subtask" } | null>(null);
 
-const API_BASE_URL = "http://localhost:4000";
-const TASK_BASE_URL = "http://localhost:5500";
+const API_BASE_URL = "http://localhost:8000/manage-task";
+const TASK_BASE_URL = "http://localhost:8000/tasks";
 
 // User permissions
 const userData = useState<any>("userData");

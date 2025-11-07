@@ -36,7 +36,7 @@ const router = useRouter();
 const route = useRoute();
 const { toast } = useToast();
 
-const API_BASE_URL = "http://localhost:4000";
+const API_BASE_URL = "http://localhost:8000/manage-task";
 
 // Get authenticated user data from middleware
 const userData = useState<any>("userData");
