@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 UTC_PLUS_8 = pytz.timezone('Asia/Singapore')
 
 # Service URLs - adjust these based on your deployment
-TASK_SERVICE_URL = os.getenv("TASK_SERVICE_URL", "http://tasks:5500")
-USERS_SERVICE_URL = os.getenv("USERS_SERVICE_URL", "http://user:5100")
-SCHEDULE_SERVICE_URL = os.getenv("SCHEDULE_SERVICE_URL", "http://schedule:5300")
-MANAGE_TASK_SERVICE_URL = os.getenv("MANAGE_TASK_SERVICE_URL", "http://manage-task:4100")
-PROJECTS_SERVICE_URL = os.getenv("PROJECTS_SERVICE_URL", "http://project:5200")
+TASK_SERVICE_URL = os.getenv("TASK_SERVICE_URL", "http://localhost:5500")
+USERS_SERVICE_URL = os.getenv("USERS_SERVICE_URL", "http://localhost:5100")
+SCHEDULE_SERVICE_URL = os.getenv("SCHEDULE_SERVICE_URL", "http://localhost:5300")
+MANAGE_TASK_SERVICE_URL = os.getenv("MANAGE_TASK_SERVICE_URL", "http://localhost:4100")
+PROJECTS_SERVICE_URL = os.getenv("PROJECTS_SERVICE_URL", "http://localhost:5200")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 
 
@@ -131,7 +131,7 @@ class DailyEmailSummaryService:
                                 project_id = task.get("pid")
                                 if project_id:
                                     project_response = client.get(
-                                        f"{PROJECTS_SERVICE_URL}/{project_id}"
+                                        f"{PROJECTS_SERVICE_URL}/pid/{project_id}"
                                     )
                                     if project_response.status_code == 200:
                                         project_data = project_response.json().get("project", {})
