@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"testing"
-	"time"
 )
 
 const manageProjectServiceURL = "http://localhost:4100"
@@ -24,10 +23,9 @@ const projectTestStaffUserID = "0ec8a99d-3aab-4ec6-b692-fda88656844f"
 
 const invalidPID = "not-a-valid-uuid-12345"
 
-// Helper function to perform GET request with timeout
+// Helper function to perform GET request with timeout and retry
 func getWithTimeout(url string) (*http.Response, error) {
-	client := &http.Client{Timeout: 100000000 * time.Second}
-	return client.Get(url)
+	return httpGetWithRetry(url, 2)
 }
 
 // Helper function to delete a project (used for cleanup)
@@ -35,12 +33,7 @@ func deleteProject(projectID string) error {
 	if projectID == "" {
 		return nil
 	}
-	req, err := http.NewRequest("DELETE", projectServiceURL+"/"+projectID, nil)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpDeleteWithRetry(projectServiceURL+"/"+projectID, 2)
 	if err != nil {
 		return err
 	}
@@ -652,17 +645,10 @@ func TestBehaviour_BadInternalKey(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Bad Internal Key Should Not Crash Service", func(t *testing.T) {
-		req, err := http.NewRequest("GET", manageProjectServiceURL+"/uid/"+projectTestStaffUserID, nil)
-		if err != nil {
-			t.Errorf("❌ Failed to create request: %v", err)
-			return
+		headers := map[string]string{
+			"X-Internal-API-Key": "definitely-wrong-key-12345",
 		}
-
-		// Set a definitely wrong internal API key
-		req.Header.Set("X-Internal-API-Key", "definitely-wrong-key-12345")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
+		resp, err := httpRequestWithRetry("GET", manageProjectServiceURL+"/uid/"+projectTestStaffUserID, nil, headers, 2)
 		if err != nil {
 			t.Errorf("❌ Request failed: %v", err)
 			return

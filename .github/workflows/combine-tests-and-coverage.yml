@@ -78,8 +78,22 @@ jobs:
                   COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
     integration-tests:
-        name: Go Integration Tests + Coverage
+        name: Go Integration Tests + Coverage (Sharded)
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [1, 2, 3]
+                include:
+                    - shard: 1
+                      test-pattern: "^Test(ServiceEndpoints|NotifyUserServiceFunctionality|KongNotifyUserFunctionality)$"
+                      shard-name: "integration"
+                    - shard: 2
+                      test-pattern: "^Test(ManageProject|GetProjects|GetProject|Behaviour)"
+                      shard-name: "manage-project"
+                    - shard: 3
+                      test-pattern: "^Test(ManageTask|Task)"
+                      shard-name: "manage-task"
         env:
             SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
             SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
@@ -155,28 +169,38 @@ jobs:
 
                   echo "Services health check complete!"
 
-            - name: Run Go integration tests with coverage
+            - name: Run Go integration tests with coverage (Shard ${{ matrix.shard }})
               working-directory: ./test/integration
               run: |
-                  go test -v -covermode=atomic -coverprofile=coverage.out
+                  echo "🧪 Running shard ${{ matrix.shard }} (${{ matrix.shard-name }})"
+                  echo "📋 Test pattern: ${{ matrix.test-pattern }}"
 
-            - name: Verify coverage file exists
+                  # Run tests matching the pattern for this shard
+                  go test -v \
+                    -covermode=atomic \
+                    -coverprofile=coverage-shard-${{ matrix.shard }}.out \
+                    -run "${{ matrix.test-pattern }}" \
+                    -timeout 10m \
+                    .
+
+            - name: Verify coverage file exists (Shard ${{ matrix.shard }})
               working-directory: ./test/integration
               run: |
-                  if [ -f coverage.out ]; then
-                      echo "✅ Coverage file exists"
-                      echo "Coverage file size: $(wc -l < coverage.out) lines"
-                      head -5 coverage.out || true
+                  coverage_file="coverage-shard-${{ matrix.shard }}.out"
+                  if [ -f "$coverage_file" ]; then
+                      echo "✅ Coverage file exists: $coverage_file"
+                      echo "Coverage file size: $(wc -l < "$coverage_file") lines"
+                      head -5 "$coverage_file" || true
                   else
-                      echo "⚠️ Warning: coverage.out not found"
+                      echo "⚠️ Warning: $coverage_file not found"
                   fi
 
-            - name: Upload Go coverage to Coveralls (parallel)
+            - name: Upload Go coverage to Coveralls (parallel, Shard ${{ matrix.shard }})
               uses: shogo82148/actions-goveralls@v1
               with:
-                  path-to-profile: test/integration/coverage.out
+                  path-to-profile: test/integration/coverage-shard-${{ matrix.shard }}.out
                   parallel: true
-                  flag-name: go
+                  flag-name: go-shard-${{ matrix.shard }}
               env:
                   COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
               continue-on-error: true
