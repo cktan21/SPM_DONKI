@@ -1,5 +1,5 @@
 /// <reference types="cypress" />
-
+// chat test
 Cypress.on("uncaught:exception", () => false);
 
 Cypress.config("defaultCommandTimeout", 120000);
