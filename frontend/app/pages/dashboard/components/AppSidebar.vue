@@ -78,7 +78,7 @@ const data = {
         //   url: "#",
         // },
  // ✅ Show this only if role === "hr"
-        ...(["hr","manager", "admin"].includes(userData.value?.user?.role)
+        ...(["hr","manager"].includes(userData.value?.user?.role)
           ? [{ title: "Generate Report", url: "/generatereport" }]
           : []),
         // {
