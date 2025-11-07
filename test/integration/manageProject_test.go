@@ -55,6 +55,7 @@ func deleteProject(projectID string) error {
 
 // TestManageProjectServiceHealth tests the root endpoint of manage-project service
 func TestManageProjectServiceHealth(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Manage-Project Service Health")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -90,6 +91,7 @@ func TestManageProjectServiceHealth(t *testing.T) {
 
 // TestGetProjectsByUser tests the GET /uid/{uid} endpoint
 func TestGetProjectsByUser(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Get Projects by User (Role-Based)")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -163,6 +165,7 @@ func TestGetProjectsByUser(t *testing.T) {
 
 // TestGetProjectByID tests the GET /pid/{project_id} endpoint
 func TestGetProjectByID(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Get Project by ID")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -259,6 +262,7 @@ func TestGetProjectByID(t *testing.T) {
 
 // TestManageProjectServiceEndpoints tests all endpoints comprehensively
 func TestManageProjectServiceEndpoints(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing All Manage-Project Service Endpoints")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 60)))
 
@@ -315,6 +319,7 @@ func TestManageProjectServiceEndpoints(t *testing.T) {
 
 // TestManageProjectServiceRoleBasedAccess tests role-based access control
 func TestManageProjectServiceRoleBasedAccess(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Role-Based Access Control")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -377,6 +382,7 @@ func TestManageProjectServiceRoleBasedAccess(t *testing.T) {
 
 // TestManageProjectServiceTaskEnrichment tests that tasks are properly enriched
 func TestManageProjectServiceTaskEnrichment(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Task Enrichment in Projects")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -455,6 +461,7 @@ func TestManageProjectServiceTaskEnrichment(t *testing.T) {
 
 // TestBehaviour_AdminGetsAllProjects verifies that admin users see all projects
 func TestBehaviour_AdminGetsAllProjects(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Admin Gets All Projects Behaviour")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -503,6 +510,7 @@ func TestBehaviour_AdminGetsAllProjects(t *testing.T) {
 
 // TestBehaviour_StaffOwnedAndMember verifies that staff users see owned and member projects
 func TestBehaviour_StaffOwnedAndMember(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Staff Owned and Member Projects Behaviour")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -551,6 +559,7 @@ func TestBehaviour_StaffOwnedAndMember(t *testing.T) {
 
 // TestBehaviour_ManagerSameDepartment verifies that manager users see same-department projects
 func TestBehaviour_ManagerSameDepartment(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Manager Same Department Projects Behaviour")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -603,6 +612,7 @@ func TestBehaviour_ManagerSameDepartment(t *testing.T) {
 
 // TestBehaviour_InvalidPID tests handling of invalid project IDs
 func TestBehaviour_InvalidPID(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Invalid PID Handling")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -637,6 +647,7 @@ func TestBehaviour_InvalidPID(t *testing.T) {
 
 // TestBehaviour_BadInternalKey tests handling of bad internal API key
 func TestBehaviour_BadInternalKey(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Bad Internal API Key Handling")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 

@@ -23,6 +23,7 @@ const testCollaboratorID = "0ec8a99d-3aab-4ec6-b692-fda88656844f"
 
 // TestManageTaskServiceHealth tests the root endpoint of manage-task service
 func TestManageTaskServiceHealth(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Manage-Task Service Health")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -81,6 +82,7 @@ func deleteTask(taskID string) error {
 
 // TestTaskCRUDOperations tests the complete CRUD workflow: Create => Update => Delete
 func TestTaskCRUDOperations(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Task CRUD Operations (Create => Update => Delete)")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 60)))
 
@@ -331,6 +333,7 @@ func TestTaskCRUDOperations(t *testing.T) {
 
 // TestGetTaskByID tests the GET /tasks/{task_id} endpoint
 func TestGetTaskByID(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Get Task by ID")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -401,6 +404,7 @@ func TestGetTaskByID(t *testing.T) {
 
 // TestGetTasksByUser tests the GET /tasks/user/{user_id} endpoint
 func TestGetTasksByUser(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Get Tasks by User")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -471,6 +475,7 @@ func TestGetTasksByUser(t *testing.T) {
 
 // TestManageTaskServiceEndpoints tests all endpoints comprehensively
 func TestManageTaskServiceEndpoints(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing All Manage-Task Service Endpoints")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 60)))
 
@@ -527,6 +532,7 @@ func TestManageTaskServiceEndpoints(t *testing.T) {
 
 // TestTaskCreationValidation tests task creation with various validation scenarios
 func TestTaskCreationValidation(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Task Creation Validation")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -658,6 +664,7 @@ func TestTaskCreationValidation(t *testing.T) {
 
 // TestUpdateTask_ScheduleOnly tests updating only schedule fields without changing task fields
 func TestUpdateTask_ScheduleOnly(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Schedule-Only Update")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -788,6 +795,7 @@ func TestUpdateTask_ScheduleOnly(t *testing.T) {
 
 // TestUpdateTask_Collaborators tests updating task collaborators
 func TestUpdateTask_Collaborators(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Collaborator Update")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -910,6 +918,7 @@ func TestUpdateTask_Collaborators(t *testing.T) {
 
 // TestUpdateTask_InvalidParentTaskId tests validation of invalid parent task ID
 func TestUpdateTask_InvalidParentTaskId(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Invalid Parent Task ID Validation")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -1008,6 +1017,7 @@ func TestUpdateTask_InvalidParentTaskId(t *testing.T) {
 
 // TestUpdateTask_InvalidCollaborator tests validation of invalid collaborator ID
 func TestUpdateTask_InvalidCollaborator(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Invalid Collaborator Validation")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -1106,6 +1116,7 @@ func TestUpdateTask_InvalidCollaborator(t *testing.T) {
 
 // TestUpdateTask_InvalidProjectId tests validation of invalid project ID on update
 func TestUpdateTask_InvalidProjectId(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Invalid Project ID Validation (Update)")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -1204,6 +1215,7 @@ func TestUpdateTask_InvalidProjectId(t *testing.T) {
 
 // TestUpdateTask_ScheduleNoExisting tests updating schedule when task has no existing schedule
 func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Schedule Update Without Existing Schedule")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
@@ -1312,6 +1324,7 @@ func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
 
 // TestUpdateTask_DirectKnownTask tests updating a known/existing task directly
 func TestUpdateTask_DirectKnownTask(t *testing.T) {
+	t.Parallel()
 	t.Log("🧪 Testing Direct Update on Known Task")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
