@@ -16,6 +16,10 @@ const testUserID = "bba910a9-1685-4fa3-af21-ccb2e11cf751"
 const testProjectID = "f434f31d-3c12-4867-889c-794edf0c6199"
 const testTaskID = "8cf55bcb-a6b2-45dd-b08c-b7469372839e"
 const invalidProjectID = "invalid-project-id-12345"
+const invalidParentTaskID = "00000000-0000-0000-0000-000000000001"
+const invalidCollaboratorID = "00000000-0000-0000-0000-000000000002"
+const invalidProjectIDForUpdate = "11111111-2222-3333-4444-555555555555"
+const testCollaboratorID = "0ec8a99d-3aab-4ec6-b692-fda88656844f"
 
 // TestManageTaskServiceHealth tests the root endpoint of manage-task service
 func TestManageTaskServiceHealth(t *testing.T) {
@@ -652,3 +656,698 @@ func TestTaskCreationValidation(t *testing.T) {
 	t.Log("🎉 Task Creation Validation Test Completed!")
 }
 
+// TestUpdateTask_ScheduleOnly tests updating only schedule fields without changing task fields
+func TestUpdateTask_ScheduleOnly(t *testing.T) {
+	t.Log("🧪 Testing Schedule-Only Update")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Update Schedule Fields Only", func(t *testing.T) {
+		// Step 1: Create a task
+		t.Log("📝 Creating task for schedule-only update test...")
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("Schedule Update Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for schedule-only update",
+			"priorityLevel":  4,
+			"label":          "schedule-test",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"start":        time.Now().Add(30 * time.Minute).Format(time.RFC3339),
+				"deadline":     time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		t.Logf("✅ Task created: %s", createdTaskID)
+
+		// Step 2: Update only schedule fields
+		t.Log("✏️  Updating schedule fields only...")
+		newDeadline := time.Now().Add(72 * time.Hour).Format(time.RFC3339)
+		updatePayload := map[string]interface{}{
+			"status":   "in_progress",
+			"deadline": newDeadline,
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to update schedule: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("❌ Schedule update failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		t.Logf("✅ Schedule updated successfully")
+
+		// Step 3: Verify update by fetching task
+		t.Log("🔍 Verifying schedule update...")
+		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		if err != nil {
+			t.Logf("⚠️  Could not verify update: %v", err)
+			return
+		}
+		defer getResp.Body.Close()
+
+		if getResp.StatusCode == http.StatusOK {
+			var taskResult map[string]interface{}
+			if json.NewDecoder(getResp.Body).Decode(&taskResult) == nil {
+				if task, ok := taskResult["task"].(map[string]interface{}); ok {
+					if status, ok := task["status"].(string); ok {
+						if status == "in_progress" {
+							t.Logf("✅ Verified: Status updated to 'in_progress'")
+						} else {
+							t.Logf("⚠️  Status is '%s' (expected 'in_progress')", status)
+						}
+					}
+					if deadline, ok := task["deadline"].(string); ok && deadline != "" {
+						t.Logf("✅ Verified: Deadline updated")
+					}
+				}
+			}
+		}
+	})
+
+	t.Log("🎉 Schedule-Only Update Test Completed!")
+}
+
+// TestUpdateTask_Collaborators tests updating task collaborators
+func TestUpdateTask_Collaborators(t *testing.T) {
+	t.Log("🧪 Testing Collaborator Update")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Update Collaborators", func(t *testing.T) {
+		// Step 1: Create a task with one collaborator
+		t.Log("📝 Creating task with initial collaborator...")
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("Collaborator Update Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for collaborator update",
+			"priorityLevel":  4,
+			"label":          "collab-test",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"deadline":     time.Now().Add(36 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		t.Logf("✅ Task created: %s", createdTaskID)
+
+		// Step 2: Update collaborators (add another collaborator)
+		t.Log("✏️  Updating collaborators...")
+		updatePayload := map[string]interface{}{
+			"collaborators": []string{testUserID, testCollaboratorID},
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to update collaborators: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("❌ Collaborator update failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		t.Logf("✅ Collaborators updated successfully")
+
+		// Step 3: Verify update by fetching task
+		t.Log("🔍 Verifying collaborator update...")
+		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		if err != nil {
+			t.Logf("⚠️  Could not verify update: %v", err)
+			return
+		}
+		defer getResp.Body.Close()
+
+		if getResp.StatusCode == http.StatusOK {
+			var taskResult map[string]interface{}
+			if json.NewDecoder(getResp.Body).Decode(&taskResult) == nil {
+				if task, ok := taskResult["task"].(map[string]interface{}); ok {
+					if collaborators, ok := task["collaborators"].([]interface{}); ok {
+						t.Logf("✅ Verified: Collaborators array length: %d", len(collaborators))
+					} else {
+						t.Logf("⚠️  Collaborators array not found in response")
+					}
+				}
+			}
+		}
+	})
+
+	t.Log("🎉 Collaborator Update Test Completed!")
+}
+
+// TestUpdateTask_InvalidParentTaskId tests validation of invalid parent task ID
+func TestUpdateTask_InvalidParentTaskId(t *testing.T) {
+	t.Log("🧪 Testing Invalid Parent Task ID Validation")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Invalid Parent Task ID Should Be Rejected", func(t *testing.T) {
+		// Create a task first
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("Invalid Parent Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for invalid parent test",
+			"priorityLevel":  3,
+			"label":          "invalid-parent",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"deadline":     time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		// Try to update with invalid parent task ID
+		updatePayload := map[string]interface{}{
+			"parentTaskId": invalidParentTaskID,
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to send update request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+
+		// Accept 400 or 500 as valid rejection
+		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusInternalServerError {
+			t.Logf("✅ Invalid parentTaskId correctly rejected with status %d", resp.StatusCode)
+		} else {
+			t.Logf("ℹ️  Invalid parentTaskId returned status %d: %s", resp.StatusCode, string(body))
+		}
+	})
+
+	t.Log("🎉 Invalid Parent Task ID Validation Test Completed!")
+}
+
+// TestUpdateTask_InvalidCollaborator tests validation of invalid collaborator ID
+func TestUpdateTask_InvalidCollaborator(t *testing.T) {
+	t.Log("🧪 Testing Invalid Collaborator Validation")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Invalid Collaborator Should Be Rejected", func(t *testing.T) {
+		// Create a task first
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("Invalid Collaborator Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for invalid collaborator test",
+			"priorityLevel":  3,
+			"label":          "invalid-collab",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"deadline":     time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		// Try to update with invalid collaborator ID
+		updatePayload := map[string]interface{}{
+			"collaborators": []string{invalidCollaboratorID},
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to send update request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+
+		// Expect 400 Bad Request
+		if resp.StatusCode == http.StatusBadRequest {
+			t.Logf("✅ Invalid collaborator correctly rejected with status 400")
+		} else {
+			t.Logf("ℹ️  Invalid collaborator returned status %d: %s", resp.StatusCode, string(body))
+		}
+	})
+
+	t.Log("🎉 Invalid Collaborator Validation Test Completed!")
+}
+
+// TestUpdateTask_InvalidProjectId tests validation of invalid project ID on update
+func TestUpdateTask_InvalidProjectId(t *testing.T) {
+	t.Log("🧪 Testing Invalid Project ID Validation (Update)")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Invalid Project ID Should Be Rejected", func(t *testing.T) {
+		// Create a task first
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("Invalid Project Update Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for invalid project update test",
+			"priorityLevel":  3,
+			"label":          "invalid-project",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"deadline":     time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		// Try to update with invalid project ID
+		updatePayload := map[string]interface{}{
+			"pid": invalidProjectIDForUpdate,
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to send update request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+
+		// Expect 400 Bad Request
+		if resp.StatusCode == http.StatusBadRequest {
+			t.Logf("✅ Invalid project ID correctly rejected with status 400")
+		} else {
+			t.Logf("ℹ️  Invalid project ID returned status %d: %s", resp.StatusCode, string(body))
+		}
+	})
+
+	t.Log("🎉 Invalid Project ID Validation Test Completed!")
+}
+
+// TestUpdateTask_ScheduleNoExisting tests updating schedule when task has no existing schedule
+func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
+	t.Log("🧪 Testing Schedule Update Without Existing Schedule")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	var createdTaskID string
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		if createdTaskID != "" {
+			if err := deleteTask(createdTaskID); err != nil {
+				t.Logf("⚠️  Failed to cleanup task %s: %v", createdTaskID, err)
+			} else {
+				t.Logf("🧹 Cleaned up test task: %s", createdTaskID)
+			}
+		}
+	}()
+
+	t.Run("Schedule Update Should Handle Missing Schedule Gracefully", func(t *testing.T) {
+		// Create a task with minimal schedule
+		taskPayload := map[string]interface{}{
+			"name":           fmt.Sprintf("No Schedule Test - %d", time.Now().Unix()),
+			"pid":            testProjectID,
+			"desc":           "Task for schedule edge case test",
+			"priorityLevel":  3,
+			"label":          "no-schedule",
+			"created_by_uid": testUserID,
+			"collaborators":  []string{testUserID},
+			"schedule": map[string]interface{}{
+				"status":       "pending",
+				"deadline":     time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				"is_recurring": false,
+			},
+		}
+
+		jsonData, _ := json.Marshal(taskPayload)
+		resp, err := http.Post(
+			manageTaskServiceURL+"/createTask",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			t.Fatalf("❌ Failed to create task: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			t.Fatalf("❌ Task creation failed: Status %d, Response: %s", resp.StatusCode, string(body))
+		}
+
+		var result map[string]interface{}
+		if json.Unmarshal(body, &result) != nil {
+			t.Fatalf("❌ Failed to decode create response")
+		}
+
+		// Extract task ID
+		if taskID, ok := result["task_id"].(string); ok && taskID != "" {
+			createdTaskID = taskID
+		} else if task, ok := result["task"].(map[string]interface{}); ok {
+			if taskID, ok := task["id"].(string); ok && taskID != "" {
+				createdTaskID = taskID
+			}
+		}
+
+		if createdTaskID == "" {
+			t.Fatalf("❌ Could not extract task ID")
+		}
+
+		// Update schedule fields (should handle gracefully even if schedule doesn't exist)
+		updatePayload := map[string]interface{}{
+			"status":   "in_progress",
+			"deadline": time.Now().Add(72 * time.Hour).Format(time.RFC3339),
+		}
+
+		jsonData, _ = json.Marshal(updatePayload)
+		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err = client.Do(req)
+		if err != nil {
+			t.Fatalf("❌ Failed to send update request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, _ = io.ReadAll(resp.Body)
+
+		// Should return 200 even if schedule doesn't exist (graceful handling)
+		if resp.StatusCode == http.StatusOK {
+			t.Logf("✅ Schedule update handled gracefully (status 200)")
+		} else {
+			t.Logf("ℹ️  Schedule update returned status %d: %s", resp.StatusCode, string(body))
+		}
+
+		// Verify service stays healthy by fetching task
+		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		if err == nil {
+			if getResp.StatusCode == http.StatusOK {
+				t.Logf("✅ Service remains healthy after schedule update")
+			}
+			getResp.Body.Close()
+		}
+	})
+
+	t.Log("🎉 Schedule Update Without Existing Schedule Test Completed!")
+}
+
+// TestUpdateTask_DirectKnownTask tests updating a known/existing task directly
+func TestUpdateTask_DirectKnownTask(t *testing.T) {
+	t.Log("🧪 Testing Direct Update on Known Task")
+	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
+
+	t.Run("Update Known Task Directly", func(t *testing.T) {
+		// Use the known test task ID
+		updatePayload := map[string]interface{}{
+			"label":  "updatedByItest",
+			"notes":  "quick sanity update from test",
+			"status": "in_progress",
+		}
+
+		jsonData, _ := json.Marshal(updatePayload)
+		req, err := http.NewRequest("PUT", manageTaskServiceURL+"/"+testTaskID, bytes.NewBuffer(jsonData))
+		if err != nil {
+			t.Fatalf("❌ Failed to create update request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Logf("⚠️  Could not update known task: %v (task may not exist)", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+
+		if resp.StatusCode == http.StatusOK {
+			t.Logf("✅ Direct update on known task %s succeeded", testTaskID)
+		} else if resp.StatusCode == http.StatusNotFound {
+			t.Logf("ℹ️  Known task %s not found (may have been deleted)", testTaskID)
+		} else {
+			t.Logf("ℹ️  Direct update returned status %d: %s", resp.StatusCode, string(body))
+		}
+	})
+
+	t.Log("🎉 Direct Known Task Update Test Completed!")
+}

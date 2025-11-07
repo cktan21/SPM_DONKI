@@ -24,6 +24,12 @@ const projectTestStaffUserID = "0ec8a99d-3aab-4ec6-b692-fda88656844f"
 
 const invalidPID = "not-a-valid-uuid-12345"
 
+// Helper function to perform GET request with timeout
+func getWithTimeout(url string) (*http.Response, error) {
+	client := &http.Client{Timeout: 100000000 * time.Second}
+	return client.Get(url)
+}
+
 // Helper function to delete a project (used for cleanup)
 func deleteProject(projectID string) error {
 	if projectID == "" {
@@ -52,7 +58,7 @@ func TestManageProjectServiceHealth(t *testing.T) {
 	t.Log("🧪 Testing Manage-Project Service Health")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
-	resp, err := http.Get(manageProjectServiceURL + "/")
+	resp, err := getWithTimeout(manageProjectServiceURL + "/")
 	if err != nil {
 		t.Errorf("❌ Failed to connect to manage-project service: %v", err)
 		return
@@ -88,7 +94,7 @@ func TestGetProjectsByUser(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Get Projects for User", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/uid/" + projectTestUserID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/uid/" + projectTestUserID)
 		if err != nil {
 			t.Errorf("❌ Failed to get projects for user: %v", err)
 			return
@@ -161,7 +167,7 @@ func TestGetProjectByID(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Get Project by ID", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/pid/" + projectTestProjectID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/pid/" + projectTestProjectID)
 		if err != nil {
 			t.Errorf("❌ Failed to get project by ID: %v", err)
 			return
@@ -258,7 +264,7 @@ func TestManageProjectServiceEndpoints(t *testing.T) {
 
 	// Test root endpoint
 	t.Run("Root Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/")
+		resp, err := getWithTimeout(manageProjectServiceURL + "/")
 		if err != nil {
 			t.Errorf("❌ Root endpoint failed: %v", err)
 			return
@@ -274,7 +280,7 @@ func TestManageProjectServiceEndpoints(t *testing.T) {
 
 	// Test favicon endpoint (should return 204)
 	t.Run("Favicon Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/favicon.ico")
+		resp, err := getWithTimeout(manageProjectServiceURL + "/favicon.ico")
 		if err != nil {
 			t.Errorf("❌ Favicon endpoint failed: %v", err)
 			return
@@ -290,7 +296,7 @@ func TestManageProjectServiceEndpoints(t *testing.T) {
 
 	// Test invalid endpoint (should return 404)
 	t.Run("Invalid Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/invalid-endpoint")
+		resp, err := getWithTimeout(manageProjectServiceURL + "/invalid-endpoint")
 		if err != nil {
 			t.Errorf("❌ Invalid endpoint test failed: %v", err)
 			return
@@ -328,7 +334,7 @@ func TestManageProjectServiceRoleBasedAccess(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := http.Get(manageProjectServiceURL + "/uid/" + tc.userID)
+			resp, err := getWithTimeout(manageProjectServiceURL + "/uid/" + tc.userID)
 			if err != nil {
 				t.Logf("⚠️  Could not test user %s: %v (user may not exist)", tc.userID, err)
 				return
@@ -375,7 +381,7 @@ func TestManageProjectServiceTaskEnrichment(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Verify Task Enrichment", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/pid/" + projectTestProjectIDForEnrichment)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/pid/" + projectTestProjectIDForEnrichment)
 		if err != nil {
 			t.Logf("⚠️  Could not test project %s: %v (project may not exist)", projectTestProjectIDForEnrichment, err)
 			return
@@ -453,7 +459,7 @@ func TestBehaviour_AdminGetsAllProjects(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Admin Should See All Projects", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/uid/" + projectTestAdminUserID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/uid/" + projectTestAdminUserID)
 		if err != nil {
 			t.Errorf("❌ Failed to get projects for admin: %v", err)
 			return
@@ -501,7 +507,7 @@ func TestBehaviour_StaffOwnedAndMember(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Staff Should See Owned and Member Projects", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/uid/" + projectTestStaffUserID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/uid/" + projectTestStaffUserID)
 		if err != nil {
 			t.Errorf("❌ Failed to get projects for staff: %v", err)
 			return
@@ -549,7 +555,7 @@ func TestBehaviour_ManagerSameDepartment(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Manager Should See Same Department Projects", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/uid/" + projectTestManagerUserID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/uid/" + projectTestManagerUserID)
 		if err != nil {
 			t.Errorf("❌ Failed to get projects for manager: %v", err)
 			return
@@ -601,7 +607,7 @@ func TestBehaviour_InvalidPID(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Invalid PID Should Be Handled Gracefully", func(t *testing.T) {
-		resp, err := http.Get(manageProjectServiceURL + "/pid/" + invalidPID)
+		resp, err := getWithTimeout(manageProjectServiceURL + "/pid/" + invalidPID)
 		if err != nil {
 			t.Errorf("❌ Failed to request invalid PID: %v", err)
 			return
