@@ -27,7 +27,7 @@ func TestManageTaskServiceHealth(t *testing.T) {
 	t.Log("🧪 Testing Manage-Task Service Health")
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
-	resp, err := http.Get(manageTaskServiceURL + "/")
+	resp, err := httpGetWithRetry(manageTaskServiceURL+"/", 2)
 	if err != nil {
 		t.Errorf("❌ Failed to connect to manage-task service: %v", err)
 		return
@@ -62,12 +62,7 @@ func deleteTask(taskID string) error {
 	if taskID == "" {
 		return nil
 	}
-	req, err := http.NewRequest("DELETE", manageTaskServiceURL+"/"+taskID, nil)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpDeleteWithRetry(manageTaskServiceURL+"/"+taskID, 2)
 	if err != nil {
 		return err
 	}
@@ -131,10 +126,11 @@ func TestTaskCRUDOperations(t *testing.T) {
 			t.Fatalf("❌ Failed to marshal task payload: %v", err)
 		}
 
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -207,18 +203,15 @@ func TestTaskCRUDOperations(t *testing.T) {
 			t.Fatalf("❌ Failed to marshal update payload: %v", err)
 		}
 
-		req, err := http.NewRequest(
-			"PUT",
+		resp, err := httpPutWithRetry(
 			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create update request: %v", err)
 		}
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("❌ Failed to update task: %v", err)
 		}
@@ -253,7 +246,7 @@ func TestTaskCRUDOperations(t *testing.T) {
 
 		// Verify the update by fetching the task
 		t.Log("🔍 Verifying update by fetching task...")
-		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		getResp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+createdTaskID, 2)
 		if err == nil && getResp.StatusCode == http.StatusOK {
 			var taskResult map[string]interface{}
 			if json.NewDecoder(getResp.Body).Decode(&taskResult) == nil {
@@ -276,13 +269,7 @@ func TestTaskCRUDOperations(t *testing.T) {
 	t.Run("Step 3: Delete Task", func(t *testing.T) {
 		t.Log("🗑️  Deleting the created task...")
 
-		req, err := http.NewRequest("DELETE", manageTaskServiceURL+"/"+createdTaskID, nil)
-		if err != nil {
-			t.Fatalf("❌ Failed to create delete request: %v", err)
-		}
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
+		resp, err := httpDeleteWithRetry(manageTaskServiceURL+"/"+createdTaskID, 2)
 		if err != nil {
 			t.Fatalf("❌ Failed to delete task: %v", err)
 		}
@@ -315,7 +302,7 @@ func TestTaskCRUDOperations(t *testing.T) {
 
 		// Verify deletion by trying to fetch the task (should return 404)
 		t.Log("🔍 Verifying deletion by fetching task (should fail)...")
-		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		getResp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+createdTaskID, 2)
 		if err == nil {
 			if getResp.StatusCode == http.StatusNotFound {
 				t.Logf("✅ Verified: Task is deleted (404 returned)")
@@ -338,7 +325,7 @@ func TestGetTaskByID(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Get Task by ID", func(t *testing.T) {
-		resp, err := http.Get(manageTaskServiceURL + "/tasks/" + testTaskID)
+		resp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+testTaskID, 2)
 		if err != nil {
 			t.Errorf("❌ Failed to get task by ID: %v", err)
 			return
@@ -409,7 +396,7 @@ func TestGetTasksByUser(t *testing.T) {
 	t.Log("=" + string(bytes.Repeat([]byte("="), 50)))
 
 	t.Run("Get Tasks for User", func(t *testing.T) {
-		resp, err := http.Get(manageTaskServiceURL + "/tasks/user/" + testUserID)
+		resp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/user/"+testUserID, 2)
 		if err != nil {
 			t.Errorf("❌ Failed to get tasks for user: %v", err)
 			return
@@ -481,7 +468,7 @@ func TestManageTaskServiceEndpoints(t *testing.T) {
 
 	// Test root endpoint
 	t.Run("Root Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageTaskServiceURL + "/")
+		resp, err := httpGetWithRetry(manageTaskServiceURL+"/", 2)
 		if err != nil {
 			t.Errorf("❌ Root endpoint failed: %v", err)
 			return
@@ -497,7 +484,7 @@ func TestManageTaskServiceEndpoints(t *testing.T) {
 
 	// Test favicon endpoint (should return 204)
 	t.Run("Favicon Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageTaskServiceURL + "/favicon.ico")
+		resp, err := httpGetWithRetry(manageTaskServiceURL+"/favicon.ico", 2)
 		if err != nil {
 			t.Errorf("❌ Favicon endpoint failed: %v", err)
 			return
@@ -513,7 +500,7 @@ func TestManageTaskServiceEndpoints(t *testing.T) {
 
 	// Test invalid endpoint (should return 404)
 	t.Run("Invalid Endpoint", func(t *testing.T) {
-		resp, err := http.Get(manageTaskServiceURL + "/invalid-endpoint")
+		resp, err := httpGetWithRetry(manageTaskServiceURL+"/invalid-endpoint", 2)
 		if err != nil {
 			t.Errorf("❌ Invalid endpoint test failed: %v", err)
 			return
@@ -563,10 +550,11 @@ func TestTaskCreationValidation(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 
 		if err != nil {
@@ -625,10 +613,11 @@ func TestTaskCreationValidation(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 
 		if err != nil {
@@ -701,10 +690,11 @@ func TestUpdateTask_ScheduleOnly(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -745,11 +735,12 @@ func TestUpdateTask_ScheduleOnly(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to update schedule: %v", err)
 		}
@@ -764,7 +755,7 @@ func TestUpdateTask_ScheduleOnly(t *testing.T) {
 
 		// Step 3: Verify update by fetching task
 		t.Log("🔍 Verifying schedule update...")
-		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		getResp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+createdTaskID, 2)
 		if err != nil {
 			t.Logf("⚠️  Could not verify update: %v", err)
 			return
@@ -831,10 +822,11 @@ func TestUpdateTask_Collaborators(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -873,11 +865,12 @@ func TestUpdateTask_Collaborators(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to update collaborators: %v", err)
 		}
@@ -892,7 +885,7 @@ func TestUpdateTask_Collaborators(t *testing.T) {
 
 		// Step 3: Verify update by fetching task
 		t.Log("🔍 Verifying collaborator update...")
-		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		getResp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+createdTaskID, 2)
 		if err != nil {
 			t.Logf("⚠️  Could not verify update: %v", err)
 			return
@@ -953,10 +946,11 @@ func TestUpdateTask_InvalidParentTaskId(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -992,11 +986,12 @@ func TestUpdateTask_InvalidParentTaskId(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to send update request: %v", err)
 		}
@@ -1052,10 +1047,11 @@ func TestUpdateTask_InvalidCollaborator(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -1091,11 +1087,12 @@ func TestUpdateTask_InvalidCollaborator(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to send update request: %v", err)
 		}
@@ -1151,10 +1148,11 @@ func TestUpdateTask_InvalidProjectId(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -1190,11 +1188,12 @@ func TestUpdateTask_InvalidProjectId(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to send update request: %v", err)
 		}
@@ -1250,10 +1249,11 @@ func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(taskPayload)
-		resp, err := http.Post(
+		resp, err := httpPostWithRetry(
 			manageTaskServiceURL+"/createTask",
 			"application/json",
 			bytes.NewBuffer(jsonData),
+			2,
 		)
 		if err != nil {
 			t.Fatalf("❌ Failed to create task: %v", err)
@@ -1290,11 +1290,12 @@ func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
 		}
 
 		jsonData, _ = json.Marshal(updatePayload)
-		req, _ := http.NewRequest("PUT", manageTaskServiceURL+"/"+createdTaskID, bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err = client.Do(req)
+		resp, err = httpPutWithRetry(
+			manageTaskServiceURL+"/"+createdTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Fatalf("❌ Failed to send update request: %v", err)
 		}
@@ -1310,7 +1311,7 @@ func TestUpdateTask_ScheduleNoExisting(t *testing.T) {
 		}
 
 		// Verify service stays healthy by fetching task
-		getResp, err := http.Get(manageTaskServiceURL + "/tasks/" + createdTaskID)
+		getResp, err := httpGetWithRetry(manageTaskServiceURL+"/tasks/"+createdTaskID, 2)
 		if err == nil {
 			if getResp.StatusCode == http.StatusOK {
 				t.Logf("✅ Service remains healthy after schedule update")
@@ -1337,14 +1338,12 @@ func TestUpdateTask_DirectKnownTask(t *testing.T) {
 		}
 
 		jsonData, _ := json.Marshal(updatePayload)
-		req, err := http.NewRequest("PUT", manageTaskServiceURL+"/"+testTaskID, bytes.NewBuffer(jsonData))
-		if err != nil {
-			t.Fatalf("❌ Failed to create update request: %v", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
+		resp, err := httpPutWithRetry(
+			manageTaskServiceURL+"/"+testTaskID,
+			"application/json",
+			bytes.NewBuffer(jsonData),
+			2,
+		)
 		if err != nil {
 			t.Logf("⚠️  Could not update known task: %v (task may not exist)", err)
 			return
