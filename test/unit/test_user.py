@@ -201,7 +201,9 @@ def test_get_user_by_id_success(mock_client, supabase_client):
     result = supabase_client.get_user_by_id(user_id)
     
     mock_client.table.assert_called_once_with("USER")
-    mock_table.select.assert_called_once_with("*")
+    mock_table.select.assert_called_once_with(
+        "id, auth_id, email, role, name, created_at", "department"
+    )
     mock_table.select.return_value.eq.assert_called_once_with("id", user_id)
     assert result == expected_user
 
