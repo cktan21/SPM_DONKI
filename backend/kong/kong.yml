@@ -46,6 +46,13 @@ services:
         paths:
           - /manage-project
 
+  - name: manage-project-service-v2
+    url: http://refactor-manage-task:5800
+    routes:
+      - name: manage-project-v2-route
+        paths:
+          - /manage-project-v2
+
   - name: notify-user-service
     url: http://notify-user:4500
     routes:
