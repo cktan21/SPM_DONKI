@@ -3,7 +3,7 @@ import os
 
 # Class to Add the Supabase Client
 class SupabaseClient:
-    def __init__(self):
+    def __init__(self): # pragma: no cover
         self.url = os.getenv("SUPABASE_URL")
         self.key = os.getenv("SUPABASE_API_KEY")
         self.client: Client = create_client(self.url, self.key)

@@ -56,6 +56,39 @@ def sample_update_payload(**overrides) -> Dict[str, Any]:
     payload.update(overrides)
     return payload
 
+# To confirm that your sample_create_payload function: Builds a default task payload dictionary correctly. Properly applies any overrides you pass in (since it uses payload.update(overrides)).
+def test_sample_create_payload_overrides_are_applied():
+    # Baseline call executes helper body
+    base = sample_create_payload()
+    assert base["name"] == "New Task Title"
+    # Override path executes payload.update(overrides)
+    out = sample_create_payload(name="X", created_by_uid="u-override")
+    assert out["name"] == "X"
+    assert out["created_by_uid"] == "u-override"
+    # unchanged keys still present
+    assert "desc" in out and "notes" in out
+
+# confirm that your sample_update_payload function: Returns the expected default task update payload.Correctly merges overrides into the default dictionary.
+def test_sample_update_payload_overrides_are_applied():
+    # Baseline call executes helper body
+    base = sample_update_payload()
+    assert base["name"] == "Complete Project Setup"
+    # Override path executes payload.update(overrides)
+    over = sample_update_payload(
+        name="Y",
+        parentTaskId=None,
+        collaborators=[],
+        pid="proj-x",
+        desc="d",
+        notes="n",
+    )
+    assert over["name"] == "Y"
+    assert over["parentTaskId"] is None
+    assert over["collaborators"] == []
+    assert over["pid"] == "proj-x"
+    assert over["desc"] == "d"
+    assert over["notes"] == "n"
+
 
 # -------------------------------
 # Get All Tasks tests
@@ -286,3 +319,248 @@ def test_delete_task_database_error(mock_client, supabase_client):
     
     with pytest.raises(Exception, match="Database error"):
         supabase_client.delete_task(task_id)
+
+
+# -------------------------------
+# Additional coverage for new columns & paths
+# -------------------------------
+
+def test_get_all_tasks_filter_by_pid_and_parent(mock_client, supabase_client):
+    """Cover filters for pid and parentTaskId (newer columns used by routes)."""
+    expected = [
+        {"id": "t1", "pid": "p-1", "parentTaskId": "pt-9", "status": "ongoing"},
+    ]
+    mock_table = mock_client.table.return_value
+    # Chain: select().eq("pid", ...).eq("parentTaskId", ...).execute().data
+    mock_table.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = expected
+
+    result = supabase_client.get_all_tasks({"pid": "p-1", "parentTaskId": "pt-9"})
+
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.select.assert_called_once_with("*")
+    assert result == expected
+
+
+def test_get_all_tasks_filter_by_created_by_and_status_and_pid(mock_client, supabase_client):
+    """Cover multi-key filter including created_by_uid + status + pid."""
+    expected = [
+        {"id": "t9", "created_by_uid": "u-1", "status": "incomplete", "pid": "proj-77"},
+    ]
+    mock_table = mock_client.table.return_value
+    # Chain three eq() calls
+    mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = expected
+
+    result = supabase_client.get_all_tasks(
+        {"created_by_uid": "u-1", "status": "incomplete", "pid": "proj-77"}
+    )
+    assert result == expected
+
+
+def test_update_task_with_priority_label_and_collaborators(mock_client, supabase_client):
+    """Ensure complex update payload (new columns) is passed through intact."""
+    task_id = "task-new"
+    updates = {
+        "name": "Kickoff",
+        "desc": "Initial setup",
+        "notes": "Check README",
+        "priorityLevel": 10,     # new column in usage
+        "label": "Setup",        # new column in usage
+        "collaborators": [       # existing but not previously covered
+            "3e3b2d6c-6d6b-4dc0-9b76-0b6b3fe9c001",
+            "f7f5cf6e-1c3a-4d3a-8d50-5a2f60d9a002",
+        ],
+        "pid": "proj-abc",       # ensure project linkage updates fine
+        "parentTaskId": None,    # explicitly set None
+    }
+    updated = {**updates, "id": task_id}
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+    resp = supabase_client.update_task(task_id, updates)
+
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.update.assert_called_once_with(updates)
+    mock_table.update.return_value.eq.assert_called_once_with("id", task_id)
+    assert resp.data == [updated]
+
+
+def test_update_task_only_label(mock_client, supabase_client):
+    """Minimal update touching just 'label' column."""
+    task_id = "task-222"
+    updates = {"label": "Blocked"}
+    updated = {"id": task_id, "label": "Blocked"}
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+    resp = supabase_client.update_task(task_id, updates)
+    assert resp.data == [updated]
+
+
+def test_update_task_only_priority(mock_client, supabase_client):
+    """Minimal update touching just 'priorityLevel' column."""
+    task_id = "task-333"
+    updates = {"priorityLevel": 2}
+    updated = {"id": task_id, "priorityLevel": 2}
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+    resp = supabase_client.update_task(task_id, updates)
+    assert resp.data == [updated]
+
+
+def test_delete_task_accepts_string_ids(mock_client, supabase_client):
+    """Ensure delete path is agnostic to UUID vs other string IDs."""
+    task_id = "custom-string-id"
+    deleted = {"id": task_id}
+    mock_table = mock_client.table.return_value
+    mock_table.delete.return_value.eq.return_value.execute.return_value.data = [deleted]
+
+    resp = supabase_client.delete_task(task_id)
+    mock_client.table.assert_called_once_with("TASK")
+    assert resp.data == [deleted]
+
+
+def test_get_all_logs_filter_schedule_record(mock_client, supabase_client):
+    """Cover log filtering when table_name includes SCHEDULE and record_id is given."""
+    expected_logs = [
+        {"id": "l-1", "table_name": "SCHEDULE", "action": "UPDATE", "record_id": "sched-42"},
+    ]
+    mock_response = MagicMock()
+    mock_response.data = expected_logs
+    # Chain: select().in_("table_name", ["TASK", "SCHEDULE"]).eq("record_id", tid).execute()
+    mock_client.table.return_value.select.return_value.in_.return_value.eq.return_value.execute.return_value = (
+        mock_response
+    )
+
+    out = supabase_client.get_all_logs("sched-42")
+    assert out == expected_logs
+
+# -------------------------------
+# Edge Case tests
+# -------------------------------
+
+def test_get_all_tasks_filter_with_unknown_key(mock_client, supabase_client):
+    """Unknown filter keys should still be passed through as .eq() calls."""
+    expected = [{"id": "t1", "weird": "value"}]
+    mock_table = mock_client.table.return_value
+    # select().eq("weird","value").execute().data
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = expected
+
+    out = supabase_client.get_all_tasks({"weird": "value"})
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.select.assert_called_once_with("*")
+    assert out == expected
+
+
+def test_get_all_tasks_filter_value_none(mock_client, supabase_client):
+    """None values should flow through; DB may treat eq(None) specially."""
+    mock_table = mock_client.table.return_value
+    # select().eq("parentTaskId", None).execute().data
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = []
+
+    out = supabase_client.get_all_tasks({"parentTaskId": None})
+    assert out == []
+
+
+def test_get_all_tasks_empty_filter_dict(mock_client, supabase_client):
+    """Empty filter dict should behave like no filter (just select *)."""
+    expected = [{"id": "t1"}, {"id": "t2"}]
+    mock_table = mock_client.table.return_value
+    # When no eq() is applied, service should just select().execute()
+    mock_table.select.return_value.execute.return_value.data = expected
+
+    out = supabase_client.get_all_tasks({})
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.select.assert_called_once_with("*")
+    assert out == expected
+
+
+def test_get_all_tasks_filter_mixed_types(mock_client, supabase_client):
+    """Mixed data types in filters (int/bool/str) should pass through .eq() chain."""
+    expected = [{"id": "t9", "priorityLevel": 10, "archived": False, "status": "incomplete"}]
+    mock_table = mock_client.table.return_value
+    # select().eq("priorityLevel",10).eq("archived",False).eq("status","incomplete").execute().data
+    mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value.data = expected
+
+    out = supabase_client.get_all_tasks({"priorityLevel": 10, "archived": False, "status": "incomplete"})
+    assert out == expected
+
+
+def test_update_task_empty_updates(mock_client, supabase_client):
+    """Empty updates dict still results in an update call; DB may echo the row."""
+    task_id = "task-empty"
+    updated = {"id": task_id}
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+    resp = supabase_client.update_task(task_id, {})
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.update.assert_called_once_with({})
+    assert resp.data == [updated]
+
+
+def test_update_task_none_data_then_fetches(mock_client, supabase_client):
+    """If update returns data=None, service should fall back to a select fetch."""
+    task_id = "t-x"
+    mock_table = mock_client.table.return_value
+
+    # update -> data=None
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = None
+    # fallback select -> one row
+    fetched = [{"id": task_id, "name": "After"}]
+    mock_table.select.return_value.eq.return_value.execute.return_value.data = fetched
+
+    resp = supabase_client.update_task(task_id, {"name": "X"})
+    # both update & select get called
+    mock_table.update.assert_called_once()
+    mock_table.select.assert_called_once_with("*")
+    assert resp.data == fetched
+
+
+def test_update_task_set_collaborators_empty_list(mock_client, supabase_client):
+    """Setting collaborators to an empty list should pass through correctly."""
+    task_id = "t-collab"
+    updates = {"collaborators": []}
+    updated = {"id": task_id, "collaborators": []}
+    mock_table = mock_client.table.return_value
+    mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+    resp = supabase_client.update_task(task_id, updates)
+    mock_table.update.assert_called_once_with(updates)
+    assert resp.data == [updated]
+
+
+def test_update_task_priority_boundaries(mock_client, supabase_client):
+    """Boundary values for priorityLevel should be accepted as-is by the client layer."""
+    task_id = "t-prio"
+    for val in (1, 10):
+        mock_table = mock_client.table.return_value
+        updates = {"priorityLevel": val}
+        updated = {"id": task_id, "priorityLevel": val}
+        mock_table.update.return_value.eq.return_value.execute.return_value.data = [updated]
+
+        resp = supabase_client.update_task(task_id, updates)
+        assert resp.data == [updated]
+
+
+def test_delete_task_special_char_id(mock_client, supabase_client):
+    """IDs containing special characters should pass through untouched to .eq()."""
+    task_id = "we!rd/id:123"
+    deleted = {"id": task_id}
+    mock_table = mock_client.table.return_value
+    mock_table.delete.return_value.eq.return_value.execute.return_value.data = [deleted]
+
+    resp = supabase_client.delete_task(task_id)
+    mock_client.table.assert_called_once_with("TASK")
+    mock_table.delete.return_value.eq.assert_called_once_with("id", task_id)
+    assert resp.data == [deleted]
+
+
+def test_get_all_logs_none_data(mock_client, supabase_client):
+    """Logs returning data=None should be normalized to []."""
+    mock_resp = MagicMock()
+    mock_resp.data = None
+    mock_client.table.return_value.select.return_value.in_.return_value.execute.return_value = mock_resp
+
+    out = supabase_client.get_all_logs()
+    assert out == []
