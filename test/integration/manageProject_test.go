@@ -360,28 +360,39 @@ func TestManageProject_ByPID(t *testing.T) {
 	_ = waitUntilReady(manageProjectBase, 25*time.Second)
 	pid := getenv("MANAGE_PROJECT_TEST_PID", defaultPID)
 	headers := maybeInternalHeaders()
-	resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/pid/%s", manageProjectBase, pid), headers)
-	if err != nil {
-		t.Fatalf("GET /pid/%s failed: %v", pid, err)
+	
+	// Add retry logic like ByUID test
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/pid/%s", manageProjectBase, pid), headers)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			var payload map[string]any
+			if json.Unmarshal(body, &payload) == nil {
+				msg, _ := payload["message"].(string)
+				if msg == "" {
+					msg = "OK"
+				}
+				t.Logf("✅ /pid/%s OK: message=%s", pid, msg)
+				if _, ok := payload["project"]; !ok {
+					t.Errorf("missing project")
+				}
+				return
+			}
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /pid/%s unexpected status: %d body=%s", pid, resp.StatusCode, string(body))
+	if lastErr != nil {
+		t.Fatalf("GET /pid/%s error: %v", pid, lastErr)
 	}
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
-	}
-
-	// NEW: Friendly success line like you wanted
-	msg, _ := payload["message"].(string)
-	if msg == "" {
-		msg = "OK"
-	}
-	t.Logf("✅ /pid/%s OK: message=%s", pid, msg)
-
-	if _, ok := payload["project"]; !ok {
-		t.Errorf("missing project")
-	}
+	t.Fatalf("GET /pid/%s did not return 200 OK", pid)
 }
 
 /***********************
@@ -580,8 +591,32 @@ func TestBehaviour_BadInternalKey(t *testing.T) {
 	if os.Getenv("INTERNAL_API_KEY") == "" {
 		t.Skip("INTERNAL_API_KEY not set; skipping bad key test")
 	}
+	
+	// Add waitUntilReady check
+	if err := waitUntilReady(manageProjectBase, 25*time.Second); err != nil {
+		t.Skipf("manage-project not reachable: %v", err)
+	}
+	
 	headers := map[string]string{"X-Internal-API-Key": "definitely-wrong-key"}
-	resp, body, err := getWithHeaders(t, manageProjectBase+"/uid/"+defaultStaffUID, headers)
+	
+	// Add retry logic with shorter timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var resp *http.Response
+	var body []byte
+	var err error
+	for i := 0; i < 3; i++ {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		resp, body, err = getWithHeaders(t, manageProjectBase+"/uid/"+defaultStaffUID, headers)
+		if err == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}

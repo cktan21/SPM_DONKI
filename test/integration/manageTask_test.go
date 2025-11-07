@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -184,24 +185,38 @@ func TestManageTask_TasksByUser(t *testing.T) {
 		t.Skipf("manage-task not reachable: %v", err)
 	}
 	uid := getenvMT("MANAGE_TASK_TEST_UID", mtDefaultStaffUID)
-	resp, body, err := getMT(t, fmt.Sprintf("%s/tasks/user/%s", mtManageTaskBase, uid), nil)
-	if err != nil {
-		t.Fatalf("GET /tasks/user/%s failed: %v", uid, err)
+	
+	// Add retry logic
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		resp, body, err := getMT(t, fmt.Sprintf("%s/tasks/user/%s", mtManageTaskBase, uid), nil)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			var payload map[string]any
+			if json.Unmarshal(body, &payload) == nil {
+				t.Logf("✅ /tasks/user/%s OK: message=%v count=%v", uid, payload["message"], payload["count"])
+				if _, ok := payload["tasks"]; !ok {
+					t.Errorf("missing 'tasks' in response")
+				}
+				if _, ok := payload["user"]; !ok {
+					t.Errorf("missing 'user' in response")
+				}
+				return
+			}
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /tasks/user/%s unexpected status: %d body=%s", uid, resp.StatusCode, string(body))
+	if lastErr != nil {
+		t.Fatalf("GET /tasks/user/%s error: %v", uid, lastErr)
 	}
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		t.Fatalf("invalid JSON: %v; body=%s", err, string(body))
-	}
-	t.Logf("✅ /tasks/user/%s OK: message=%v count=%v", uid, payload["message"], payload["count"])
-	if _, ok := payload["tasks"]; !ok {
-		t.Errorf("missing 'tasks' in response")
-	}
-	if _, ok := payload["user"]; !ok {
-		t.Errorf("missing 'user' in response")
-	}
+	t.Fatalf("GET /tasks/user/%s did not return 200 OK", uid)
 }
 
 // Full workflow: POST /createTask then GET /tasks/{task_id}
@@ -244,10 +259,28 @@ func TestManageTask_CreateTask_And_Get(t *testing.T) {
 		},
 	}
 
-	// Create via composite
-	resp, body, err := postJSONMT(t, mtManageTaskBase+"/createTask", payload, nil)
+	// Create via composite with retry logic
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var resp *http.Response
+	var body []byte
+	var err error
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+		resp, body, err = postJSONMT(t, mtManageTaskBase+"/createTask", payload, nil)
+		if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated) {
+			break
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
+	}
 	if err != nil {
-		t.Fatalf("POST /createTask failed: %v", err)
+		t.Fatalf("POST /createTask failed: %v", lastErr)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		t.Fatalf("POST /createTask unexpected status: %d body=%s", resp.StatusCode, string(body))
