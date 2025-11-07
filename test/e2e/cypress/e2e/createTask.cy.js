@@ -1,57 +1,4 @@
-// --- 🧹 CLEAN UP EXISTING TASKS WITH SAME NAME ---
-    // cy.log("🧹 Checking for existing tasks with same name...");
-    // const deleteExistingTasks = () => {
-    //   cy.get("body").then(($body) => {
-    //     const hasTask = $body.find(`:contains("${TASK_NAME}")`).length > 0;
-    //     if (hasTask) {
-    //       cy.log("🗑 Found an existing test task — deleting...");
-    //       cy.contains(TASK_NAME)
-    //         .first()
-    //         .scrollIntoView()
-    //         .should("be.visible")
-    //         .click({ force: true });
-
-    //       // --- 1️⃣ Click first Delete button on the task page ---
-    //       cy.contains("Delete", { timeout: 20000 })
-    //         .should("be.visible")
-    //         .click({ force: true });
-
-    //       // --- 2️⃣ Wait for popup dialog ---
-    //       cy.contains("Are you sure?", { timeout: 10000 }).should("be.visible");
-    //       cy.contains(/This action cannot be undone/i, { timeout: 10000 }).should("be.visible");
-
-    //       // --- 3️⃣ Click red Delete button in popup ---
-    //       cy.wait(500); // dialog fade-in buffer
-    //       cy.contains("button", /^Delete$/)
-    //         .should("be.visible")
-    //         .click({ force: true });
-
-    //       // --- 4️⃣ Wait for redirect or re-navigate if stuck ---
-    //       cy.url({ timeout: 60000 }).then((url) => {
-    //         if (url.includes("/task/")) {
-    //           cy.log("⏳ Still on task page after deletion, forcing navigation...");
-    //           cy.wait(5000);
-    //           cy.visit(`/project/${PROJECT_ID}`);
-    //         }
-    //       });
-
-    //       cy.url({ timeout: 60000 })
-    //     //   should("include", `/project/${PROJECT_ID}`);
-    //       cy.contains("Project Dashboard", { timeout: 60000 }).should("be.visible");
-    //       cy.wait(2000);
-
-    //       // Recursively delete duplicates if any remain
-    //       deleteExistingTasks();
-    //     } else {
-    //       cy.log("✅ No existing tasks found.");
-    //     }
-    //   });
-    // };
-    // deleteExistingTasks();
-
-
-///
- <reference types="cypress" />
+///  <reference types="cypress" />
 
 Cypress.on("uncaught:exception", () => false);
 
@@ -171,5 +118,10 @@ describe("Manager flow: create new task", () => {
     cy.url({ timeout: 180000 }).should("include", `/project/${PROJECT_ID}`);
     cy.contains("Project Dashboard", { timeout: 60000 }).should("be.visible");
     cy.contains(TASK_NAME, { timeout: 120000 }).should("be.visible");
+
+    // --- DELETE ---
+    cy.contains('[data-slot="table-cell"]',TASK_NAME,{timeout:20000}).should('exist').click()
+    cy.contains('button',"Delete",{timeout:20000}).click().wait(1000)
+    cy.get('[role="alertdialog"]').contains('[type="button"]',"Delete").click({force: true})
   });
 });
