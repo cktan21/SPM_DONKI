@@ -244,17 +244,12 @@ def check_cookies(request: Request):
     if not access_token or not refresh_token or not user_data_cookie:
         raise HTTPException(status_code=401, detail="No valid cookies found, login required")
 
-    # If got access token, check for expiry.
+    # Just decode user_data cookie - it contains all the info we need
     try:
-        # Validate access token first (just checks signature + expiry)
-        jwt.decode(access_token, JWT_SECRET, algorithms=[JWT_ALGORITHM], audience="authenticated")
-
-        # Access token is valid → decode user_data cookie and return it
         payload = jwt.decode(user_data_cookie, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return JSONResponse(status_code=200, content={"user": payload})
-
-    except ExpiredSignatureError: # pragma: no cover
-        # Access token expired, try refresh token
+    except ExpiredSignatureError:
+        # If user_data expired, try to refresh using refresh_token
         try:
             new_session = supabase.refresh_session(refresh_token)
 
