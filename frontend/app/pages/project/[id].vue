@@ -55,7 +55,14 @@ const route = useRoute();
 // Fetch selected project from global state
 const selectedProject = useState<Project | null>("selectedProject");
 const loading = ref(false);
+const refreshing = ref(false); // Separate flag for background refresh
 const error = ref<string | null>(null);
+
+// Cache project data by ID for instant loading
+const getCachedProject = (id: string) => {
+    const cacheKey = `project_${id}`;
+    return useState<Project | null>(cacheKey, () => null);
+};
 
 // Get current user data from auth state
 const userData = useState<{
@@ -63,8 +70,16 @@ const userData = useState<{
 } | null>("userData");
 
 // Fetch project by project ID
-const fetchProjectById = async (projectId: string) => {
-    loading.value = true;
+const fetchProjectById = async (
+    projectId: string,
+    backgroundRefresh = false
+) => {
+    // Set appropriate loading flags
+    if (backgroundRefresh) {
+        refreshing.value = true;
+    } else {
+        loading.value = true;
+    }
     error.value = null;
 
     try {
@@ -76,33 +91,57 @@ const fetchProjectById = async (projectId: string) => {
         if (!res.ok) throw new Error(`Failed to fetch project: ${res.status}`);
 
         const data = await res.json();
-        selectedProject.value = data.project;
-        console.log("Fetched project by ID:", data.project);
+        const project = data.project;
+
+        // Update both local state and cache
+        selectedProject.value = project;
+
+        // Cache the project data
+        const cachedProject = getCachedProject(projectId);
+        cachedProject.value = project;
+
+        console.log("Fetched project by ID:", project);
     } catch (err: any) {
         console.error("Error fetching project:", err);
         error.value = err.message || "Failed to fetch project";
+        // Don't clear cache on error - keep showing stale data
     } finally {
         loading.value = false;
+        refreshing.value = false;
     }
 };
 
-// On mount, check if project is in state, otherwise fetch from URL
+// On mount, check cache first, then state, then fetch from URL
 onMounted(async () => {
     const projectId = route.params.id as string;
 
-    if (!selectedProject.value && projectId) {
-        // No project in state but we have ID in URL - fetch it
-        await fetchProjectById(projectId);
+    if (!projectId) {
+        console.warn("No project ID in URL");
+        return;
+    }
+
+    // Check cache first
+    const cachedProject = getCachedProject(projectId);
+
+    if (cachedProject.value) {
+        // Show cached data immediately
+        selectedProject.value = cachedProject.value;
+        console.log("Loaded cached project:", projectId);
+        // Fetch fresh data in background
+        await fetchProjectById(projectId, true); // true = background refresh
     } else if (
         selectedProject.value &&
-        projectId !== selectedProject.value.id
+        projectId === selectedProject.value.id
     ) {
-        // URL ID doesn't match state - fetch from URL
-        await fetchProjectById(projectId);
-    } else if (selectedProject.value) {
+        // Project in state matches URL - use it and cache it
+        const cached = getCachedProject(projectId);
+        cached.value = selectedProject.value;
         console.log("Using project from state:", selectedProject.value);
+        // Fetch fresh data in background
+        await fetchProjectById(projectId, true);
     } else {
-        console.warn("No project ID in URL and no project in state");
+        // No cache and state doesn't match - do normal fetch
+        await fetchProjectById(projectId, false);
     }
 });
 
@@ -111,7 +150,19 @@ watch(
     () => route.params.id,
     async (newId) => {
         if (newId && typeof newId === "string") {
-            await fetchProjectById(newId);
+            // Check cache first when route changes
+            const cachedProject = getCachedProject(newId);
+
+            if (cachedProject.value) {
+                // Show cached data immediately
+                selectedProject.value = cachedProject.value;
+                console.log("Loaded cached project on route change:", newId);
+                // Fetch fresh data in background
+                await fetchProjectById(newId, true);
+            } else {
+                // No cache, do normal fetch
+                await fetchProjectById(newId, false);
+            }
         }
     }
 );
@@ -497,7 +548,29 @@ const handleBackToDashboard = () => {
                         {{ projectDescription }}
                     </p>
                 </div>
-                <!-- Desktop Create Button - Hidden, will be shown below with "Tasks" -->
+                <!-- Refresh indicator -->
+                <div
+                    v-if="refreshing"
+                    class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <svg
+                        class="h-4 w-4 animate-spin"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24">
+                        <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"></circle>
+                        <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Refreshing...</span>
+                </div>
             </div>
 
             <!-- Loading State -->

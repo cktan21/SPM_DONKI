@@ -36,7 +36,7 @@ const router = useRouter();
 const route = useRoute();
 const { toast } = useToast();
 
-const API_BASE_URL = "http://localhost:4000";
+const API_BASE_URL = "http://localhost:8000/manage-task";
 
 // Get authenticated user data from middleware
 const userData = useState<any>("userData");
@@ -63,11 +63,36 @@ const formCreate = ref({
 
 onMounted(() => {
     formCreate.value.pid = route.params.id as string;
+    // Set default start date to today
+    const today = new Date();
+    formCreate.value.schedule.start = new CalendarDate(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        today.getDate()
+    );
     fetchAllUsers();
 });
 
 const state = ref({ creating: false });
 const handleBack = () => router.back();
+
+// Validation state for required fields
+const validationErrors = ref({
+    name: false,
+    startDate: false,
+    deadline: false,
+    dateRange: false
+});
+
+// Computed properties for validation
+const isNameValid = computed(() => formCreate.value.name.trim().length > 0);
+const isStartDateValid = computed(
+    () => formCreate.value.schedule.start !== undefined
+);
+const isDeadlineValid = computed(
+    () => formCreate.value.schedule.deadline !== undefined
+);
+const isDateRangeValidComputed = computed(() => isDateRangeValid.value);
 
 // Helper function to format date as dd/mm/yyyy
 const formatDate = (dateValue: any): string => {
@@ -214,18 +239,39 @@ const selectUser = (id: string) => {
 };
 
 const createTask = async () => {
-    if (!formCreate.value.name.trim()) {
-        toast({ title: "Task name is required", variant: "destructive" });
-        return;
+    // Reset validation errors
+    validationErrors.value = {
+        name: false,
+        startDate: false,
+        deadline: false,
+        dateRange: false
+    };
+
+    // Validate required fields
+    let hasErrors = false;
+
+    if (!isNameValid.value) {
+        validationErrors.value.name = true;
+        hasErrors = true;
     }
 
-    // Validate date range
-    if (!isDateRangeValid.value) {
-        toast({
-            title: "Invalid date range",
-            description: "Start date must be before the deadline",
-            variant: "destructive"
-        });
+    if (!isStartDateValid.value) {
+        validationErrors.value.startDate = true;
+        hasErrors = true;
+    }
+
+    if (!isDeadlineValid.value) {
+        validationErrors.value.deadline = true;
+        hasErrors = true;
+    }
+
+    if (!isDateRangeValidComputed.value) {
+        validationErrors.value.dateRange = true;
+        hasErrors = true;
+    }
+
+    // If there are validation errors, don't submit
+    if (hasErrors) {
         return;
     }
 
@@ -410,18 +456,69 @@ const createTask = async () => {
                             </h3>
                             <div class="grid gap-4 sm:gap-6">
                                 <div class="space-y-2">
-                                    <Label
-                                        for="task-name"
-                                        class="text-sm font-medium">
-                                        Task Name
-                                        <span class="text-destructive">*</span>
-                                    </Label>
+                                    <div class="flex items-center gap-2">
+                                        <Label
+                                            for="task-name"
+                                            class="text-sm font-medium">
+                                            Task Name
+                                            <span class="text-destructive"
+                                                >*</span
+                                            >
+                                        </Label>
+                                        <Popover
+                                            v-model:open="
+                                                validationErrors.name
+                                            ">
+                                            <PopoverTrigger as-child>
+                                                <Button
+                                                    v-if="validationErrors.name"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    class="h-5 w-5 rounded-full p-0"
+                                                    type="button">
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        class="h-4 w-4 text-destructive"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor">
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                class="w-auto p-3 text-sm"
+                                                :align="'start'">
+                                                <p
+                                                    class="font-semibold mb-1 text-destructive">
+                                                    Task Name Required
+                                                </p>
+                                                <p
+                                                    class="text-muted-foreground">
+                                                    Please enter a task name
+                                                    before submitting.
+                                                </p>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
                                     <Input
                                         id="task-name"
                                         v-model="formCreate.name"
                                         placeholder="Enter a descriptive task name"
                                         required
-                                        class="w-full" />
+                                        :class="[
+                                            'w-full',
+                                            validationErrors.name
+                                                ? 'border-destructive'
+                                                : ''
+                                        ]"
+                                        @input="
+                                            validationErrors.name = false
+                                        " />
                                 </div>
 
                                 <div class="grid gap-4 sm:grid-cols-2">
@@ -718,11 +815,57 @@ const createTask = async () => {
 
                                 <div class="grid gap-4 sm:grid-cols-2">
                                     <div class="space-y-2">
-                                        <Label
-                                            for="task-start"
-                                            class="text-sm font-medium">
-                                            Start Date
-                                        </Label>
+                                        <div class="flex items-center gap-2">
+                                            <Label
+                                                for="task-start"
+                                                class="text-sm font-medium">
+                                                Start Date
+                                                <span class="text-destructive"
+                                                    >*</span
+                                                >
+                                            </Label>
+                                            <Popover
+                                                v-model:open="
+                                                    validationErrors.startDate
+                                                ">
+                                                <PopoverTrigger as-child>
+                                                    <Button
+                                                        v-if="
+                                                            validationErrors.startDate
+                                                        "
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        class="h-5 w-5 rounded-full p-0"
+                                                        type="button">
+                                                        <svg
+                                                            xmlns="http://www.w3.org/2000/svg"
+                                                            class="h-4 w-4 text-destructive"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor">
+                                                            <path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent
+                                                    class="w-auto p-3 text-sm"
+                                                    :align="'start'">
+                                                    <p
+                                                        class="font-semibold mb-1 text-destructive">
+                                                        Start Date Required
+                                                    </p>
+                                                    <p
+                                                        class="text-muted-foreground">
+                                                        Please select a start
+                                                        date for the task.
+                                                    </p>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
                                         <Popover>
                                             <PopoverTrigger as-child>
                                                 <Button
@@ -730,9 +873,13 @@ const createTask = async () => {
                                                     class="w-full justify-start text-left font-normal"
                                                     :class="{
                                                         'border-destructive':
-                                                            !isDateRangeValid
+                                                            validationErrors.startDate ||
+                                                            validationErrors.dateRange
                                                     }"
-                                                    id="task-start">
+                                                    id="task-start"
+                                                    @click="
+                                                        validationErrors.startDate = false
+                                                    ">
                                                     <svg
                                                         xmlns="http://www.w3.org/2000/svg"
                                                         class="h-4 w-4 mr-2"
@@ -765,8 +912,11 @@ const createTask = async () => {
                             (formCreate.schedule.start as DateValue | undefined)
                           "
                                                     @update:model-value="
-                            (value: DateValue | undefined) =>
-                              (formCreate.schedule.start = value)
+                            (value: DateValue | undefined) => {
+                              formCreate.schedule.start = value;
+                              validationErrors.startDate = false;
+                              validationErrors.dateRange = false;
+                            }
                           "
                                                     :initial-focus="true" />
                                             </PopoverContent>
@@ -786,16 +936,107 @@ const createTask = async () => {
                                                 "
                                                 type="time"
                                                 class="w-full mt-1"
-                                                placeholder="09:00" />
+                                                placeholder="09:00"
+                                                @input="
+                                                    validationErrors.dateRange = false
+                                                " />
                                         </div>
                                     </div>
 
                                     <div class="space-y-2">
-                                        <Label
-                                            for="task-deadline"
-                                            class="text-sm font-medium">
-                                            Deadline
-                                        </Label>
+                                        <div class="flex items-center gap-2">
+                                            <Label
+                                                for="task-deadline"
+                                                class="text-sm font-medium">
+                                                Deadline
+                                                <span class="text-destructive"
+                                                    >*</span
+                                                >
+                                            </Label>
+                                            <Popover
+                                                v-model:open="
+                                                    validationErrors.deadline
+                                                ">
+                                                <PopoverTrigger as-child>
+                                                    <Button
+                                                        v-if="
+                                                            validationErrors.deadline
+                                                        "
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        class="h-5 w-5 rounded-full p-0"
+                                                        type="button">
+                                                        <svg
+                                                            xmlns="http://www.w3.org/2000/svg"
+                                                            class="h-4 w-4 text-destructive"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor">
+                                                            <path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent
+                                                    class="w-auto p-3 text-sm"
+                                                    :align="'start'">
+                                                    <p
+                                                        class="font-semibold mb-1 text-destructive">
+                                                        Deadline Required
+                                                    </p>
+                                                    <p
+                                                        class="text-muted-foreground">
+                                                        Please select a deadline
+                                                        for the task.
+                                                    </p>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <Popover
+                                                v-model:open="
+                                                    validationErrors.dateRange
+                                                ">
+                                                <PopoverTrigger as-child>
+                                                    <Button
+                                                        v-if="
+                                                            validationErrors.dateRange &&
+                                                            !validationErrors.deadline
+                                                        "
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        class="h-5 w-5 rounded-full p-0"
+                                                        type="button">
+                                                        <svg
+                                                            xmlns="http://www.w3.org/2000/svg"
+                                                            class="h-4 w-4 text-destructive"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor">
+                                                            <path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent
+                                                    class="w-auto p-3 text-sm"
+                                                    :align="'start'">
+                                                    <p
+                                                        class="font-semibold mb-1 text-destructive">
+                                                        Invalid Date Range
+                                                    </p>
+                                                    <p
+                                                        class="text-muted-foreground">
+                                                        Start date must be
+                                                        before the deadline.
+                                                    </p>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
                                         <Popover>
                                             <PopoverTrigger as-child>
                                                 <Button
@@ -803,9 +1044,14 @@ const createTask = async () => {
                                                     class="w-full justify-start text-left font-normal"
                                                     :class="{
                                                         'border-destructive':
-                                                            !isDateRangeValid
+                                                            validationErrors.deadline ||
+                                                            validationErrors.dateRange
                                                     }"
-                                                    id="task-deadline">
+                                                    id="task-deadline"
+                                                    @click="
+                                                        validationErrors.deadline = false;
+                                                        validationErrors.dateRange = false;
+                                                    ">
                                                     <svg
                                                         xmlns="http://www.w3.org/2000/svg"
                                                         class="h-4 w-4 mr-2"
@@ -839,8 +1085,11 @@ const createTask = async () => {
                               .deadline as DateValue | undefined)
                           "
                                                     @update:model-value="
-                            (value: DateValue | undefined) =>
-                              (formCreate.schedule.deadline = value)
+                            (value: DateValue | undefined) => {
+                              formCreate.schedule.deadline = value;
+                              validationErrors.deadline = false;
+                              validationErrors.dateRange = false;
+                            }
                           "
                                                     :initial-focus="true" />
                                             </PopoverContent>
@@ -860,19 +1109,13 @@ const createTask = async () => {
                                                 "
                                                 type="time"
                                                 class="w-full mt-1"
-                                                placeholder="17:00" />
+                                                placeholder="17:00"
+                                                @input="
+                                                    validationErrors.deadline = false;
+                                                    validationErrors.dateRange = false;
+                                                " />
                                         </div>
                                     </div>
-                                </div>
-
-                                <!-- Date validation warning -->
-                                <div
-                                    v-if="!isDateRangeValid"
-                                    class="p-3 bg-destructive/10 border border-destructive rounded-md">
-                                    <p class="text-sm text-destructive">
-                                        ⚠️ Start date must be before the
-                                        deadline
-                                    </p>
                                 </div>
 
                                 <!-- Recurring Task Section -->
