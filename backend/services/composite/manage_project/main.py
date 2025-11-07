@@ -303,6 +303,52 @@ async def get_project_with_tasks(uid: str):
 
             # ==================== STEP 5: Enrich Tasks via Manage-Task Service ====================
             print(f"[DEBUG] Starting task enrichment via Manage-Task service")
+            
+            # Helper function to process tasks in batches to avoid overwhelming the service
+            async def enrich_tasks_batch(tids: list, raw_tasks: list, batch_size: int = 20):
+                """Enrich tasks in batches to limit concurrent requests"""
+                enriched = []
+                for i in range(0, len(tids), batch_size):
+                    batch = tids[i:i + batch_size]
+                    print(f"[DEBUG] Processing batch {i//batch_size + 1} ({len(batch)} tasks)")
+                    
+                    reqs = [client.get(f"{MANAGE_TASK_URL}/tasks/{tid}", headers=internal_headers) for tid in batch]
+                    results = await asyncio.gather(*reqs, return_exceptions=True)
+                    
+                    for tid, res in zip(batch, results):
+                        fallback = next((t for t in raw_tasks if t.get("id") == tid), {})
+                        
+                        if isinstance(res, Exception):
+                            print(f"[ERROR] Manage-Task call failed for task {tid}: {res}")
+                            enriched.append(fallback)
+                            continue
+                            
+                        if getattr(res, "status_code", 0) == 200:
+                            try:
+                                payload = res.json()
+                                task_obj = payload.get("task") if isinstance(payload, dict) else None
+                                if not task_obj and isinstance(payload, dict):
+                                    task_obj = payload
+                                if isinstance(task_obj, dict) and task_obj:
+                                    task_obj = {**fallback, **task_obj}
+                                    enriched.append(task_obj)
+                                    print(f"[DEBUG] Successfully enriched task {tid}")
+                                else:
+                                    print(f"[WARN] Unexpected task shape for {tid}, using fallback")
+                                    enriched.append(fallback)
+                            except Exception as e:
+                                print(f"[ERROR] Failed parsing Manage-Task response for {tid}: {e}")
+                                enriched.append(fallback)
+                        else:
+                            print(f"[WARN] Manage-Task returned {res.status_code} for {tid}")
+                            enriched.append(fallback)
+                    
+                    # Small delay between batches to prevent overwhelming the service
+                    if i + batch_size < len(tids):
+                        await asyncio.sleep(0.1)
+                
+                return enriched
+            
             for pid in all_pids:
                 raw_tasks = project_tasks_map.get(pid, [])
                 if not raw_tasks:
@@ -312,38 +358,7 @@ async def get_project_with_tasks(uid: str):
                 tids = [t["id"] for t in raw_tasks if t.get("id")]
                 print(f"[DEBUG] Enriching {len(tids)} tasks for project {pid}")
                 
-                reqs = [client.get(f"{MANAGE_TASK_URL}/tasks/{tid}", headers=internal_headers) for tid in tids]
-                results = await asyncio.gather(*reqs, return_exceptions=True)
-
-                enriched = []
-                for tid, res in zip(tids, results):
-                    fallback = next((t for t in raw_tasks if t.get("id") == tid), {})
-                    
-                    if isinstance(res, Exception):
-                        print(f"[ERROR] Manage-Task call failed for task {tid}: {res}")
-                        enriched.append(fallback)
-                        continue
-                        
-                    if getattr(res, "status_code", 0) == 200:
-                        try:
-                            payload = res.json()
-                            task_obj = payload.get("task") if isinstance(payload, dict) else None
-                            if not task_obj and isinstance(payload, dict):
-                                task_obj = payload
-                            if isinstance(task_obj, dict) and task_obj:
-                                task_obj = {**fallback, **task_obj}
-                                enriched.append(task_obj)
-                                print(f"[DEBUG] Successfully enriched task {tid}")
-                            else:
-                                print(f"[WARN] Unexpected task shape for {tid}, using fallback")
-                                enriched.append(fallback)
-                        except Exception as e:
-                            print(f"[ERROR] Failed parsing Manage-Task response for {tid}: {e}")
-                            enriched.append(fallback)
-                    else:
-                        print(f"[WARN] Manage-Task returned {res.status_code} for {tid}")
-                        enriched.append(fallback)
-
+                enriched = await enrich_tasks_batch(tids, raw_tasks, batch_size=20)
                 projects_by_id[pid]["tasks"] = enriched
 
             # ==================== STEP 6: Return Final Response ====================

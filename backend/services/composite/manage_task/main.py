@@ -588,7 +588,7 @@ async def get_task_composite(
     6. Fetch parent task name if parentTaskId exists
     """
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             # === 1. Get Task ===
             task_resp = await client.get(f"{TASK_SERVICE_URL}/tid/{task_id}")

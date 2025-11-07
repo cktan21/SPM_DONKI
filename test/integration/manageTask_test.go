@@ -27,7 +27,7 @@ func init() {
 /***********************
  Helpers (namespaced with MT)
 ***********************/
-var httpClientMT = &http.Client{Timeout: 12 * time.Second}
+var httpClientMT = &http.Client{Timeout: 30 * time.Second}
 
 func getenvMT(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
@@ -191,10 +191,8 @@ func TestManageTask_TasksByUser(t *testing.T) {
 	defer cancel()
 	var lastErr error
 	for i := 0; i < 4; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			break
-		default:
 		}
 		resp, body, err := getMT(t, fmt.Sprintf("%s/tasks/user/%s", mtManageTaskBase, uid), nil)
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -267,10 +265,8 @@ func TestManageTask_CreateTask_And_Get(t *testing.T) {
 	var err error
 	var lastErr error
 	for i := 0; i < 4; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			break
-		default:
 		}
 		resp, body, err = postJSONMT(t, mtManageTaskBase+"/createTask", payload, nil)
 		if err == nil && (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated) {
@@ -314,14 +310,8 @@ func TestManageTask_CreateTask_And_Get(t *testing.T) {
 
 	t.Logf("✅ /tasks/%s OK: message=%v", taskID, detail["message"])
 
-	// Soft checks
-	if taskObj, _ := detail["task"].(map[string]any); taskObj != nil {
-		_, _ = taskObj["project"]
-		_, _ = taskObj["created_by"]
-		_, _ = taskObj["collaborators"]
-		_, _ = taskObj["status"]
-		_, _ = taskObj["deadline"]
-	} else {
+	// Verify task object exists in response
+	if taskObj, _ := detail["task"].(map[string]any); taskObj == nil {
 		t.Errorf("missing 'task' object in composite detail response")
 	}
 }

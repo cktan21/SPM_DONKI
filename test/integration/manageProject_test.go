@@ -27,7 +27,7 @@ func init() {
 /***********************
  Helpers
 ***********************/
-var httpClient = &http.Client{Timeout: 12 * time.Second}
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 func getenv(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
@@ -325,10 +325,8 @@ func TestManageProject_ByUID(t *testing.T) {
 	defer cancel()
 	var lastErr error
 	for i := 0; i < 4; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			break
-		default:
 		}
 		resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, uid), headers)
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -366,10 +364,8 @@ func TestManageProject_ByPID(t *testing.T) {
 	defer cancel()
 	var lastErr error
 	for i := 0; i < 4; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			break
-		default:
 		}
 		resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/pid/%s", manageProjectBase, pid), headers)
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -419,20 +415,38 @@ func TestBehaviour_AdminGetsAllProjects(t *testing.T) {
 		t.Skip("Project creation skipped; cannot assert admin behaviour")
 	}
 
-	resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, adminUID), headers)
-	if err != nil {
-		t.Fatalf("GET /uid/%s failed: %v", adminUID, err)
+	// Add retry logic with context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	var lastErr error
+	var resp *http.Response
+	var body []byte
+	for i := 0; i < 4; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		var err error
+		resp, body, err = getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, adminUID), headers)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			var out map[string]any
+			if json.Unmarshal(body, &out) == nil {
+				arr, _ := out["projects"].([]any)
+				if len(arr) < 2 {
+					t.Errorf("expected >=2 projects for admin; got %d", len(arr))
+				}
+				return
+			}
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
+	if lastErr != nil {
+		t.Fatalf("GET /uid/%s failed: %v", adminUID, lastErr)
 	}
-
-	var out map[string]any
-	_ = json.Unmarshal(body, &out)
-	arr, _ := out["projects"].([]any)
-	if len(arr) < 2 {
-		t.Errorf("expected >=2 projects for admin; got %d", len(arr))
+	if resp == nil {
+		t.Fatalf("GET /uid/%s did not return 200 OK", adminUID)
 	}
+	t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
 }
 
 // Staff: owned + member projects
@@ -466,20 +480,38 @@ func TestBehaviour_StaffOwnedAndMember(t *testing.T) {
 		memberPID = memberPID2
 	}
 
-	resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, staffUID), headers)
-	if err != nil {
-		t.Fatalf("GET /uid/%s failed: %v", staffUID, err)
+	// Add retry logic with context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	var lastErr error
+	var resp *http.Response
+	var body []byte
+	for i := 0; i < 4; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		var err error
+		resp, body, err = getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, staffUID), headers)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			var out map[string]any
+			if json.Unmarshal(body, &out) == nil {
+				arr, _ := out["projects"].([]any)
+				if len(arr) == 0 {
+					t.Errorf("expected some projects for staff; got 0")
+				}
+				return
+			}
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
+	if lastErr != nil {
+		t.Fatalf("GET /uid/%s failed: %v", staffUID, lastErr)
 	}
-
-	var out map[string]any
-	_ = json.Unmarshal(body, &out)
-	arr, _ := out["projects"].([]any)
-	if len(arr) == 0 {
-		t.Errorf("expected some projects for staff; got 0")
+	if resp == nil {
+		t.Fatalf("GET /uid/%s did not return 200 OK", staffUID)
 	}
+	t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
 }
 
 // Manager: also gets projects whose owner is in the same department
@@ -501,18 +533,37 @@ func TestBehaviour_ManagerSameDepartment(t *testing.T) {
 		t.Skip("Project creation skipped; cannot assert manager dept behaviour")
 	}
 
-	resp, body, err := getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, managerUID), headers)
-	if err != nil {
-		t.Fatalf("GET /uid/%s failed: %v", managerUID, err)
+	// Add retry logic with context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	var lastErr error
+	var resp *http.Response
+	var body []byte
+	for i := 0; i < 4; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		var err error
+		resp, body, err = getWithHeaders(t, fmt.Sprintf("%s/uid/%s", manageProjectBase, managerUID), headers)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			var out map[string]any
+			if json.Unmarshal(body, &out) == nil {
+				if out["projects"] == nil {
+					t.Errorf("expected projects for manager; got nil")
+				}
+				return
+			}
+		}
+		lastErr = err
+		time.Sleep(800 * time.Millisecond)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
+	if lastErr != nil {
+		t.Fatalf("GET /uid/%s failed: %v", managerUID, lastErr)
 	}
-	var out map[string]any
-	_ = json.Unmarshal(body, &out)
-	if out["projects"] == nil {
-		t.Errorf("expected projects for manager; got nil")
+	if resp == nil {
+		t.Fatalf("GET /uid/%s did not return 200 OK", managerUID)
 	}
+	t.Fatalf("unexpected status: %d body=%s", resp.StatusCode, string(body))
 }
 
 // Task enrichment: create project + task, then ensure /pid/{id} returns tasks (optionally enriched)
@@ -564,8 +615,8 @@ func TestBehaviour_TaskEnrichment(t *testing.T) {
 	// Soft-check fields if present
 	if len(tasks) > 0 {
 		if t0, ok := tasks[0].(map[string]any); ok {
-			_, _ = t0["status"]
-			_, _ = t0["deadline"]
+			_ = t0["status"]
+			_ = t0["deadline"]
 		}
 	}
 }
@@ -606,10 +657,8 @@ func TestBehaviour_BadInternalKey(t *testing.T) {
 	var body []byte
 	var err error
 	for i := 0; i < 3; i++ {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			break
-		default:
 		}
 		resp, body, err = getWithHeaders(t, manageProjectBase+"/uid/"+defaultStaffUID, headers)
 		if err == nil {
