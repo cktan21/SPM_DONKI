@@ -24,6 +24,8 @@ docker run -p 5100:5100 --name my-fastapi-container my-fastapi-app
 
 ## EndPoints
 
+## Access API docs at: http://localhost:5100/docs#
+
 ### Health Check
 
 GET http://localhost:5100
@@ -465,5 +467,170 @@ Sample Output:
     "created_at": "2025-09-22T05:11:59.671524+00:00",
     "exists": true,
     "internal_api_key": "secret"
+}
+```
+
+## Get all logs
+
+GET http://localhost:5100/logs
+
+> http://localhost:5100/logs
+
+Sample Output:
+
+```json
+{
+  "message": "16 log(s) retrieved",
+  "logs": [
+    {
+      "id": "8506182a-8366-4d12-be9f-9fc71b77e4c8",
+      "table_name": "USER",
+      "record_id": "6933d965-e4c4-4b49-bc99-08236b1d9458",
+      "record_pk": {
+        "id": "6933d965-e4c4-4b49-bc99-08236b1d9458"
+      },
+      "operation": "INSERT",
+      "old_values": null,
+      "new_values": {
+        "id": "6933d965-e4c4-4b49-bc99-08236b1d9458",
+        "name": "gorillaXx",
+        "role": "manager",
+        "email": "gorillalover@rchehehaha.com",
+        "phone": null,
+        "auth_id": null,
+        "created_at": "2025-11-05T18:17:42.180822+00:00",
+        "department": "Quant"
+      },
+      "changed_fields": null,
+      "delta": null,
+      "user_id": null,
+      "timestamp": "2025-11-05T18:17:42.180822+00:00",
+      "ip_address": null,
+      "user_agent": null,
+      "session_id": null
+    },
+    {
+      "id": "6e8d98cc-ef88-43f3-9f6b-f8b05adb36c1",
+      "table_name": "USER",
+      "record_id": "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+      "record_pk": {
+        "id": "fb892a63-2401-46fc-b660-bf3fe1196d4e"
+      },
+      "operation": "UPDATE",
+      "old_values": {
+        "id": "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+        "name": "test staff",
+        "role": "staff",
+        "email": "teststaff@example.com",
+        "phone": null,
+        "auth_id": "a7860875-e519-4a18-a5a3-2a66848c73b6",
+        "created_at": "2025-10-01T11:43:52.115734+00:00",
+        "department": "Quant"
+      },
+      "new_values": {
+        "id": "fb892a63-2401-46fc-b660-bf3fe1196d4e",
+        "name": "test staff",
+        "role": "staff",
+        "email": "teststaff@example.com",
+        "phone": null,
+        "auth_id": "a7860875-e519-4a18-a5a3-2a66848c73b6",
+        "created_at": "2025-10-01T11:43:52.115734+00:00",
+        "department": "Tech"
+      },
+      "changed_fields": [
+        "department"
+      ],
+      "delta": {
+        "department": {
+          "new": "Tech",
+          "old": "Quant"
+        }
+      },
+      "user_id": null,
+      "timestamp": "2025-10-28T08:11:11.384619+00:00",
+      "ip_address": null,
+      "user_agent": null,
+      "session_id": null
+    },
+    {
+      "id": "e6c92fdd-2625-4267-b4c8-a7d081123b5f",
+      "table_name": "USER",
+      "record_id": "a43815c3-2051-44b9-9646-8ceaf9d6cb87",
+      "record_pk": {
+        "id": "a43815c3-2051-44b9-9646-8ceaf9d6cb87"
+      },
+      "operation": "INSERT",
+      "old_values": null,
+      "new_values": {
+        "id": "a43815c3-2051-44b9-9646-8ceaf9d6cb87",
+        "name": "Michael Jordan",
+        "role": "manager",
+        "email": "passwordistestresearch@gmail.com",
+        "auth_id": "0794bfcb-2c97-49dc-b983-c98027eb9339",
+        "created_at": "2025-10-23T14:01:18.773657+00:00",
+        "department": "Research"
+      },
+    }
+  ]
+  ...
+}
+```
+
+
+
+## Get logs by user ID
+
+GET http://localhost:5100/logs/{uid}
+
+> http://localhost:5100/logs/0ec8a99d-3aab-4ec6-b692-fda88656844f'
+
+Sample Output:
+
+```json
+{
+  "message": "Log retrieved successfully",
+  "log": [
+    {
+      "id": "a5ec666c-aab1-4359-b54c-dbf008fb9e65",
+      "table_name": "USER",
+      "record_id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+      "record_pk": {
+        "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f"
+      },
+      "operation": "UPDATE",
+      "old_values": {
+        "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+        "name": "Default Name",
+        "role": "staff",
+        "email": "rc@example.com",
+        "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
+        "created_at": "2025-09-22T05:11:59.671524+00:00",
+        "department": "tech"
+      },
+      "new_values": {
+        "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+        "name": "Default Name",
+        "role": "staff",
+        "email": "rc@example.com",
+        "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
+        "created_at": "2025-09-22T05:11:59.671524+00:00",
+        "department": "Tech"
+      },
+      "changed_fields": [
+        "department"
+      ],
+      "delta": {
+        "department": {
+          "new": "Tech",
+          "old": "tech"
+        }
+      },
+      "user_id": null,
+      "timestamp": "2025-10-23T13:25:47.459037+00:00",
+      "ip_address": null,
+      "user_agent": null,
+      "session_id": null
+    }
+  ]
 }
 ```

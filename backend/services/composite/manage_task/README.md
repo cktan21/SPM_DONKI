@@ -19,6 +19,8 @@ docker run -p 4000:4000 --name my-fastapi-container my-fastapi-app
 
 ## EndPoints
 
+## Access API docs at: http://localhost:4000/docs#
+
 ### Health Check
 
 GET http://localhost:4000
@@ -27,87 +29,12 @@ Output:
 ```bash
 "message":"Composite Manage Task Service is running 🚀","service":"manage-task-composite"
 ```
-### Create task
-
-POST http://127.0.0.1:4000/createTask
-
-> http://127.0.0.1:4000/createTask
-
-Sample Output:
-```json
-{
-  "message": "Task created successfully via composite service",
-  "task_id": "6c2c6617-971d-4c30-a0ec-263c386bc937",
-  "task": {
-    "message": "Task created successfully",
-    "task": {
-      "id": "6c2c6617-971d-4c30-a0ec-263c386bc937",
-      "name": "New Task Title2",
-      "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-      "updated_timestamp": "2025-09-26T00:41:00.17705+00:00",
-      "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
-      "collaborators": [
-        "0ec8a99d-3aab-4ec6-b692-fda88656844f",
-        "17a40371-66fe-411a-963b-a977cc7cb475"
-      ],
-      "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-      "desc": "Optional description",
-      "notes": "Optional notes"
-    }
-  },
-  "schedule": {
-    "status": "failed",
-    "message": "Schedule service returned 405",
-    "error": "{\"detail\":\"Method Not Allowed\"}"
-  },
-  "project_info": {
-    "message": "Project retrieved successfully",
-    "project": {
-      "id": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-      "uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
-      "created_at": "2025-09-14T14:08:09.069584+00:00"
-    }
-  },
-  "collaborator_info": [
-    {
-      "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
-      "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
-      "email": "rc@example.com",
-      "role": "user",
-      "created_at": "2025-09-22T05:11:59.671524+00:00",
-      "exists": true,
-      "internal_api_key": "_1x2uAQdCjxcQ0GAATRigf-hPxEpQ47d7dd1y2qyu4ISiq5JZXEQNDvtGG9HgxcQH5-jjwmi_5t9tN_iWCHpV-u-0xWngN3qGsbtGMGxdpLGSVSB4cy8sdun-66XG3I4"
-    },
-    {
-      "id": "17a40371-66fe-411a-963b-a977cc7cb475",
-      "auth_id": "30397e3b-61c5-4836-98fb-987e85a8bd29",
-      "email": "ashley6@example.com",
-      "role": "user",
-      "created_at": "2025-09-18T13:15:12.958746+00:00",
-      "exists": true,
-      "internal_api_key": "_1x2uAQdCjxcQ0GAATRigf-hPxEpQ47d7dd1y2qyu4ISiq5JZXEQNDvtGG9HgxcQH5-jjwmi_5t9tN_iWCHpV-u-0xWngN3qGsbtGMGxdpLGSVSB4cy8sdun-66XG3I4"
-    }
-  ],
-  "validations_passed": {
-    "parentTaskId": true,
-    "collaborators": true,
-    "project": true
-  },
-  "services_used": {
-    "task_service": true,
-    "schedule_service": true,
-    "project_service": true,
-    "users_service": true
-  },
-  "created_at": "2025-09-26T00:41:03.653691+00:00"
-}
-```
 
 ### Get task by userID
 
-POST http://127.0.0.1:4000/tasks/{userId}
+GET http://127.0.0.1:4000/tasks/user/{userId}
 
-> http://127.0.0.1:4000/tasks/17a40371-66fe-411a-963b-a977cc7cb475
+> http://127.0.0.1:4000/tasks/user/17a40371-66fe-411a-963b-a977cc7cb475
 
 Sample Output:
 ```json
@@ -184,7 +111,6 @@ Sample Output:
   }
 }
 ```
-
 ### Get task by taskID
 
 POST http://127.0.0.1:4000/tasks/{task_id}
@@ -267,65 +193,130 @@ Sample Output:
 }
 ```
 
-### Update task
+### Create task
 
-PUT http://localhost:4000/{task_id}
+POST http://127.0.0.1:4000/createTask
 
-> http://localhost:4000/c34e506a-548b-4f05-8356-e68c11370cab
+> http://127.0.0.1:4000/createTask
 
 Sample Output:
 ```json
 {
-  "message": "Task updated successfully via composite service",
-  "task_id": "c34e506a-548b-4f05-8356-e68c11370cab",
-  "validations_passed": {
-    "parentTaskId": true,
-    "collaborators": true,
-    "project": true
-  },
-  "updates_applied": {
-    "task_fields": [
-      "name",
-      "parentTaskId",
-      "collaborators",
-      "pid",
-      "desc",
-      "notes"
-    ],
-    "schedule_fields": [
-      "status",
-      "deadline"
-    ]
-  },
+  "message": "Task created successfully via composite service",
+  "task_id": "6c2c6617-971d-4c30-a0ec-263c386bc937",
   "task": {
-    "message": "Task updated successfully",
+    "message": "Task created successfully",
     "task": {
-      "id": "c34e506a-548b-4f05-8356-e68c11370cab",
-      "name": "Update task from composite service",
+      "id": "6c2c6617-971d-4c30-a0ec-263c386bc937",
+      "name": "New Task Title2",
       "created_by_uid": "7b055ff5-84f4-47bc-be7d-5905caec3ec6",
-      "updated_timestamp": "2025-09-23T03:30:10.375276+00:00",
-      "parentTaskId": "b1692687-4e49-41b1-bb04-3f5c18d6faf7",
+      "updated_timestamp": "2025-09-26T00:41:00.17705+00:00",
+      "parentTaskId": "1991067d-18d4-48c4-987b-7c06743725b4",
       "collaborators": [
         "0ec8a99d-3aab-4ec6-b692-fda88656844f",
         "17a40371-66fe-411a-963b-a977cc7cb475"
       ],
       "pid": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
-      "desc": "Set up the initial project structure and dependencies",
-      "notes": "Remember to update the README file"
+      "desc": "Optional description",
+      "notes": "Optional notes"
     }
   },
-  "schedule_updated": true,
-  "schedule_info": {
-    "status": "success",
-    "message": "Task c34e506a-548b-4f05-8356-e68c11370cab schedule updated successfully",
-    "data": {
-      "message": "Task c34e506a-548b-4f05-8356-e68c11370cab Schedule Updated Successfully",
-      "data": {
-        "tid": "c34e506a-548b-4f05-8356-e68c11370cab",
-        "deadline": "2024-12-31T23:59:59+00:00",
-        "status": "in_progress",
-        "created_at": "2025-09-20T03:08:15.62852+00:00"
-      }
+  "schedule": {
+    "status": "failed",
+    "message": "Schedule service returned 405",
+    "error": "{\"detail\":\"Method Not Allowed\"}"
+  },
+  "project_info": {
+    "message": "Project retrieved successfully",
+    "project": {
+      "id": "40339da5-9a62-4195-bbe5-c69f2fc04ed6",
+      "uid": "fc001efc-0e9c-4700-a041-e914f6d9d101",
+      "created_at": "2025-09-14T14:08:09.069584+00:00"
+    }
+  },
+  "collaborator_info": [
+    {
+      "id": "0ec8a99d-3aab-4ec6-b692-fda88656844f",
+      "auth_id": "f0ed9d08-d833-4d43-9428-41a9b179eff0",
+      "email": "rc@example.com",
+      "role": "user",
+      "created_at": "2025-09-22T05:11:59.671524+00:00",
+      "exists": true,
+      "internal_api_key": "_1x2uAQdCjxcQ0GAATRigf-hPxEpQ47d7dd1y2qyu4ISiq5JZXEQNDvtGG9HgxcQH5-jjwmi_5t9tN_iWCHpV-u-0xWngN3qGsbtGMGxdpLGSVSB4cy8sdun-66XG3I4"
+    },
+    {
+      "id": "17a40371-66fe-411a-963b-a977cc7cb475",
+      "auth_id": "30397e3b-61c5-4836-98fb-987e85a8bd29",
+      "email": "ashley6@example.com",
+      "role": "user",
+      "created_at": "2025-09-18T13:15:12.958746+00:00",
+      "exists": true,
+      "internal_api_key": "_1x2uAQdCjxcQ0GAATRigf-hPxEpQ47d7dd1y2qyu4ISiq5JZXEQNDvtGG9HgxcQH5-jjwmi_5t9tN_iWCHpV-u-0xWngN3qGsbtGMGxdpLGSVSB4cy8sdun-66XG3I4"
+    }
+  ],
+  "validations_passed": {
+    "parentTaskId": true,
+    "collaborators": true,
+    "project": true
+  },
+  "services_used": {
+    "task_service": true,
+    "schedule_service": true,
+    "project_service": true,
+    "users_service": true
+  },
+  "created_at": "2025-09-26T00:41:03.653691+00:00"
+}
+```
+
+### Update task
+
+PUT http://localhost:4000/{task_id}
+
+> http://localhost:4000/10166f86-cda5-44e5-994a-3287b326ed45
+
+Sample Request:
+```json
+{
+  "name": "New Task Title 8.6.2"
+}
+```
+
+Sample Output:
+```json
+{
+  "message": "Task updated successfully via composite service",
+  "task_id": "10166f86-cda5-44e5-994a-3287b326ed45",
+  "validations_passed": {
+    "parentTaskId": false,
+    "collaborators": false,
+    "project": false,
+    "created_by_uid": false
+  },
+  "updates_applied": {
+    "task_fields": [
+      "name"
+    ],
+    "schedule_fields": []
+  },
+  "updated_data": {
+    "message": "Task updated successfully",
+    "task": {
+      "id": "10166f86-cda5-44e5-994a-3287b326ed45",
+      "name": "New Task Title 8.6.2",
+      "created_by_uid": "655a9260-f871-480f-abea-ded735b2170a",
+      "updated_timestamp": "2025-11-07T12:49:35.505704+00:00",
+      "parentTaskId": "00a3a48b-cb05-4f8a-99c1-15e9fceb2bc6",
+      "collaborators": [
+        "da283ea9-552d-48dd-be56-18c81364adf0"
+      ],
+      "pid": "2c34dac5-b347-4b4f-aa41-a9e84030f39e",
+      "desc": "Optional description",
+      "notes": "Optional notes",
+      "priorityLevel": 10,
+      "label": "bug",
+      "messages": [],
+      "time_entries": []
     }
   }
 }
