@@ -52,8 +52,8 @@ const router = useRouter();
 const route = useRoute();
 const { toast } = useToast();
 const taskId = ref(route.params.id as string);
-const API_BASE_URL = "http://localhost:4000";
-const COMPOSITE_API_URL = "http://localhost:4100";
+const API_BASE_URL = "http://localhost:8000/manage-task"; 
+const COMPOSITE_API_URL = "http://localhost:8000/manage-project";
 
 // Get authenticated user data from middleware
 const userData = useState<any>("userData");

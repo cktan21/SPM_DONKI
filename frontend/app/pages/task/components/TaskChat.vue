@@ -176,7 +176,7 @@ const formatFileSize = (bytes: number): string => {
 const fetchMessages = async () => {
   loading.value = true
   try {
-    const response = await $fetch<MessagesResponse>(`http://localhost:4000/tasks/${props.taskId}/messages`, {
+    const response = await $fetch<MessagesResponse>(`http://localhost:8000/manage-task/tasks/${props.taskId}/messages`, {
       credentials: 'include'
     })
     messages.value = response.messages || []
@@ -282,7 +282,7 @@ const sendMessage = async () => {
       attachmentCount: requestBody.attachments.length
     })
     
-    await $fetch(`http://localhost:4000/tasks/${props.taskId}/messages`, {
+    await $fetch(`http://localhost:8000/manage-task/tasks/${props.taskId}/messages`, {
       method: 'POST',
       credentials: 'include',
       body: requestBody
@@ -321,7 +321,7 @@ const saveEdit = async (messageId: string) => {
   if (!user.value?.id) return
   
   try {
-    await $fetch(`http://localhost:4000/tasks/${props.taskId}/messages/${messageId}`, {
+    await $fetch(`http://localhost:8000/manage-task/tasks/${props.taskId}/messages/${messageId}`, {
       method: 'PUT',
       credentials: 'include',
       body: {
@@ -354,7 +354,7 @@ const deleteMessage = async (messageId: string) => {
   if (!user.value?.id) return
   
   try {
-    await $fetch(`http://localhost:4000/tasks/${props.taskId}/messages/${messageId}`, {
+    await $fetch(`http://localhost:8000/manage-task/tasks/${props.taskId}/messages/${messageId}`, {
       method: 'DELETE',
       credentials: 'include',
       body: {
@@ -444,7 +444,7 @@ const filteredCollaborators = computed(() => {
 // Fetch collaborators for mentions
 const fetchCollaborators = async () => {
   try {
-    const response = await $fetch<{ task: { collaborators: Collaborator[] } }>(`http://localhost:4000/tasks/${props.taskId}`, {
+    const response = await $fetch<{ task: { collaborators: Collaborator[] } }>(`http://localhost:8000/manage-task/tasks/${props.taskId}`, {
       credentials: 'include'
     })
     collaborators.value = response.task.collaborators || []
