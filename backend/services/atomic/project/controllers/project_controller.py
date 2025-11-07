@@ -9,8 +9,10 @@ class ProjectController:
     
     def __init__(self):
         self.project_service = ProjectService()
-        # 👇 cache Project model fields (Pydantic v2)
-        self._project_fields = set(Project.model_fields.keys())
+        # 👇 cache Project model fields (works for Pydantic v1 & v2)
+        self._project_fields = set(
+            getattr(Project, "model_fields", getattr(Project, "__fields__", {})).keys()
+        )
 
     # Get all projects
     def get_all_projects(self) -> ProjectListResponse:

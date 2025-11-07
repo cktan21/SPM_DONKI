@@ -57,9 +57,6 @@ async def notify_schedule_added(schedule_data: Dict[str, Any]):
     # If all attempts failed, log the error but don't crash the main operation
     logger.error(f"Failed to notify notify_user service after all attempts for task {schedule_data.get('sid')}")
 
-# Alias for backward compatibility with tests
-notify_recurring_task_added = notify_schedule_added
-
 async def notify_deadline_monitoring_added(deadline_data: Dict[str, Any]):
     """Notify the notify_user service when deadline monitoring should be set up"""
     import asyncio
@@ -199,9 +196,9 @@ async def insert_new_schedule(new_data: Dict[str, Any] = Body(...) ):
         data = supabase.insert_schedule(tid, start, deadline, is_recurring, status, next_occurrence, frequency)
         
         # If this is a recurring task, notify the notify_user service
-        if data and is_recurring:
+        if data:
             import asyncio
-            asyncio.create_task(notify_recurring_task_added(data))
+            asyncio.create_task(notify_schedule_added(data))
         
         return {"message":f"Task {tid} Schedule Inserted Successfully" ,"data": data}
     except Exception as e:
